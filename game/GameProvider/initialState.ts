@@ -1,0 +1,67 @@
+/**
+ * Initial state for the game reducer.
+ */
+
+import type { GameState } from './types';
+import { createEmptyGrid } from './helpers';
+import {
+  DEFAULT_LEVELS,
+  INITIAL_TOOL_MODE,
+  DEFAULT_FARM_COLS,
+  DEFAULT_FARM_ROWS,
+  DEFAULT_HOUSE_COLS,
+  DEFAULT_HOUSE_ROWS,
+} from './constants';
+
+/** Default state when the game context mounts (before snapshot). */
+export const initialState: GameState = {
+  activeScene: 'farm',
+  farmGrid: createEmptyGrid(DEFAULT_FARM_COLS, DEFAULT_FARM_ROWS),
+  houseGrid: createEmptyGrid(DEFAULT_HOUSE_COLS, DEFAULT_HOUSE_ROWS),
+  selectedTile: null,
+  selectedItemType: null,
+  isTransitioning: false,
+  editMode: false,
+  activeCategory: 'all',
+  inventory: {},
+  harvestEffects: [],
+  farmName: 'My Farm',
+  farmXp: 0,
+  farmLevel: 1,
+  farmLevels: DEFAULT_LEVELS,
+  equipped: undefined,
+  foodDishQueues: undefined,
+  itemDefs: {},
+  sceneryUrl: '',
+  pendingInteraction: null,
+  movingItemId: null,
+  pendingDropTarget: null,
+  lastOptimisticPlace: null,
+  toolMode: INITIAL_TOOL_MODE,
+  petDialog: null,
+  gems: 0,
+  activeBugs: [],
+  lastCatchResult: null,
+  activeBalloons: [],
+  lastBalloonPopResult: null,
+  lastFossilDigResult: null,
+  quests: [],
+  canUpgrade: false,
+  questDialogQueue: [],
+  currentQuestDialog: null,
+  questDialogIndex: 0,
+  currentDialogSpeaker: null,
+  currentNpcItemType: null,
+  currentQuestIdToComplete: null,
+  currentDialogRewards: null,
+  currentDialogBlocking: true,
+  shopOpen: false,
+  sellBoxOpen: false,
+  cookingOpen: false,
+  foodDishOpen: false,
+  equipOpen: false,
+  petBehaviorSync: null,
+  petState: null,
+  pendingSellItems: null,
+  pendingSellAt: null,
+};

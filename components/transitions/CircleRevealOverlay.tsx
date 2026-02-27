@@ -1,0 +1,142 @@
+import React, { useEffect, useRef, useMemo } from 'react';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSequence,
+  Easing,
+  runOnJS,
+  cancelAnimation,
+} from 'react-native-reanimated';
+
+const DEFAULT_DURATION = 480;
+const EASING = Easing.bezier(0.4, 0, 0.2, 1);
+
+export type CircleRevealVariant = 'reveal' | 'conceal';
+
+interface CircleRevealOverlayBaseProps {
+  variant: CircleRevealVariant;
+  backgroundColor: string;
+  duration?: number;
+  onComplete: () => void;
+  children?: React.ReactNode;
+}
+
+interface CircleRevealOverlaySeqProps {
+  mode: 'conceal-then-reveal';
+  backgroundColor: string;
+  duration?: number;
+  onConcealComplete: () => void;
+  onComplete: () => void;
+  children?: React.ReactNode;
+}
+
+type CircleRevealOverlayProps = CircleRevealOverlayBaseProps | CircleRevealOverlaySeqProps;
+
+function isSeqProps(p: CircleRevealOverlayProps): p is CircleRevealOverlaySeqProps {
+  return 'mode' in p && p.mode === 'conceal-then-reveal';
+}
+
+/**
+ * GPU-accelerated circle wipe transition using a single Animated.View
+ * with transform: scale. No SVG, no masking — runs entirely on the GPU
+ * via native transform compositing.
+ *
+ * - Conceal: solid circle grows from center, covering content.
+ * - Reveal: solid circle shrinks to center, revealing content.
+ * - conceal-then-reveal: both phases in sequence without remount.
+ */
+export function CircleRevealOverlay(props: CircleRevealOverlayProps) {
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  const diameter = useMemo(
+    () => Math.ceil(Math.sqrt(screenW ** 2 + screenH ** 2)),
+    [screenW, screenH],
+  );
+  const duration = props.duration ?? DEFAULT_DURATION;
+
+  const circleScale = useSharedValue(isSeqProps(props) ? 0 : (props as CircleRevealOverlayBaseProps).variant === 'reveal' ? 1 : 0);
+
+  const onCompleteRef = useRef(isSeqProps(props) ? props.onComplete : props.onComplete);
+  const onConcealRef = useRef(isSeqProps(props) ? props.onConcealComplete : () => {});
+  if (isSeqProps(props)) {
+    onCompleteRef.current = props.onComplete;
+    onConcealRef.current = props.onConcealComplete;
+  } else {
+    onCompleteRef.current = props.onComplete;
+  }
+
+  useEffect(() => {
+    cancelAnimation(circleScale);
+
+    if (isSeqProps(props)) {
+      circleScale.value = 0;
+      circleScale.value = withSequence(
+        withTiming(1, { duration, easing: EASING }, (f) => {
+          if (f) runOnJS(onConcealRef.current)();
+        }),
+        withTiming(0, { duration, easing: EASING }, (f) => {
+          if (f) runOnJS(onCompleteRef.current)();
+        }),
+      );
+      return;
+    }
+
+    const variant = (props as CircleRevealOverlayBaseProps).variant;
+    if (variant === 'reveal') {
+      circleScale.value = 1;
+      circleScale.value = withTiming(0, { duration, easing: EASING }, (f) => {
+        if (f) runOnJS(onCompleteRef.current)();
+      });
+    } else {
+      circleScale.value = 0;
+      circleScale.value = withTiming(1, { duration, easing: EASING }, (f) => {
+        if (f) runOnJS(onCompleteRef.current)();
+      });
+    }
+  }, [isSeqProps(props) ? 'seq' : (props as CircleRevealOverlayBaseProps).variant, duration]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: circleScale.value }],
+    opacity: circleScale.value > 0 ? 1 : 0,
+  }));
+
+  const circleStyle = useMemo(
+    () => ({
+      position: 'absolute' as const,
+      width: diameter,
+      height: diameter,
+      borderRadius: diameter / 2,
+      left: (screenW - diameter) / 2,
+      top: (screenH - diameter) / 2,
+    }),
+    [diameter, screenW, screenH],
+  );
+
+  return (
+    <View style={styles.overlay} pointerEvents="box-none">
+      {'children' in props && props.children != null && (
+        <View style={styles.content}>{props.children}</View>
+      )}
+      <Animated.View
+        style={[circleStyle, { backgroundColor: props.backgroundColor }, animatedStyle]}
+        renderToHardwareTextureAndroid
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10000,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+});
