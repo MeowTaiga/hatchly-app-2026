@@ -17,7 +17,6 @@ import type {
   StateUpdate,
   EquippedSnapshot,
   InteractAction,
-  PetDialogMessage,
   ActiveBug,
   BugCatchResult,
   ActiveBalloon,
@@ -59,6 +58,8 @@ export interface GameContextValue {
   /** When farm has a scene with baked image, use these for world size instead of padded procedural dims. */
   sceneWorldCols?: number;
   sceneWorldRows?: number;
+  /** Scene placements for tap detection when using scene bake. */
+  scenePlacements?: Array<{ id: string; itemType: string; x: number; y: number; scale: number; depthOffset?: number }>;
   connected: boolean;
   loading: boolean;
   pendingInteraction: InteractAction | null;
@@ -66,8 +67,11 @@ export interface GameContextValue {
   movingItemId: string | null;
   /** When set, drag-ended item stays visually at drop spot until server confirms. Cleared on STATE_UPDATE. */
   pendingDropTarget: { anchorId: string; newCol: number; newRow: number } | null;
+  /** Anchor ID of tree playing tap-shake animation; null when idle. */
+  shakingTreeAnchorId: string | null;
+  /** Shake trigger (changes each tap) so animation can replay. */
+  shakeTrigger: number;
   toolMode: ToolMode;
-  petDialog: PetDialogMessage | null;
   gems: number;
   activeBugs: ActiveBug[];
   lastCatchResult: BugCatchResult | null;
@@ -87,9 +91,9 @@ export interface GameContextValue {
   currentDialogBlocking: boolean;
 
   placeItem: (col: number, row: number) => void;
-  placeItemAt: (itemType: string, col: number, row: number) => void;
+  placeItemAt: (itemType: string, col: number, row: number) => boolean;
   removeItem: (col: number, row: number) => void;
-  moveItem: (itemId: string, col: number, row: number) => void;
+  moveItem: (itemId: string, col: number, row: number) => boolean;
   setPendingDropTarget: (target: { anchorId: string; newCol: number; newRow: number } | null) => void;
   selectTile: (col: number, row: number) => void;
   selectInventoryItem: (itemType: string | null) => void;
@@ -111,7 +115,6 @@ export interface GameContextValue {
   destroySelectedItem: () => void;
   setToolMode: (mode: ToolMode) => void;
   showPetDialog: (text: string) => void;
-  dismissPetDialog: () => void;
   waterTile: (col: number, row: number) => void;
   purchaseItem: (itemType: string) => void;
   sellItem: (itemType: string, qty?: number) => void;
@@ -123,6 +126,7 @@ export interface GameContextValue {
   popBalloon: (spawnId: string) => void;
   dismissBalloonPopResult: () => void;
   digFossil: (anchorId: string) => void;
+  shakeTree: (anchorId: string) => void;
   dismissFossilDigResult: () => void;
   completeQuest: (questId: string) => void;
   emitQuestActivateByNpc: (npcItemType: string) => void;
@@ -186,13 +190,14 @@ export interface GameState {
   /** When farm has a scene with baked image, use these for world size instead of padded procedural dims. */
   sceneWorldCols?: number;
   sceneWorldRows?: number;
+  /** Scene placements for tap detection when using scene bake. */
+  scenePlacements?: Array<{ id: string; itemType: string; x: number; y: number; scale: number; depthOffset?: number }>;
   pendingInteraction: InteractAction | null;
   movingItemId: string | null;
   pendingDropTarget: { anchorId: string; newCol: number; newRow: number } | null;
   /** Last optimistic placement; reverted when server rejects (e.g. out of bounds). */
   lastOptimisticPlace: { anchorId: string; itemType: string } | null;
   toolMode: ToolMode;
-  petDialog: PetDialogMessage | null;
   gems: number;
   activeBugs: ActiveBug[];
   lastCatchResult: BugCatchResult | null;
@@ -225,6 +230,10 @@ export interface GameState {
   pendingSellItems: Array<{ itemType: string; qty: number }> | null;
   /** When OPTIMISTIC_SELL was applied; we keep protection for a few seconds. */
   pendingSellAt: number | null;
+  /** Anchor ID of tree currently playing tap-shake animation; cleared after animation. */
+  shakingTreeAnchorId: string | null;
+  /** Increments on each shake so the same tree can animate again. */
+  shakeTrigger: number;
 }
 
 /** All dispatchable reducer actions. */
@@ -254,7 +263,6 @@ export type GameAction =
   | { type: 'SET_PENDING_DROP'; target: { anchorId: string; newCol: number; newRow: number } | null }
   | { type: 'UPDATE_ITEM_DEFS'; defs: Record<string, ItemDefinition> }
   | { type: 'SET_TOOL_MODE'; mode: ToolMode }
-  | { type: 'PET_DIALOG'; message: PetDialogMessage | null }
   | { type: 'ADD_BUG'; bug: ActiveBug }
   | { type: 'REMOVE_BUG'; spawnId: string }
   | { type: 'CLEAR_BUGS' }
@@ -268,6 +276,7 @@ export type GameAction =
   | { type: 'OPTIMISTIC_QUEST_ACTIVATE'; questId: string }
   | { type: 'QUEUE_QUEST_DIALOG'; dialogs: Array<{ steps: DialogStep[]; speaker?: DialogSpeaker; npcItemType?: string; rewards?: import('../types').QuestReward }> }
   | { type: 'QUEUE_NPC_DIALOG'; steps: DialogStep[]; speaker?: DialogSpeaker; npcItemType?: string; blocking?: boolean; questIdToComplete?: string }
+  | { type: 'SHOW_PET_DIALOG'; text: string }
   | { type: 'ADVANCE_QUEST_DIALOG' }
   | { type: 'SET_SHOP_OPEN'; open: boolean }
   | { type: 'SET_SELL_BOX_OPEN'; open: boolean }
@@ -276,4 +285,6 @@ export type GameAction =
   | { type: 'SET_EQUIP_OPEN'; open: boolean }
   | { type: 'SET_PET_BEHAVIOR_SYNC'; state: string }
   | { type: 'CLEAR_PET_BEHAVIOR_SYNC' }
-  | { type: 'SET_PET_STATE'; payload: { col: number; row: number; behavior: string; targetCol?: number; targetRow?: number; interactionType?: string; interactionTarget?: string } };
+  | { type: 'SET_PET_STATE'; payload: { col: number; row: number; behavior: string; targetCol?: number; targetRow?: number; interactionType?: string; interactionTarget?: string } }
+  | { type: 'TREE_SHAKE'; anchorId: string; trigger: number }
+  | { type: 'CLEAR_TREE_SHAKE' };

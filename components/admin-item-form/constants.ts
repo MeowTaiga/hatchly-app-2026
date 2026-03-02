@@ -26,6 +26,7 @@ export const CATEGORY_OPTIONS: DropdownOptionLike[] = [
   { key: 'food', label: 'Food' },
   { key: 'asset', label: 'Asset' },
   { key: 'npc', label: 'NPC' },
+  { key: 'tree', label: 'Tree' },
 ];
 
 export const ACTION_TYPES: { key: ActionType; label: string }[] = [
@@ -59,6 +60,7 @@ export const SUB_CATEGORIES: { key: string; label: string }[] = [
   { key: 'pond', label: 'Pond' },
   { key: 'table', label: 'Table' },
   { key: 'fence', label: 'Fence' },
+  { key: 'fruit', label: 'Fruit' },
 ];
 
 /** Map of subcategory key to label for chip display in shops. */

@@ -38,7 +38,6 @@ export const initialState: GameState = {
   pendingDropTarget: null,
   lastOptimisticPlace: null,
   toolMode: INITIAL_TOOL_MODE,
-  petDialog: null,
   gems: 0,
   activeBugs: [],
   lastCatchResult: null,
@@ -64,4 +63,6 @@ export const initialState: GameState = {
   petState: null,
   pendingSellItems: null,
   pendingSellAt: null,
+  shakingTreeAnchorId: null,
+  shakeTrigger: 0,
 };

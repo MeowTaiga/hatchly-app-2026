@@ -6,7 +6,7 @@
  */
 
 import { useAuth } from '@/store/AuthProvider';
-import React, { createContext, useCallback, useContext, useMemo, useReducer, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ActiveBalloon, ActiveBug, BalloonPopResult, BugCatchResult, CookResult, CraftResult, DialogSpeaker, DialogStep, FarmMeta, FossilDigResult, GameSnapshot, GridData, InventorySlot, ItemDefinition, StateUpdate } from '../types';
 import { useGameSocket } from '../useGameSocket';
 
@@ -194,6 +194,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const lastErrorRef = useRef<{ msg: string; ts: number }>({ msg: '', ts: 0 });
 
+  useEffect(() => {
+    if (state.shakingTreeAnchorId) {
+      const t = setTimeout(() => dispatch({ type: 'CLEAR_TREE_SHAKE' }), 400);
+      return () => clearTimeout(t);
+    }
+  }, [state.shakingTreeAnchorId, dispatch]);
+
   const handleError = useCallback((msg: string, context?: { spawnId?: string }) => {
     // State-sync errors: server says we're already in that state; treat as success, no error UI
     const isStateSyncError =
@@ -280,6 +287,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     emitSetEquipped,
     emitCatchBug,
     emitDigFossil,
+    emitShakeTree,
     emitPopBalloon,
     emitCompleteQuest,
     emitQuestActivateByNpc,
@@ -317,14 +325,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     onPetUpdated: handlePetUpdated,
   });
 
-  const showPetDialog = useCallback((text: string) => {
-    dispatch({ type: 'PET_DIALOG', message: { id: `pd_${Date.now()}`, text } });
-  }, []);
-
-  const dismissPetDialog = useCallback(() => {
-    dispatch({ type: 'PET_DIALOG', message: null });
-  }, []);
-
   const advanceQuestDialog = useCallback(() => {
     const step = state.currentQuestDialog?.[state.questDialogIndex];
     if (step?.highlight) return;
@@ -340,6 +340,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const queueNpcDialog = useCallback((steps: DialogStep[], speaker?: DialogSpeaker, npcItemType?: string, blocking?: boolean, questIdToComplete?: string) => {
     dispatch({ type: 'QUEUE_NPC_DIALOG', steps, speaker, npcItemType, blocking, questIdToComplete });
+  }, []);
+
+  const showPetDialog = useCallback((text: string) => {
+    dispatch({ type: 'SHOW_PET_DIALOG', text });
   }, []);
 
   const optimisticallyActivateQuest = useCallback((questId: string) => {
@@ -384,6 +388,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     emitAddToFoodDish,
     emitCatchBug,
     emitDigFossil,
+    emitShakeTree,
     emitCompleteQuest,
     emitQuestActivateByNpc,
     emitQuestActivateByScene,
@@ -397,6 +402,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   });
 
   const digFossil = actions.digFossil;
+  const shakeTree = actions.shakeTree;
 
   const inventorySlots = useMemo<InventorySlot[]>(() => {
     return Object.entries(state.inventory)
@@ -453,13 +459,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       sceneryUrl: state.sceneryUrl,
       sceneWorldCols: state.sceneWorldCols,
       sceneWorldRows: state.sceneWorldRows,
+      scenePlacements: state.scenePlacements,
       connected,
       loading,
       pendingInteraction: state.pendingInteraction,
       movingItemId: state.movingItemId,
       pendingDropTarget: state.pendingDropTarget,
+      shakingTreeAnchorId: state.shakingTreeAnchorId,
+      shakeTrigger: state.shakeTrigger,
       toolMode: state.toolMode,
-      petDialog: state.petDialog,
       gems: state.gems,
       activeBugs: state.activeBugs,
       lastCatchResult: state.lastCatchResult,
@@ -499,7 +507,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setToolMode: actions.setToolMode,
       waterTile: actions.waterTile,
       showPetDialog,
-      dismissPetDialog,
       purchaseItem: actions.purchaseItem,
       sellItem: actions.sellItem,
       sellItemsBatch: actions.sellItemsBatch,
@@ -510,6 +517,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       popBalloon,
       dismissBalloonPopResult,
       digFossil,
+      shakeTree,
       dismissFossilDigResult,
       completeQuest: actions.completeQuest,
       emitQuestActivateByNpc,
@@ -565,8 +573,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       state.pendingInteraction,
       state.movingItemId,
       state.pendingDropTarget,
+      state.shakingTreeAnchorId,
+      state.shakeTrigger,
       state.toolMode,
-      state.petDialog,
       state.gems,
       state.activeBugs,
       state.lastCatchResult,
@@ -622,10 +631,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       actions.dismissCatchResult,
       actions.completeQuest,
       showPetDialog,
-      dismissPetDialog,
       popBalloon,
       dismissBalloonPopResult,
       digFossil,
+      shakeTree,
       dismissFossilDigResult,
       advanceQuestDialog,
       queueNpcDialog,

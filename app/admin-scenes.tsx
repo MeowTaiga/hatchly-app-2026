@@ -4,7 +4,7 @@ import {
   ScrollView, Alert, TextInput,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Image } from 'expo-image';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -292,7 +292,7 @@ export default function AdminScenesScreen() {
                   </View>
 
                   {previewUrl && (
-                    <Image source={{ uri: previewUrl }} style={styles.preview} contentFit="cover" cachePolicy="disk" />
+                    <CachedImage source={{ uri: previewUrl }} style={styles.preview} resizeMode="cover" />
                   )}
 
                   {bake && (
@@ -369,7 +369,7 @@ export default function AdminScenesScreen() {
                     </View>
 
                     {scene.bakedImageUrl && (
-                      <Image source={{ uri: scene.bakedImageUrl }} style={styles.preview} contentFit="cover" cachePolicy="disk" />
+                      <CachedImage source={{ uri: scene.bakedImageUrl }} style={styles.preview} resizeMode="cover" />
                     )}
 
                     <View style={styles.btnRow}>

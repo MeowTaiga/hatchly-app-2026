@@ -6,9 +6,10 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, ScrollView, Image,
+  View, Text, TextInput, Pressable, ScrollView,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -142,7 +143,7 @@ export function SeedWizard() {
       <View style={ts.card}>
         <View style={ts.imgRow}>
           {stepData.imageUrl ? (
-            <Image source={{ uri: stepData.imageUrl }} style={ts.imgThumb} />
+            <CachedImage source={{ uri: stepData.imageUrl }} style={ts.imgThumb} />
           ) : (
             <View style={ts.imgThumb}>
               <Ionicons name="image-outline" size={20} color={colors.textMuted} style={{ margin: 'auto' }} />

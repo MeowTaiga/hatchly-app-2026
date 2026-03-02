@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { View, Text, Image, StyleSheet, Dimensions, Platform, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Platform, Pressable } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -17,6 +17,7 @@ import { PetStatsDisplay } from '@/components/ui/PetStatsDisplay';
 import { usePetHero } from '@/store/PetHeroProvider';
 import { useAuth } from '@/store/AuthProvider';
 import { useTheme } from '@/store/ThemeProvider';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { getPoseForContext, useNeutralPoseCycle } from '@/game/creature/pet';
 
 // ─── Layout Constants ────────────────────────────────────────────────────────
@@ -299,7 +300,7 @@ const PetHeroBarInner = React.memo(function PetHeroBarInner({
         >
           <Pressable onPress={onPetPress} style={({ pressed }) => [{ width: '100%', height: '100%', opacity: pressed ? 0.9 : 1 }]}>
             {petImageUrl ? (
-              <Image source={{ uri: petImageUrl }} style={styles.petImage} resizeMode="contain" />
+              <CachedImage source={{ uri: petImageUrl }} style={styles.petImage} resizeMode="contain" />
             ) : (
               <View style={styles.petFallback}>
                 <Text style={styles.petFallbackEmoji}>🐣</Text>

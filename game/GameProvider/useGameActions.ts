@@ -7,6 +7,7 @@ import { useCallback, useRef } from 'react';
 import { BUG_CATCH_BUFFER_MS, BUG_LIFESPAN_MS } from '../constants';
 import {
   canPlaceSoil,
+  canPlaceTree,
   findNearbyInteractable,
   findSeedPlacement,
   getAllPlacedItems,
@@ -27,7 +28,7 @@ import type {
 } from '../types';
 import { tileKey } from '../types';
 import { hasRequiredTool, getNoToolMessage } from '../toolRequiredUtils';
-import { meetsActivationRequirements } from '../multiplayer/QuestBubble';
+import { tryInteractWithPlacedItem } from '../interactWithPlacedItem';
 import { genItemId } from './helpers';
 import { optIdMap } from './reducer';
 import type { GameContextValue, GameState } from './types';
@@ -49,6 +50,7 @@ export interface GameActionsDeps {
   emitSetEquipped: (slot: 'handTool' | 'bobber' | 'bait' | 'chair', itemType: string | null) => void;
   emitCatchBug: (spawnId: string) => void;
   emitDigFossil: (anchorId: string) => void;
+  emitShakeTree: (anchorId: string) => void;
   emitCompleteQuest: (questId: string) => void;
   emitQuestActivateByNpc: (npcItemType: string) => void;
   emitQuestActivateByScene: (sceneSlug: string) => void;
@@ -64,6 +66,9 @@ export interface GameActionsDeps {
 
 /** Debounce delay before flushing the crop batch queue to the server. */
 const CROP_BATCH_DEBOUNCE_MS = 300;
+
+/** Debounce delay before flushing the shake tree batch to the server. */
+const SHAKE_BATCH_DEBOUNCE_MS = 300;
 
 type Dispatch = React.Dispatch<import('./types').GameAction>;
 
@@ -99,6 +104,7 @@ export function useGameActions(
   | 'catchBug'
   | 'dismissCatchResult'
   | 'digFossil'
+  | 'shakeTree'
   | 'completeQuest'
   | 'selectTile'
   | 'startMoveItem'
@@ -133,6 +139,7 @@ export function useGameActions(
     emitSetEquipped,
     emitCatchBug,
     emitDigFossil,
+    emitShakeTree,
     emitCompleteQuest,
     emitQuestActivateByNpc,
     emitQuestActivateByScene,
@@ -162,6 +169,29 @@ export function useGameActions(
     [flushCropBatch],
   );
 
+  // ── Shake tree batch: accumulate anchorIds, flush after debounce ─────────
+  const shakeBatchQueueRef = useRef<Set<string>>(new Set());
+  const shakeBatchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushShakeBatch = useCallback(() => {
+    const ids = shakeBatchQueueRef.current;
+    if (ids.size === 0) return;
+    const toSend = [...ids];
+    shakeBatchQueueRef.current = new Set();
+    for (const anchorId of toSend) {
+      emitShakeTree(anchorId);
+    }
+  }, [emitShakeTree]);
+
+  const enqueueShake = useCallback(
+    (anchorId: string) => {
+      shakeBatchQueueRef.current.add(anchorId);
+      if (shakeBatchTimerRef.current) clearTimeout(shakeBatchTimerRef.current);
+      shakeBatchTimerRef.current = setTimeout(flushShakeBatch, SHAKE_BATCH_DEBOUNCE_MS);
+    },
+    [flushShakeBatch],
+  );
+
   const resolveAnchor = resolveAnchorFromGrid;
 
   const SEED_ERROR_MSGS: Record<string, string> = {
@@ -174,15 +204,15 @@ export function useGameActions(
   const PENDING_PLACEMENT_MS = 400;
 
   const placeItemCore = useCallback(
-    (itemType: string, col: number, row: number) => {
-      if (!state.editMode) return;
+    (itemType: string, col: number, row: number): boolean => {
+      if (!state.editMode) return false;
       const def = state.itemDefs[itemType];
-      if (!def?.placeable) return;
+      if (!def?.placeable) return false;
       if (def.category === 'food') {
         showPetDialog("Food can't be placed on the farm. Use a food dish to feed your pet!");
-        return;
+        return false;
       }
-      if ((state.inventory[itemType] ?? 0) <= 0) return;
+      if ((state.inventory[itemType] ?? 0) <= 0) return false;
 
       // Ensure base placement is within grid bounds
       const clampedCol = Math.max(0, Math.min(activeGrid.cols - (def.cols ?? 1), col));
@@ -197,7 +227,7 @@ export function useGameActions(
           showPetDialog(
             "Oops! Soil can't be placed on top of the plantable area of another soil patch. Try placing it alongside instead! 🌱",
           );
-          return;
+          return false;
         }
       }
 
@@ -211,15 +241,34 @@ export function useGameActions(
         }
         if (!result.ok) {
           showPetDialog(SEED_ERROR_MSGS[result.reason] ?? 'Cannot place here.');
-          return;
+          return false;
         }
         plantCol = result.col;
         plantRow = result.row;
       }
 
+      if (def.category === 'tree') {
+        const treeCols = 2;
+        const treeRows = 2;
+        const treeResult = canPlaceTree(activeGrid, col, row, treeCols, treeRows);
+        if (!treeResult.ok) {
+          showPetDialog(
+            treeResult.reason === 'out_of_bounds'
+              ? "That spot is out of bounds! 🌳"
+              : "Trees need a clear area. Try another spot! 🌳",
+          );
+          return false;
+        }
+        plantCol = col;
+        plantRow = row;
+      }
+
+      const isTree = def.category === 'tree';
+      const blockCols = isTree ? 2 : (def.cols ?? 1);
+      const blockRows = isTree ? 2 : (def.rows ?? 1);
       const keysToBlock: string[] = [];
-      for (let dr = 0; dr < def.rows; dr++) {
-        for (let dc = 0; dc < def.cols; dc++) {
+      for (let dr = 0; dr < blockRows; dr++) {
+        for (let dc = 0; dc < blockCols; dc++) {
           keysToBlock.push(tileKey(plantCol + dc, plantRow + dr));
         }
       }
@@ -227,7 +276,7 @@ export function useGameActions(
       // is instant. Non-seed items still use the lockout to prevent double-tap.
       if (def.category !== 'seed') {
         const pending = pendingPlacementKeysRef.current;
-        if (keysToBlock.some((k) => pending.has(k))) return;
+        if (keysToBlock.some((k) => pending.has(k))) return false;
         for (const k of keysToBlock) pending.add(k);
         const toRemove = [...keysToBlock];
         setTimeout(() => {
@@ -238,11 +287,14 @@ export function useGameActions(
       const anchorId = genItemId();
       const items: PlacedItem[] = [];
       const keys: string[] = [];
-      for (let dr = 0; dr < def.rows; dr++) {
-        for (let dc = 0; dc < def.cols; dc++) {
+      const today = new Date().toISOString().slice(0, 10);
+      const itemRows = blockRows;
+      const itemCols = blockCols;
+      for (let dr = 0; dr < itemRows; dr++) {
+        for (let dc = 0; dc < itemCols; dc++) {
           const isAnchor = dr === 0 && dc === 0;
           const id = isAnchor ? anchorId : genItemId();
-          items.push({
+          const item: PlacedItem = {
             id,
             clientId: id,
             itemType: def.itemType,
@@ -251,13 +303,17 @@ export function useGameActions(
             color: def.color,
             emoji: isAnchor ? def.emoji : undefined,
             imageUrl: isAnchor ? def.imageUrl : undefined,
-            tileCols: def.cols,
-            tileRows: def.rows,
+            tileCols: itemCols,
+            tileRows: itemRows,
             anchorId: isAnchor ? undefined : anchorId,
             plantedAt: undefined,
             growthMs: def.growthMs,
             watered: def.growthMs ? false : undefined,
-          });
+          };
+          if (def.category === 'tree') {
+            item.treePlantedDate = today;
+          }
+          items.push(item);
           keys.push(tileKey(plantCol + dc, plantRow + dr));
         }
       }
@@ -272,6 +328,7 @@ export function useGameActions(
       if (def.category === 'decoration') {
         decorationReactionRef.current?.(plantCol, plantRow, def.itemType);
       }
+      return true;
     },
     [state.editMode, state.inventory, state.itemDefs, activeGrid, decorationReactionRef, emitPlaceItem, enqueueCropOp, showPetDialog, tryAutoAdvanceDialog, dispatch],
   );
@@ -285,8 +342,8 @@ export function useGameActions(
   );
 
   const placeItemAt = useCallback(
-    (itemType: string, col: number, row: number) => {
-      placeItemCore(itemType, col, row);
+    (itemType: string, col: number, row: number): boolean => {
+      return placeItemCore(itemType, col, row) ?? false;
     },
     [placeItemCore],
   );
@@ -317,8 +374,8 @@ export function useGameActions(
   );
 
   const moveItem = useCallback(
-    (itemId: string, col: number, row: number) => {
-      if (!itemId || isNaN(col) || isNaN(row)) return;
+    (itemId: string, col: number, row: number): boolean => {
+      if (!itemId || isNaN(col) || isNaN(row)) return false;
       let resolvedId = itemId;
       let movingItem: PlacedItem | undefined;
       if (itemId.startsWith('opt_')) {
@@ -338,7 +395,7 @@ export function useGameActions(
         }
         if (resolvedId.startsWith('opt_')) {
           dispatch({ type: 'CANCEL_MOVE' });
-          return;
+          return false;
         }
       }
       if (!movingItem) {
@@ -363,13 +420,36 @@ export function useGameActions(
             "Oops! Soil can't be placed on top of the plantable area of another soil patch. Try moving it alongside instead! 🌱",
           );
           dispatch({ type: 'CANCEL_MOVE' });
-          return;
+          return false;
+        }
+      }
+      if (def?.category === 'tree') {
+        const treeCols = movingItem?.tileCols ?? def.cols ?? 2;
+        const treeRows = movingItem?.tileRows ?? def.rows ?? 2;
+        const treeResult = canPlaceTree(activeGrid, col, row, treeCols, treeRows, movingItem?.id);
+        if (!treeResult.ok) {
+          showPetDialog(
+            treeResult.reason === 'out_of_bounds'
+              ? "That spot is out of bounds! 🌳"
+              : "Trees need a clear area. Try another spot! 🌳",
+          );
+          dispatch({ type: 'CANCEL_MOVE' });
+          return false;
         }
       }
       emitMoveItem(resolvedId, col, row);
-      dispatch({ type: 'CANCEL_MOVE' });
+      // Do NOT dispatch CANCEL_MOVE — pending stays until server confirms via APPLY_GRID
+      return true;
     },
     [activeGrid, state.itemDefs, emitMoveItem, showPetDialog, dispatch],
+  );
+
+  const shakeTree = useCallback(
+    (anchorId: string) => {
+      dispatch({ type: 'TREE_SHAKE', anchorId, trigger: Date.now() });
+      enqueueShake(anchorId);
+    },
+    [enqueueShake, dispatch],
   );
 
   const setPendingDropTarget = useCallback(
@@ -584,106 +664,31 @@ export function useGameActions(
           return;
         }
         if (existing) {
-          const def = state.itemDefs[existing.itemType];
-          if (def?.category === 'npc') {
-            // Priority: completable quest end dialog > active quest start dialog > locked-but-available > completed quest end dialog > default NPC dialog
-            const petLevel = deps.petLevel ?? 1;
-            const completableQuestWithEndDialog = state.quests?.find(
-              (q) =>
-                q.status === 'active' &&
-                q.canComplete &&
-                q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === existing.itemType) &&
-                q.endDialog?.length,
-            );
-            const activeQuestWithDialog = state.quests?.find(
-              (q) =>
-                q.status === 'active' &&
-                q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === existing.itemType) &&
-                q.startDialog?.length &&
-                !(q.canComplete && q.endDialog?.length), // completable with endDialog handled above
-            );
-            const lockedQuestAvailable = state.quests?.find(
-              (q) =>
-                q.status === 'locked' &&
-                q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === existing.itemType) &&
-                q.startDialog?.length &&
-                meetsActivationRequirements(q, petLevel, state.farmLevel, state.quests ?? []),
-            );
-            const completedQuestWithEndDialog = state.quests?.find(
-              (q) =>
-                q.status === 'completed' &&
-                q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === existing.itemType) &&
-                q.endDialog?.length,
-            );
-            const steps = completableQuestWithEndDialog
-              ? completableQuestWithEndDialog.endDialog!
-              : activeQuestWithDialog
-                ? activeQuestWithDialog.startDialog!
-                : lockedQuestAvailable
-                  ? lockedQuestAvailable.startDialog!
-                  : completedQuestWithEndDialog
-                    ? completedQuestWithEndDialog.endDialog!
-                    : def.npcDialog ?? [];
-            const useNpcSpeaker = completableQuestWithEndDialog
-              ? completableQuestWithEndDialog.endDialogSpeaker !== 'pet'
-              : activeQuestWithDialog
-                ? activeQuestWithDialog.startDialogSpeaker !== 'pet'
-                : lockedQuestAvailable
-                  ? lockedQuestAvailable.startDialogSpeaker !== 'pet'
-                  : completedQuestWithEndDialog
-                    ? completedQuestWithEndDialog.endDialogSpeaker !== 'pet'
-                    : true;
-            if (steps.length) {
-              const dialogInfo = {
-                steps,
-                speaker: useNpcSpeaker ? { name: def.label, imageUrl: def.imageUrl ?? null } : undefined,
-                npcItemType: existing.itemType,
-              };
-              setPendingNpcDialog(dialogInfo);
-              // Show dialog immediately for locked-but-available (don't wait for server round-trip)
-              if (lockedQuestAvailable) {
+          const handled = tryInteractWithPlacedItem(
+            existing,
+            state.itemDefs,
+            state.quests,
+            state.farmLevel,
+            deps.petLevel ?? 1,
+            {
+              setPendingNpcDialog,
+              queueNpcDialog: (steps, speaker, npcItemType, _blocking, questIdToComplete) =>
                 dispatch({
                   type: 'QUEUE_NPC_DIALOG',
-                  steps: dialogInfo.steps,
-                  speaker: dialogInfo.speaker,
-                  npcItemType: dialogInfo.npcItemType,
-                });
-                deps.optimisticallyActivateQuest?.(lockedQuestAvailable.questId);
-              }
-              // Show end dialog immediately for completable (no server response, so we'd never show it otherwise)
-              if (completableQuestWithEndDialog) {
-                dispatch({
-                  type: 'QUEUE_NPC_DIALOG',
-                  steps: dialogInfo.steps,
-                  speaker: dialogInfo.speaker,
-                  npcItemType: dialogInfo.npcItemType,
-                  questIdToComplete: completableQuestWithEndDialog.questId,
-                });
-              }
-            }
-            if (!completableQuestWithEndDialog && !completedQuestWithEndDialog) emitQuestActivateByNpc(existing.itemType);
-            return;
-          }
-          if (def?.interactAction && def.interactAction.type !== 'none') {
-            if (def.interactAction.type === 'open_scene' && def.interactAction.payload) {
-              if (def.interactAction.payload === 'house') {
-                emitQuestModalOpened('house');
-                dispatch({ type: 'SET_INTERACTION', action: { type: 'open_modal', payload: 'house' } });
-              } else {
-                dispatch({ type: 'SWITCH_SCENE', target: def.interactAction.payload });
-              }
-            } else {
-              const anchId = existing.anchorId ?? existing.id;
-              if (def.interactAction.type === 'open_modal' && def.interactAction.payload) {
-                emitQuestModalOpened(def.interactAction.payload);
-              }
-              dispatch({
-                type: 'SET_INTERACTION',
-                action: { ...def.interactAction, anchorId: def.interactAction?.payload === 'food_dish' ? anchId : undefined },
-              });
-            }
-            return;
-          }
+                  steps,
+                  speaker,
+                  npcItemType,
+                  questIdToComplete,
+                }),
+              optimisticallyActivateQuest: deps.optimisticallyActivateQuest,
+              emitQuestActivateByNpc,
+              switchScene: (target) => dispatch({ type: 'SWITCH_SCENE', target }),
+              dispatch,
+              clearInteraction: () => dispatch({ type: 'SET_INTERACTION', action: null }),
+              emitQuestModalOpened,
+            },
+          );
+          if (handled) return;
         }
         return;
       }
@@ -705,6 +710,35 @@ export function useGameActions(
           return;
         }
         if (existing) {
+          const def = state.itemDefs[existing.itemType];
+          const canInteract = def?.category === 'npc' || (def?.interactAction && def.interactAction.type !== 'none');
+          if (canInteract) {
+            const handled = tryInteractWithPlacedItem(
+              existing,
+              state.itemDefs,
+              state.quests,
+              state.farmLevel,
+              deps.petLevel ?? 1,
+              {
+                setPendingNpcDialog,
+                queueNpcDialog: (steps, speaker, npcItemType, _blocking, questIdToComplete) =>
+                  dispatch({
+                    type: 'QUEUE_NPC_DIALOG',
+                    steps,
+                    speaker,
+                    npcItemType,
+                    questIdToComplete,
+                  }),
+                optimisticallyActivateQuest: deps.optimisticallyActivateQuest,
+                emitQuestActivateByNpc,
+                switchScene: (target) => dispatch({ type: 'SWITCH_SCENE', target }),
+                dispatch,
+                clearInteraction: () => dispatch({ type: 'SET_INTERACTION', action: null }),
+                emitQuestModalOpened,
+              },
+            );
+            if (handled) return;
+          }
           const anchor = resolveAnchor(activeGrid, existing);
           if (anchor && !anchor.growthMs) {
             const anchorKey = tileKey(anchor.col, anchor.row);
@@ -865,6 +899,7 @@ export function useGameActions(
     catchBug,
     dismissCatchResult,
     digFossil,
+    shakeTree,
     completeQuest,
     selectTile,
     startMoveItem,

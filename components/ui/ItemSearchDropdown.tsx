@@ -4,7 +4,8 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/store/ThemeProvider';
 import { radius } from '@/constants/theme';
@@ -62,7 +63,7 @@ export function ItemSearchDropdown({
   return (
     <>
       <Pressable style={styles.inputRow} onPress={() => setOpen(true)}>
-        {selectedItem?.imageUrl && <Image source={{ uri: selectedItem.imageUrl }} style={styles.thumb} />}
+        {selectedItem?.imageUrl && <CachedImage source={{ uri: selectedItem.imageUrl }} style={styles.thumb} />}
         <Text style={selectedItem ? styles.selectedLabel : [styles.selectedLabel, { color: colors.textMuted }]}>
           {selectedItem ? selectedItem.label : placeholder}
         </Text>

@@ -12,6 +12,7 @@ const EV = {
   PLACE_ITEM: 'game:place_item',
   REMOVE_ITEM: 'game:remove_item',
   HARVEST: 'game:harvest',
+  SHAKE_TREE: 'game:shake_tree',
   RENAME_FARM: 'game:rename_farm',
   MOVE_ITEM: 'game:move_item',
   WATER_TILE: 'game:water_tile',
@@ -67,6 +68,7 @@ export interface UseGameSocketReturn {
   emitPlaceItem: (itemType: string, col: number, row: number) => void;
   emitRemoveItem: (itemId: string) => void;
   emitHarvest: (itemId: string) => void;
+  emitShakeTree: (anchorId: string) => void;
   emitRenameFarm: (name: string) => void;
   emitMoveItem: (itemId: string, col: number, row: number) => void;
   emitWaterTile: (col: number, row: number) => void;
@@ -317,6 +319,10 @@ export function useGameSocket({
     socketRef.current?.emit(EV.HARVEST, { itemId });
   }, []);
 
+  const emitShakeTree = useCallback((anchorId: string) => {
+    socketRef.current?.emit(EV.SHAKE_TREE, { anchorId });
+  }, []);
+
   const emitRenameFarm = useCallback((name: string) => {
     socketRef.current?.emit(EV.RENAME_FARM, { name });
   }, []);
@@ -433,6 +439,7 @@ export function useGameSocket({
     emitPlaceItem,
     emitRemoveItem,
     emitHarvest,
+    emitShakeTree,
     emitRenameFarm,
     emitMoveItem,
     emitWaterTile,

@@ -2,12 +2,12 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  Image,
   Pressable,
   StyleSheet,
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -95,7 +95,7 @@ const PetCard = React.memo(function PetCard({
           >
             <View style={[styles.imageArea, { backgroundColor: theme.colors.surfaceElevated }]}>
               {pet.image ? (
-                <Image source={{ uri: pet.image }} style={styles.petImage} resizeMode="contain" />
+                <CachedImage source={{ uri: pet.image }} style={styles.petImage} resizeMode="contain" />
               ) : (
                 <View style={styles.eggPlaceholder}>
                   <Text style={styles.eggEmoji}>🥚</Text>

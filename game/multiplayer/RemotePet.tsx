@@ -24,7 +24,7 @@ const BUBBLE_DISMISS_MS = 5000;
 import type { FishResultBubble } from './MultiplayerProvider';
 import { RARITY_BUBBLE_COLORS, formatFishSize, FishStarRow } from './fishBubbleUtils';
 
-const POLE_WADDLE_DEG = 4;
+const POLE_WADDLE_DEG = 2;
 const POLE_REEL_DEG = 8;
 
 interface RemotePetProps {
@@ -113,11 +113,17 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
 
   const poleAnimatedStyle = useAnimatedStyle(() => {
     const rot = isReelingSv.value ? reelRotation.value * POLE_REEL_DEG : bounceOffset.value * POLE_WADDLE_DEG;
-    return { transform: [{ rotate: `${-35 + rot}deg` }] };
+    return {
+      transform: [
+        { scaleX: -1 },
+        { rotate: `${-50 + rot}deg` },
+      ],
+    };
   });
 
   return (
     <Animated.View style={[styles.container, positionStyle]}>
+      {/* Equipment rendered behind pet */}
       {chairDef && (chairDef.imageUrl || chairDef.emoji) && (
         <View style={equipmentStyles.chairWrap} pointerEvents="none">
           {chairDef.imageUrl ? (
@@ -127,15 +133,6 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
           )}
         </View>
       )}
-      {displayImageUrl ? (
-        <CachedImage
-          source={{ uri: displayImageUrl }}
-          style={styles.petImage}
-          resizeMode="contain"
-        />
-      ) : (
-        <Text style={styles.fallbackEmoji}>🐾</Text>
-      )}
       {handToolDef && (handToolDef.imageUrl || handToolDef.emoji) && (
         <Animated.View style={[equipmentStyles.poleWrap, poleAnimatedStyle]}>
           {handToolDef.imageUrl ? (
@@ -144,6 +141,15 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
             <Text style={equipmentStyles.poleEmoji}>{handToolDef.emoji ?? '🔧'}</Text>
           )}
         </Animated.View>
+      )}
+      {displayImageUrl ? (
+        <CachedImage
+          source={{ uri: displayImageUrl }}
+          style={styles.petImage}
+          resizeMode="contain"
+        />
+      ) : (
+        <Text style={styles.fallbackEmoji}>🐾</Text>
       )}
       <Animated.View style={[styles.nametagWrap, unflipStyle]}>
         <View style={styles.nametagBg}>

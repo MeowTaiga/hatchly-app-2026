@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { InteractionManager, View, StyleSheet } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { TILE_SIZE } from './constants';
 import { SceneryLayer } from './SceneryLayer';
 import type { ItemDefinition } from './types';
@@ -55,8 +55,15 @@ export function BakedSceneryLayer({
   }, []);
 
   const handleLoad = useCallback(() => {
-    console.log('[Scenery] Baked image loaded:', imageUrl);
-    onReady?.();
+    if (__DEV__) console.log('[Scenery] Baked image loaded:', imageUrl);
+    // onLoad fires when decoded, not when painted. Defer until compositor has painted.
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          onReady?.();
+        });
+      });
+    });
   }, [onReady, imageUrl]);
 
   if (!snapshotLoaded) {
@@ -81,11 +88,11 @@ export function BakedSceneryLayer({
 
   return (
     <View style={[styles.container, { width, height }]} pointerEvents="none">
-      <Image
+      <CachedImage
+        key={imageUrl}
         source={{ uri: imageUrl }}
         style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        cachePolicy="disk"
+        resizeMode="contain"
         onLoad={handleLoad}
         onError={handleError}
       />

@@ -57,13 +57,19 @@ export const INITIAL_STATE: FormState = {
   imagePrompt: '',
   promptTouched: false,
   referenceItemType: '',
+  colorSchemeItemType: '',
+  extractedColors: [],
+  selectedColorIndices: [],
+  growsOnTrees: [],
 };
 
 // ─── Action types ────────────────────────────────────────────────────────────
 
 export type FormAction =
   | { type: 'POPULATE'; payload: AdminGameItem }
-  | { type: 'SET_FIELD'; field: keyof FormState; value: string | boolean | string[] }
+  | { type: 'SET_FIELD'; field: keyof FormState; value: string | boolean | string[] | number[] }
+  | { type: 'SET_EXTRACTED_COLORS'; itemType: string; colors: string[] }
+  | { type: 'TOGGLE_COLOR_INDEX'; index: number }
   | { type: 'RESET_PROMPT' }
   | { type: 'ADD_HARVEST_DROP'; currentSlug: string }
   | { type: 'REMOVE_HARVEST_DROP'; index: number }
@@ -133,11 +139,31 @@ export function formReducer(state: FormState, action: FormAction): FormState {
         foodBuffType: item.foodBuffType ?? '',
         foodBuffDurationMs: toStr(item.foodBuffDurationMs),
         npcDialog: (item.npcDialog ?? []).map((s) => ({ text: s.text })),
+        colorSchemeItemType: '',
+        extractedColors: [],
+        selectedColorIndices: [],
+        growsOnTrees: item.subCategory === 'fruit' ? (item.growsOnTrees ?? []) : [],
       };
     }
 
     case 'SET_FIELD':
       return { ...state, [action.field]: action.value };
+
+    case 'SET_EXTRACTED_COLORS':
+      return {
+        ...state,
+        colorSchemeItemType: action.itemType,
+        extractedColors: action.colors,
+        selectedColorIndices: action.colors.map((_, i) => i),
+      };
+
+    case 'TOGGLE_COLOR_INDEX': {
+      const idx = action.index;
+      const selected = new Set(state.selectedColorIndices);
+      if (selected.has(idx)) selected.delete(idx);
+      else selected.add(idx);
+      return { ...state, selectedColorIndices: Array.from(selected).sort((a, b) => a - b) };
+    }
 
     case 'RESET_PROMPT':
       return { ...state, promptTouched: false, imagePrompt: '' };

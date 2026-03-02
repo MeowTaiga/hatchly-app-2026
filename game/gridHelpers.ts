@@ -34,6 +34,7 @@ export function getAllPlacedItems(grid: GridData): PlacedItem[] {
 export function getBlockedTileKeys(grid: GridData): Set<string> {
   const blocked = new Set<string>();
   for (const item of getAllPlacedItems(grid)) {
+    if (item.anchorId) continue;
     for (let dr = 0; dr < item.tileRows; dr++) {
       for (let dc = 0; dc < item.tileCols; dc++) {
         blocked.add(tileKey(item.col + dc, item.row + dr));
@@ -54,6 +55,7 @@ export function getBlockedTileKeysForPet(
 ): Set<string> {
   const blocked = new Set<string>();
   for (const item of getAllPlacedItems(grid)) {
+    if (item.anchorId) continue;
     const def = itemDefs[item.itemType];
     const isWalkable = def?.subCategory && walkableSubCategories.includes(def.subCategory);
     if (isWalkable) continue;
@@ -369,6 +371,84 @@ export function findNearbyInteractable(
   return null;
 }
 
+/** Radius (tiles) for fossil/dig hole hit detection. 2 = 5x5 area so fossils are always tappable. */
+const DIGGABLE_TAP_RADIUS = 2;
+
+/** Find a diggable item (fossil_hole or dig_hole) at tap or within radius. Ensures fossils are always diggable. */
+export function findDiggableAtTap(
+  grid: GridData,
+  col: number,
+  row: number,
+  itemDefs: Record<string, ItemDefinition>,
+): PlacedItem | null {
+  let closest: PlacedItem | null = null;
+  let closestDist = Infinity;
+  for (let dr = -DIGGABLE_TAP_RADIUS; dr <= DIGGABLE_TAP_RADIUS; dr++) {
+    for (let dc = -DIGGABLE_TAP_RADIUS; dc <= DIGGABLE_TAP_RADIUS; dc++) {
+      const tc = col + dc;
+      const tr = row + dr;
+      if (tc < 0 || tc >= grid.cols || tr < 0 || tr >= grid.rows) continue;
+      const items = getItemsAt(grid, tc, tr);
+      for (const item of items) {
+        const def = itemDefs[item.itemType];
+        const isDiggable =
+          item.itemType === 'fossil_hole' || def?.subCategory === 'dig_hole';
+        if (!isDiggable) continue;
+        const dist = Math.abs(dc) + Math.abs(dr);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = item;
+        }
+      }
+    }
+  }
+  return closest;
+}
+
+/** Fully grown trees use a 4x4 image over 2x2 footprint — visual extends 1 left, 2 up, 1 right. Hit area = 4x4. */
+const FULLY_GROWN_TREE_HIT_COLS = 4;
+const FULLY_GROWN_TREE_HIT_ROWS = 4;
+const FULLY_GROWN_TREE_HIT_OFFSET_COL = -1;
+const FULLY_GROWN_TREE_HIT_OFFSET_ROW = -2;
+
+/** Find a tree at tap. Fully grown: 4x4 hit area (matches visual). Others: tap + 8 neighbors. */
+export function findTreeAtTap(
+  grid: GridData,
+  tapCol: number,
+  tapRow: number,
+  itemDefs: Record<string, ItemDefinition>,
+): PlacedItem | null {
+  for (const item of getAllPlacedItems(grid)) {
+    if (item.anchorId) continue;
+    const def = itemDefs[item.itemType];
+    if (def?.category !== 'tree') continue;
+    const col = item.col;
+    const row = item.row;
+    if (item.itemType.startsWith('tree_fully_grown_')) {
+      const hitCol = col + FULLY_GROWN_TREE_HIT_OFFSET_COL;
+      const hitRow = row + FULLY_GROWN_TREE_HIT_OFFSET_ROW;
+      if (
+        tapCol >= hitCol &&
+        tapCol < hitCol + FULLY_GROWN_TREE_HIT_COLS &&
+        tapRow >= hitRow &&
+        tapRow < hitRow + FULLY_GROWN_TREE_HIT_ROWS
+      ) {
+        return item;
+      }
+    }
+  }
+  for (const [dc, dr] of TAP_NEIGHBOR_OFFSETS) {
+    const tc = tapCol + dc;
+    const tr = tapRow + dr;
+    if (tc < 0 || tc >= grid.cols || tr < 0 || tr >= grid.rows) continue;
+    const item = getItemAt(grid, tc, tr);
+    if (!item) continue;
+    const def = itemDefs[item.itemType];
+    if (def?.category === 'tree') return item;
+  }
+  return null;
+}
+
 /**
  * Returns all valid seed-placement positions across every soil patch on the grid.
  * Each position is the top-left anchor of a seedCols x seedRows quadrant within
@@ -430,6 +510,89 @@ export function canPlaceSoil(
  * with size (cols, rows) — i.e. tiles overlapping existing soil's inner plantable area.
  * Used for grid highlights during drag.
  */
+export type TreePlacementResult =
+  | { ok: true }
+  | { ok: false; reason: 'collision' | 'out_of_bounds' };
+
+/**
+ * Checks if a tree can be placed at (col, row) with the given footprint.
+ * Sapling: 1x1, in_growth/fully_grown: 2x2.
+ * @param cols - Footprint width (1 for sapling, 2 for in_growth/fully_grown).
+ * @param rows - Footprint height.
+ * @param excludeAnchorId - When moving, exclude this anchor so we don't block the item's current position.
+ */
+export function canPlaceTree(
+  grid: GridData,
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  excludeAnchorId?: string,
+): TreePlacementResult {
+  if (col + cols > grid.cols || row + rows > grid.rows || col < 0 || row < 0) {
+    return { ok: false, reason: 'out_of_bounds' };
+  }
+  const blocked = new Set<string>();
+  for (const item of getAllPlacedItems(grid)) {
+    if (item.anchorId) continue;
+    const aid = item.id;
+    if (excludeAnchorId && aid === excludeAnchorId) continue;
+    for (let dr = 0; dr < item.tileRows; dr++) {
+      for (let dc = 0; dc < item.tileCols; dc++) {
+        blocked.add(tileKey(item.col + dc, item.row + dr));
+      }
+    }
+  }
+  for (let dr = 0; dr < rows; dr++) {
+    for (let dc = 0; dc < cols; dc++) {
+      if (blocked.has(tileKey(col + dc, row + dr))) {
+        return { ok: false, reason: 'collision' };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * Returns tile keys that would be invalid for tree placement.
+ * Used for drag preview highlights (red squares).
+ * Only marks tiles that actually overlap existing items (or are out of bounds),
+ * not the entire preview footprint — matching soil behavior.
+ */
+export function getTreeInvalidTileKeys(
+  grid: GridData,
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  excludeAnchorId?: string,
+): Set<string> {
+  const invalid = new Set<string>();
+  const blocked = new Set<string>();
+  for (const item of getAllPlacedItems(grid)) {
+    if (item.anchorId) continue;
+    const aid = item.id;
+    if (excludeAnchorId && aid === excludeAnchorId) continue;
+    for (let dr = 0; dr < item.tileRows; dr++) {
+      for (let dc = 0; dc < item.tileCols; dc++) {
+        blocked.add(tileKey(item.col + dc, item.row + dr));
+      }
+    }
+  }
+  for (let dr = 0; dr < rows; dr++) {
+    for (let dc = 0; dc < cols; dc++) {
+      const nc = col + dc;
+      const nr = row + dr;
+      const key = tileKey(nc, nr);
+      const outOfBounds = nc < 0 || nc >= grid.cols || nr < 0 || nr >= grid.rows;
+      if (outOfBounds || blocked.has(key)) {
+        invalid.add(key);
+      }
+    }
+  }
+  return invalid;
+}
+
 export function getSoilInvalidTileKeys(
   grid: GridData,
   itemDefs: Record<string, ItemDefinition>,

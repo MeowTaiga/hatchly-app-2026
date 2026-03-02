@@ -1,6 +1,7 @@
 import React, {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -12,8 +13,10 @@ import { AppDrawer, type AppDrawerRef } from '@/components/ui/AppDrawer';
 import { NumberPicker } from '@/components/onboarding/NumberPicker';
 import { useWeight } from '@/store/WeightProvider';
 import { useTheme } from '@/store/ThemeProvider';
+import { api } from '@/lib/api';
 import { spacing, radius } from '@/constants/theme';
 import { drawerInner } from '@/components/ui/drawerStyles';
+import { heightToInches, calculateBMI } from '@/utils/weightUtils';
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -24,6 +27,34 @@ export interface WeightDrawerRef {
 
 interface WeightDrawerProps {
   onWeightLogged?: (xpGained: number, gemsAwarded?: number) => void;
+}
+
+// ─── StatCard (DRY) ─────────────────────────────────────────────────────────
+
+function StatCard({
+  icon,
+  iconBg,
+  iconColor,
+  value,
+  label,
+  st,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
+  value: string;
+  label: string;
+  st: { card: object; iconWrap: object; value: object; label: object };
+}) {
+  return (
+    <View style={st.card}>
+      <View style={[st.iconWrap, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={18} color={iconColor} />
+      </View>
+      <Text style={st.value}>{value}</Text>
+      <Text style={st.label}>{label}</Text>
+    </View>
+  );
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -51,27 +82,6 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
             fontWeight: '600',
             color: colors.secondary,
           },
-          heroCard: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
-            backgroundColor: colors.surface,
-            borderRadius: radius.xl,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: colors.border,
-          },
-          heroIcon: {
-            width: 38,
-            height: 38,
-            borderRadius: 14,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: colors.surfaceElevated,
-          },
-          heroTextWrap: { flex: 1 },
-          heroTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
-          heroSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
           pickerCard: {
             backgroundColor: colors.surface,
             borderRadius: radius.xl,
@@ -86,30 +96,24 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
             marginTop: -6,
             marginBottom: 8,
           },
-          summaryCard: {
-            backgroundColor: colors.surfaceElevated,
+          bmiRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: colors.surface,
             borderRadius: radius.xl,
             borderWidth: 1,
             borderColor: colors.border,
             padding: 14,
-            alignItems: 'center',
+            marginTop: spacing.sm,
           },
-          summaryTitle: {
-            fontSize: 11,
-            fontWeight: '700',
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
-            color: colors.textMuted,
-          },
-          summaryWeight: {
-            fontSize: 30,
-            fontWeight: '800',
-            color: colors.text,
-            marginTop: 4,
-          },
-          summarySub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-          statGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-          statCard: {
+          bmiLabel: { fontSize: 12, color: colors.textSecondary },
+          bmiCell: { alignItems: 'center' as const },
+          bmiCenter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+          bmiValue: { fontSize: 18, fontWeight: '700', color: colors.text },
+          bmiArrow: { fontSize: 16, color: colors.textMuted },
+          statGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: spacing.sm },
+          card: {
             minWidth: '31%',
             flexGrow: 1,
             backgroundColor: colors.surface,
@@ -120,22 +124,23 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
             alignItems: 'center',
             gap: 4,
           },
-          statIconWrap: {
+          iconWrap: {
             width: 32,
             height: 32,
             borderRadius: 10,
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 2,
+            color: colors.accent,
           },
-          statValue: {
+          value: {
             fontSize: 13,
             fontWeight: '700',
             color: colors.text,
             textAlign: 'center',
           },
-          statLabel: { fontSize: 10, color: colors.textMuted, textAlign: 'center' },
-          error: { color: colors.error, fontSize: 13, textAlign: 'center' },
+          label: { fontSize: 10, color: colors.textMuted, textAlign: 'center' },
+          error: { color: colors.error, fontSize: 13, textAlign: 'center', marginTop: spacing.xs },
           btn: {
             flexDirection: 'row',
             alignItems: 'center',
@@ -144,24 +149,42 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
             paddingVertical: 14,
             borderRadius: radius.full,
             gap: 8,
-            marginTop: spacing.xs,
+            marginTop: spacing.md,
           },
           btnOff: { opacity: 0.4 },
           btnText: { ...theme.typography.button, fontSize: 16, color: colors.onPrimary ?? '#fff' },
         }),
       [theme],
     );
+
     const drawerRef = useRef<AppDrawerRef>(null);
     const {
-      currentWeight, todayLog, weeklyChange, goalWeight, logs,
-      logWeight, updateTodayWeight,
+      currentWeight,
+      todayLog,
+      weeklyChange,
+      goalWeight,
+      logs,
+      logWeight,
+      updateTodayWeight,
     } = useWeight();
 
     const [weight, setWeight] = useState(150);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [height, setHeight] = useState<{ feet: number; inches: number } | null>(null);
 
     const isEditing = !!todayLog;
+
+    useEffect(() => {
+      api
+        .getOnboardingProgress()
+        .then(({ profile }) => {
+          if (profile?.heightFeet != null && profile?.heightInches != null) {
+            setHeight({ feet: profile.heightFeet, inches: profile.heightInches });
+          }
+        })
+        .catch(() => {});
+    }, []);
 
     useImperativeHandle(ref, () => ({
       open() {
@@ -169,7 +192,9 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
         setWeight(todayLog?.weight ?? currentWeight ?? 150);
         drawerRef.current?.open();
       },
-      close() { drawerRef.current?.close(); },
+      close() {
+        drawerRef.current?.close();
+      },
     }));
 
     const handleSubmit = useCallback(async () => {
@@ -186,15 +211,18 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
           onWeightLogged?.(xpGained, gemsAwarded ?? 0);
           drawerRef.current?.close();
         }
-      } catch (err: any) {
-        if (err?.code === 'WEIGHT_ALREADY_LOGGED') {
+      } catch (err: unknown) {
+        const e = err as { code?: string; message?: string };
+        if (e?.code === 'WEIGHT_ALREADY_LOGGED') {
           setError('Already logged today — editing instead.');
           try {
             await updateTodayWeight(weight);
             drawerRef.current?.close();
-          } catch { setError('Failed to update weight.'); }
+          } catch {
+            setError('Failed to update weight.');
+          }
         } else {
-          setError(err?.message ?? 'Something went wrong');
+          setError(e?.message ?? 'Something went wrong');
         }
       }
       setSubmitting(false);
@@ -202,12 +230,48 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
 
     const diff = currentWeight && goalWeight ? +(currentWeight - goalWeight).toFixed(1) : null;
     const totalLogs = logs.length;
-    const weeklyLabel = useMemo(() => {
-      if (weeklyChange == null) return 'No weekly trend yet';
-      if (weeklyChange < 0) return `${Math.abs(weeklyChange).toFixed(1)} lbs down this week`;
-      if (weeklyChange > 0) return `${Math.abs(weeklyChange).toFixed(1)} lbs up this week`;
-      return 'Steady this week';
-    }, [weeklyChange]);
+    const heightInches = height ? heightToInches(height.feet, height.inches) : 0;
+    const currentBmi = heightInches > 0 ? calculateBMI(weight, heightInches) : null;
+    const goalBmi =
+      heightInches > 0 && goalWeight > 0 ? calculateBMI(goalWeight, heightInches) : null;
+
+    const stats = useMemo(() => {
+      const items: Array<{
+        icon: keyof typeof Ionicons.glyphMap;
+        iconBg: string;
+        iconColor: string;
+        value: string;
+        label: string;
+      }> = [];
+      if (weeklyChange !== null) {
+        items.push({
+          icon: weeklyChange <= 0 ? 'trending-down' : 'trending-up',
+          iconBg: `${weeklyChange <= 0 ? colors.successDark : colors.errorDark}16`,
+          iconColor: weeklyChange <= 0 ? colors.successDark : colors.errorDark,
+          value: `${weeklyChange > 0 ? '+' : ''}${weeklyChange} lbs`,
+          label: 'This week',
+        });
+      }
+      if (diff !== null) {
+        items.push({
+          icon: 'flag-outline',
+          iconBg: `${colors.secondary}16`,
+          iconColor: colors.secondary,
+          value: diff > 0 ? `${diff} to go` : 'Reached!',
+          label: `Goal: ${goalWeight} lbs`,
+        });
+      }
+      if (totalLogs > 0) {
+        items.push({
+          icon: 'calendar-outline',
+          iconBg: `${colors.primary}14`,
+          iconColor: colors.accent,
+          value: String(totalLogs),
+          label: 'Total logs',
+        });
+      }
+      return items;
+    }, [weeklyChange, diff, goalWeight, totalLogs, colors]);
 
     return (
       <AppDrawer
@@ -225,16 +289,6 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
             </View>
           )}
 
-          <View style={st.heroCard}>
-            <View style={st.heroIcon}>
-              <Ionicons name="cloud-outline" size={20} color={colors.secondary} />
-            </View>
-            <View style={st.heroTextWrap}>
-              <Text style={st.heroTitle}>Take a calm progress snapshot</Text>
-              <Text style={st.heroSub}>Consistency beats perfection every time.</Text>
-            </View>
-          </View>
-
           <View style={st.pickerCard}>
             <NumberPicker
               value={weight}
@@ -248,51 +302,40 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
             <Text style={st.pickerHint}>Tap the number to type directly</Text>
           </View>
 
-          <View style={st.summaryCard}>
-            <Text style={st.summaryTitle}>Today</Text>
-            <Text style={st.summaryWeight}>{weight.toFixed(1)} lbs</Text>
-            <Text style={st.summarySub}>{weeklyLabel}</Text>
-          </View>
-
-          <View style={st.statGrid}>
-            {weeklyChange !== null && (
-              <View style={st.statCard}>
-                <View style={[st.statIconWrap, { backgroundColor: `${colors.accent}16` }]}>
-                  <Ionicons
-                    name={weeklyChange <= 0 ? 'trending-down' : 'trending-up'}
-                    size={18}
-                    color={weeklyChange <= 0 ? colors.successDark : colors.errorDark}
-                  />
-                </View>
-                <Text style={st.statValue}>
-                  {weeklyChange > 0 ? '+' : ''}{weeklyChange} lbs
+          {currentBmi != null && (
+            <View style={st.bmiRow}>
+              <View style={st.bmiCell}>
+                <Text style={st.bmiLabel}>Current</Text>
+                <Text style={st.bmiValue}>{currentBmi.toFixed(1)}</Text>
+              </View>
+              <View style={st.bmiCenter}>
+                <Text style={st.bmiLabel}>BMI</Text>
+                <Text style={st.bmiArrow}>→</Text>
+              </View>
+              <View style={st.bmiCell}>
+                <Text style={st.bmiLabel}>Goal</Text>
+                <Text style={st.bmiValue}>
+                  {goalBmi != null ? goalBmi.toFixed(1) : '—'}
                 </Text>
-                <Text style={st.statLabel}>This week</Text>
               </View>
-            )}
+            </View>
+          )}
 
-            {diff !== null && (
-              <View style={st.statCard}>
-                <View style={[st.statIconWrap, { backgroundColor: `${colors.secondary}16` }]}>
-                  <Ionicons name="flag-outline" size={18} color={colors.secondary} />
-                </View>
-                <Text style={st.statValue}>
-                  {diff > 0 ? `${diff} to go` : 'Reached!'}
-                </Text>
-                <Text style={st.statLabel}>Goal: {goalWeight} lbs</Text>
-              </View>
-            )}
-
-            {totalLogs > 0 && (
-              <View style={st.statCard}>
-                <View style={[st.statIconWrap, { backgroundColor: `${colors.primary}14` }]}>
-                  <Ionicons name="calendar-outline" size={18} color={colors.accent} />
-                </View>
-                <Text style={st.statValue}>{totalLogs}</Text>
-                <Text style={st.statLabel}>Total logs</Text>
-              </View>
-            )}
-          </View>
+          {stats.length > 0 && (
+            <View style={st.statGrid}>
+              {stats.map((s, i) => (
+                <StatCard
+                  key={i}
+                  icon={s.icon}
+                  iconBg={s.iconBg}
+                  iconColor={s.iconColor}
+                  value={s.value}
+                  label={s.label}
+                  st={st}
+                />
+              ))}
+            </View>
+          )}
 
           {error ? <Text style={st.error}>{error}</Text> : null}
 
@@ -301,7 +344,9 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
             disabled={submitting}
             style={[st.btn, submitting && st.btnOff]}
           >
-            {submitting ? <ActivityIndicator color={colors.onPrimary ?? '#fff'} /> : (
+            {submitting ? (
+              <ActivityIndicator color={colors.onPrimary ?? '#fff'} />
+            ) : (
               <>
                 <Ionicons
                   name={isEditing ? 'checkmark-circle' : 'scale'}
@@ -319,4 +364,3 @@ export const WeightDrawer = forwardRef<WeightDrawerRef, WeightDrawerProps>(
     );
   },
 );
-

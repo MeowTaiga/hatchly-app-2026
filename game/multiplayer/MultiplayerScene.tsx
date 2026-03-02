@@ -4,6 +4,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedReaction,
+  useFrameCallback,
   withTiming,
   withDelay,
   withRepeat,
@@ -11,14 +12,16 @@ import Animated, {
   cancelAnimation,
   Easing,
   runOnJS,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { CachedImage } from '@/components/ui/CachedImage';
 import { useTheme } from '@/store/ThemeProvider';
 import { useAuth } from '@/store/AuthProvider';
 import { api } from '@/lib/api';
-import { TILE_SIZE, MIN_ZOOM, MAX_ZOOM, PET_WALK_SPEED_MS } from '../constants';
+import { TILE_SIZE, MIN_ZOOM, MAX_ZOOM } from '../constants';
+import { findPath, pathToWaypoints, PET_WALK_MS_PER_TILE } from './pathfinding';
 import { useGame } from '../GameProvider';
-import { executeAction } from '../actionRegistry';
+import { tryInteractWithPlacedItem } from '../interactWithPlacedItem';
 import { useMultiplayer } from './MultiplayerProvider';
 import { useWalkAnimation } from './useWalkAnimation';
 import { RemotePet } from './RemotePet';
@@ -28,12 +31,13 @@ import { BobberView } from './BobberView';
 import { PlayerDrawer, type PlayerDrawerRef } from '../PlayerDrawer';
 import { FishingMiniGame } from '../FishingMiniGame';
 import { DayNightOverlay } from '../DayNightOverlay';
-import { QuestBubble, getQuestStatusForNpc, meetsActivationRequirements } from './QuestBubble';
+import { QuestBubble, getQuestStatusForNpc } from './QuestBubble';
 import type { SceneData, WalkableRect } from './types';
 import type { FishResultBubble } from './MultiplayerProvider';
 import { RARITY_BUBBLE_COLORS, formatFishSize, FishStarRow } from './fishBubbleUtils';
 const PET_SIZE = TILE_SIZE * 2;
 const HALF_PET = PET_SIZE / 2;
+const MAX_PATH_TILES = 20;
 
 function isTileWalkable(
   col: number,
@@ -159,6 +163,11 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
   const myPosRef = useRef(myPos);
   myPosRef.current = myPos;
   const spawnSyncRef = useRef(false);
+  const pathQueueRef = useRef<Array<{ x: number; y: number; durationMs: number }>>([]);
+  const pathTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pathInProgress, setPathInProgress] = useState<Array<{ x: number; y: number }> | null>(null);
+  const petVisualPosRef = useRef<{ x: number; y: number }>({ x: myPos.x, y: myPos.y });
+  if (!pathInProgress) petVisualPosRef.current = { x: myPos.x, y: myPos.y };
 
   // Sync myPos to spawnPos when we join (spawnPos arrives async from mp:joined)
   useEffect(() => {
@@ -174,6 +183,10 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
       spawnSyncRef.current = false;
     }
   }, [myPos.x, myPos.y, spawnPos.x, spawnPos.y]);
+
+  useEffect(() => () => {
+    if (pathTimeoutRef.current) clearTimeout(pathTimeoutRef.current);
+  }, []);
 
   const lastChatByUser = useRef<Map<string, string>>(new Map());
   const playerDrawerRef = useRef<PlayerDrawerRef>(null);
@@ -221,9 +234,13 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
     return Math.min(MAX_ZOOM, minZoom);
   }, [worldW, worldH, screenW, screenH]);
 
-  const translateX = useSharedValue((screenW - worldW * sceneZoom) / 2);
-  const translateY = useSharedValue((screenH - worldH * sceneZoom) / 2);
   const scale = useSharedValue(sceneZoom);
+  const cameraTargetX = useSharedValue(myPos.x);
+  const cameraTargetY = useSharedValue(myPos.y);
+  const cameraFacing = useSharedValue(0);
+  const smoothCamX = useSharedValue(myPos.x);
+  const smoothCamY = useSharedValue(myPos.y);
+  const cameraLagOffset = useSharedValue(0);
 
   const walkableRect = useMemo(() => {
     const wr = sceneData?.walkableRect;
@@ -271,24 +288,44 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
       screenH / 2 - myPos.y * sceneZoom,
       sceneZoom,
     );
-    translateX.value = target.tx;
-    translateY.value = target.ty;
+    cameraTargetX.value = myPos.x;
+    cameraTargetY.value = myPos.y;
+    smoothCamX.value = myPos.x;
+    smoothCamY.value = myPos.y;
     cameraRef.current = { tx: target.tx, ty: target.ty, s: sceneZoom };
     cameraInitDone.current = true;
   }, [sceneZoom, worldW, worldH, screenW, screenH]);
 
   useEffect(() => {
-    if (!cameraInitDone.current) return;
-    const target = clampTransJS(
-      screenW / 2 - myPos.x * sceneZoom,
-      screenH / 2 - myPos.y * sceneZoom,
-      sceneZoom,
-    );
-    const camDuration = 900;
-    const camDelay = 300;
-    translateX.value = withDelay(camDelay, withTiming(target.tx, { duration: camDuration, easing: Easing.out(Easing.quad) }));
-    translateY.value = withDelay(camDelay, withTiming(target.ty, { duration: camDuration, easing: Easing.out(Easing.quad) }));
+    cameraTargetX.value = myPos.x;
+    cameraTargetY.value = myPos.y;
   }, [myPos.x, myPos.y]);
+
+  useEffect(() => {
+    if (!pathInProgress) cameraFacing.value = 0;
+  }, [pathInProgress]);
+
+  const CAM_LAG_PX = 22;
+  const CAM_LERP = 0.28;
+  const worldWForCam = worldW;
+  const worldHForCam = worldH;
+  useFrameCallback((frameInfo) => {
+    'worklet';
+    const dt = Math.min(frameInfo.timeSincePreviousFrame ?? 16, 50) / 16;
+    const t = 1 - Math.pow(1 - CAM_LERP, dt);
+    smoothCamX.value = smoothCamX.value + (cameraTargetX.value - smoothCamX.value) * t;
+    smoothCamY.value = smoothCamY.value + (cameraTargetY.value - smoothCamY.value) * t;
+  });
+
+  useAnimatedReaction(
+    () => cameraFacing.value,
+    (facing) => {
+      cameraLagOffset.value = withTiming(
+        -facing * CAM_LAG_PX,
+        { duration: facing === 0 ? 380 : 100, easing: Easing.out(Easing.quad) },
+      );
+    },
+  );
 
   const worldCols = sceneData?.cols ?? 0;
   const worldRows = sceneData?.rows ?? 0;
@@ -304,6 +341,57 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
 
       const clickedCol = Math.floor(wx / TILE_SIZE);
       const clickedRow = Math.floor(wy / TILE_SIZE);
+      const startCol = Math.floor(petVisualPosRef.current.x / TILE_SIZE);
+      const startRow = Math.floor(petVisualPosRef.current.y / TILE_SIZE);
+
+      const tryMoveWithPath = (destCol: number, destRow: number) => {
+        pathQueueRef.current = [];
+        setPathInProgress(null);
+        if (pathTimeoutRef.current) {
+          clearTimeout(pathTimeoutRef.current);
+          pathTimeoutRef.current = null;
+        }
+        const path = findPath(startCol, startRow, destCol, destRow, walkableRect, unwalkableSet, worldCols, worldRows);
+        if (!path || path.length > MAX_PATH_TILES) return false;
+        const petX = petVisualPosRef.current.x;
+        const petY = petVisualPosRef.current.y;
+        const waypoints = pathToWaypoints(path, undefined, {
+          startX: petX,
+          startY: petY,
+          rect: walkableRect,
+          unwalkableSet,
+          worldCols,
+          worldRows,
+        });
+        const first = { x: waypoints[0].x, y: waypoints[0].y };
+        const final = waypoints[waypoints.length - 1];
+        const totalDuration = waypoints.reduce((sum, w) => sum + w.durationMs, 0);
+        pathQueueRef.current = waypoints.slice(1);
+        setWaypoint({ x: final.x, y: final.y, visibleForMs: Math.max(0, totalDuration - 180) });
+        moveMyPet(first.x, first.y);
+        setMyPos(first);
+        setPathInProgress(waypoints.length > 1 ? waypoints.map((w) => ({ x: w.x, y: w.y })) : null);
+        const dispatchNext = () => {
+          pathTimeoutRef.current = null;
+          const queue = pathQueueRef.current;
+          if (queue.length === 0) return;
+          const next = queue.shift()!;
+          moveMyPet(next.x, next.y);
+          if (queue.length === 0) {
+            setPathInProgress(null);
+            setMyPos({ x: final.x, y: final.y });
+          } else {
+            pathTimeoutRef.current = setTimeout(dispatchNext, queue[0].durationMs);
+          }
+        };
+        if (pathQueueRef.current.length > 0) {
+          pathTimeoutRef.current = setTimeout(dispatchNext, pathQueueRef.current[0].durationMs);
+        } else if (waypoints.length === 1) {
+          setPathInProgress(null);
+          setMyPos({ x: final.x, y: final.y });
+        }
+        return true;
+      };
 
       // Check if tap hit a fishing tile — require fishing pole, then walk + cast
       if (fishingTilesSet.has(`${clickedCol},${clickedRow}`)) {
@@ -312,19 +400,11 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
           return;
         }
         if (fishingByUser.has(myUserId ?? '')) {
-          // Already fishing: re-cast at new tile without moving the pet
           fishCast(sceneSlug, clickedCol, clickedRow);
           return;
         }
         const nearest = findNearestWalkable(clickedCol, clickedRow, walkableRect, unwalkableSet, worldCols, worldRows);
-        if (nearest) {
-          const destX = (nearest.col + 0.5) * TILE_SIZE;
-          const destY = (nearest.row + 0.5) * TILE_SIZE;
-          const distPx = Math.hypot(destX - myPosRef.current.x, destY - myPosRef.current.y);
-          const duration = Math.max(200, (distPx / TILE_SIZE) * PET_WALK_SPEED_MS);
-          setWaypoint({ x: destX, y: destY, visibleForMs: Math.max(0, duration - 180) });
-          moveMyPet(destX, destY);
-          setMyPos({ x: destX, y: destY });
+        if (nearest && tryMoveWithPath(nearest.col, nearest.row)) {
           fishCast(sceneSlug, clickedCol, clickedRow);
         }
         return;
@@ -375,121 +455,44 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
         const left = p.x + (baseW - w) / 2;
         const top = p.y + (baseH - h);
         if (wx >= left && wx <= left + w && wy >= top && wy <= top + h) {
-          if (def?.category === 'npc') {
-            // Priority: completable quest end dialog > active quest start dialog > locked-but-available > completed quest end dialog > default NPC dialog
-            const petLevel = user?.pet?.level ?? 1;
-            const completableQuestWithEndDialog = quests?.find(
-              (q) =>
-                q.status === 'active' &&
-                q.canComplete &&
-                q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === p.itemType) &&
-                q.endDialog?.length,
-            );
-            const activeQuestWithDialog = quests?.find(
-              (q) =>
-                q.status === 'active' &&
-                q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === p.itemType) &&
-                q.startDialog?.length &&
-                !(q.canComplete && q.endDialog?.length), // completable with endDialog handled above
-            );
-            const lockedQuestAvailable = quests?.find(
-              (q) =>
-                q.status === 'locked' &&
-                q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === p.itemType) &&
-                q.startDialog?.length &&
-                meetsActivationRequirements(q, petLevel, farmLevel, quests ?? []),
-            );
-            const completedQuestWithEndDialog = quests?.find(
-              (q) =>
-                q.status === 'completed' &&
-                q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === p.itemType) &&
-                q.endDialog?.length,
-            );
-            const steps = completableQuestWithEndDialog
-              ? completableQuestWithEndDialog.endDialog!
-              : activeQuestWithDialog
-                ? activeQuestWithDialog.startDialog!
-                : lockedQuestAvailable
-                  ? lockedQuestAvailable.startDialog!
-                  : completedQuestWithEndDialog
-                    ? completedQuestWithEndDialog.endDialog!
-                    : def.npcDialog ?? [];
-            const useNpcSpeaker = completableQuestWithEndDialog
-              ? completableQuestWithEndDialog.endDialogSpeaker !== 'pet'
-              : activeQuestWithDialog
-                ? activeQuestWithDialog.startDialogSpeaker !== 'pet'
-                : lockedQuestAvailable
-                  ? lockedQuestAvailable.startDialogSpeaker !== 'pet'
-                  : completedQuestWithEndDialog
-                    ? completedQuestWithEndDialog.endDialogSpeaker !== 'pet'
-                    : true;
-            if (steps.length) {
-              const dialogInfo = {
-                steps,
-                speaker: useNpcSpeaker ? { name: def.label, imageUrl: def.imageUrl ?? null } : undefined,
-                npcItemType: p.itemType,
-              };
-              setPendingNpcDialog(dialogInfo);
-              // Show dialog immediately for locked-but-available (don't wait for server round-trip)
-              if (lockedQuestAvailable) {
-                queueNpcDialog(dialogInfo.steps, dialogInfo.speaker, dialogInfo.npcItemType);
-                optimisticallyActivateQuest(lockedQuestAvailable.questId);
-              }
-              // Show end dialog immediately for completable (no server response, so we'd never show it otherwise)
-              if (completableQuestWithEndDialog) {
-                queueNpcDialog(dialogInfo.steps, dialogInfo.speaker, dialogInfo.npcItemType, undefined, completableQuestWithEndDialog.questId);
-              }
-            }
-            // Emit activation for active (in-progress) or locked-but-available; not for completable or completed
-            if (!completableQuestWithEndDialog && !completedQuestWithEndDialog) {
-              // Always use emitQuestActivateByNpc (game socket) so server response (QUEST_ACTIVATED) reaches
-              // the connection that has the game state listeners. Using SocketProvider's socket would send
-              // the response to a different connection, so DB updates wouldn't sync to client.
-              emitQuestActivateByNpc(p.itemType);
-            }
-            break;
-          }
-          const act = def?.interactAction;
-          if (act && act.type !== 'none') {
-            if (act.type === 'open_scene' && act.payload) {
-              switchScene(act.payload);
-            } else {
-              if (act.type === 'open_modal' && act.payload) {
-                emitQuestModalOpened(act.payload);
-              }
-              if (!executeAction(act, clearInteraction)) {
-                setPendingInteraction(act);
-              }
-            }
-          }
+          const placedItem = {
+            id: p.id,
+            itemType: p.itemType,
+            col: 0,
+            row: 0,
+            color: '',
+            tileCols: def?.cols ?? 1,
+            tileRows: def?.rows ?? 1,
+          };
+          const petLevel = user?.pet?.level ?? 1;
+          const callbacks = {
+            setPendingNpcDialog,
+            queueNpcDialog,
+            optimisticallyActivateQuest,
+            emitQuestActivateByNpc,
+            switchScene,
+            setPendingInteraction,
+            clearInteraction,
+            emitQuestModalOpened,
+          };
+          tryInteractWithPlacedItem(placedItem, itemDefs, quests, farmLevel, petLevel, callbacks);
           break;
         }
       }
 
-      setMyPos((prev) => {
-        const clickedWalkable = isTileWalkable(clickedCol, clickedRow, walkableRect, unwalkableSet, worldCols, worldRows);
-        let dest: { x: number; y: number };
-        if (clickedWalkable) {
-          dest = clampToWalkable(wx, wy, walkableRect, unwalkableSet, worldW, worldH, prev.x, prev.y);
-        } else {
-          const nearest = findNearestWalkable(clickedCol, clickedRow, walkableRect, unwalkableSet, worldCols, worldRows);
-          if (nearest) {
-            dest = {
-              x: (nearest.col + 0.5) * TILE_SIZE,
-              y: (nearest.row + 0.5) * TILE_SIZE,
-            };
-          } else {
-            dest = prev;
-          }
-        }
-        const distPx = Math.hypot(dest.x - prev.x, dest.y - prev.y);
-        if (distPx > 2) {
-          const duration = Math.max(200, (distPx / TILE_SIZE) * PET_WALK_SPEED_MS);
-          setWaypoint({ x: dest.x, y: dest.y, visibleForMs: Math.max(0, duration - 180) });
-        }
-        moveMyPet(dest.x, dest.y);
-        return dest;
-      });
+      // General tap-to-walk with pathfinding
+      let destCol: number;
+      let destRow: number;
+      if (isTileWalkable(clickedCol, clickedRow, walkableRect, unwalkableSet, worldCols, worldRows)) {
+        destCol = clickedCol;
+        destRow = clickedRow;
+      } else {
+        const nearest = findNearestWalkable(clickedCol, clickedRow, walkableRect, unwalkableSet, worldCols, worldRows);
+        if (!nearest) return;
+        destCol = nearest.col;
+        destRow = nearest.row;
+      }
+      tryMoveWithPath(destCol, destRow);
     },
     [worldW, worldH, worldCols, worldRows, moveMyPet, walkableRect, unwalkableSet, fishingTilesSet, fishingByUser, sceneSlug, fishCast, sceneData?.placements, itemDefs, quests, farmLevel, user?.pet?.level, switchScene, setPendingInteraction, clearInteraction, setPendingNpcDialog, queueNpcDialog, optimisticallyActivateQuest, emitQuestActivateByNpc, emitQuestModalOpened, players, myUserId, equipped, showPetDialog],
   );
@@ -500,18 +503,49 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
 
   const clearWaypoint = useCallback(() => setWaypoint(null), []);
 
-  useAnimatedReaction(
-    () => ({ tx: translateX.value, ty: translateY.value, s: scale.value }),
-    (curr) => { runOnJS(syncCamera)(curr.tx, curr.ty, curr.s); },
-  );
+  const worldStyle = useAnimatedStyle(() => {
+    'worklet';
+    const x = smoothCamX.value;
+    const y = smoothCamY.value;
+    const lag = cameraLagOffset.value;
+    const tx = screenW / 2 - (x + lag) * scale.value;
+    const ty = screenH / 2 - y * scale.value;
+    const scaledW = worldWForCam * scale.value;
+    const scaledH = worldHForCam * scale.value;
+    const minX = screenW - scaledW;
+    const minY = screenH - scaledH;
+    const clampedTx = Math.min(Math.max(tx, Math.min(minX, 0)), Math.max(0, minX));
+    const clampedTy = Math.min(Math.max(ty, Math.min(minY, 0)), Math.max(0, minY));
+    return {
+      transform: [
+        { translateX: clampedTx },
+        { translateY: clampedTy },
+        { scale: scale.value },
+      ],
+    };
+  }, [screenW, screenH, worldWForCam, worldHForCam]);
 
-  const worldStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }));
+  useAnimatedReaction(
+    () => {
+      'worklet';
+      const x = smoothCamX.value;
+      const y = smoothCamY.value;
+      const lag = cameraLagOffset.value;
+      const tx = screenW / 2 - (x + lag) * scale.value;
+      const ty = screenH / 2 - y * scale.value;
+      const scaledW = worldWForCam * scale.value;
+      const scaledH = worldHForCam * scale.value;
+      const minX = screenW - scaledW;
+      const minY = screenH - scaledH;
+      return {
+        tx: Math.min(Math.max(tx, Math.min(minX, 0)), Math.max(0, minX)),
+        ty: Math.min(Math.max(ty, Math.min(minY, 0)), Math.max(0, minY)),
+        s: scale.value,
+      };
+    },
+    (curr) => { runOnJS(syncCamera)(curr.tx, curr.ty, curr.s); },
+    [screenW, screenH, worldWForCam, worldHForCam],
+  );
 
   const basePetImageUrl = user?.pet?.imageUrl;
   const petPoseMap = user?.pet?.pose as Record<string, string> | undefined;
@@ -557,30 +591,34 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
                   style={{ width: worldW, height: worldH }}
                   resizeMode="cover"
                 />
-              ) : sceneData?.tiledFlooringItemType && itemDefs[sceneData.tiledFlooringItemType]?.imageUrl ? (
-                <View style={{ width: worldW, height: worldH, position: 'absolute' }}>
-                  {Array.from({ length: Math.ceil(worldRows / 5) * Math.ceil(worldCols / 5) }, (_, i) => {
-                    const tileCols = Math.ceil(worldCols / 5);
-                    const row = Math.floor(i / tileCols);
-                    const col = i % tileCols;
-                    return (
-                      <CachedImage
-                        key={`tile-${row}-${col}`}
-                        source={{ uri: itemDefs[sceneData!.tiledFlooringItemType!]!.imageUrl! }}
-                        style={{
-                          position: 'absolute',
-                          left: col * 5 * TILE_SIZE - 1,
-                          top: row * 5 * TILE_SIZE - 1,
-                          width: 5 * TILE_SIZE + 2,
-                          height: 5 * TILE_SIZE + 2,
-                        }}
-                        resizeMode="fill"
-                      />
-                    );
-                  })}
-                </View>
               ) : (
-                <View style={{ width: worldW, height: worldH, backgroundColor: sceneData?.bgColor ?? '#5A9E5A' }} />
+                <>
+                  {/* Color flooring always rendered first so transparent tiled flooring shows it beneath */}
+                  <View style={{ width: worldW, height: worldH, position: 'absolute', backgroundColor: sceneData?.bgColor ?? '#5A9E5A' }} />
+                  {sceneData?.tiledFlooringItemType && itemDefs[sceneData.tiledFlooringItemType]?.imageUrl ? (
+                    <View style={{ width: worldW, height: worldH, position: 'absolute' }}>
+                      {Array.from({ length: Math.ceil(worldRows / 5) * Math.ceil(worldCols / 5) }, (_, i) => {
+                        const tileCols = Math.ceil(worldCols / 5);
+                        const row = Math.floor(i / tileCols);
+                        const col = i % tileCols;
+                        return (
+                          <CachedImage
+                            key={`tile-${row}-${col}`}
+                            source={{ uri: itemDefs[sceneData!.tiledFlooringItemType!]!.imageUrl! }}
+                            style={{
+                              position: 'absolute',
+                              left: col * 5 * TILE_SIZE - 1,
+                              top: row * 5 * TILE_SIZE - 1,
+                              width: 5 * TILE_SIZE + 2,
+                              height: 5 * TILE_SIZE + 2,
+                            }}
+                            resizeMode="fill"
+                          />
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </>
               )}
 
               {sceneData?.placements
@@ -647,6 +685,11 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
               <OwnPet
                 x={myPos.x}
                 y={myPos.y}
+                path={pathInProgress}
+                petVisualPosRef={petVisualPosRef}
+                cameraTargetX={cameraTargetX}
+                cameraTargetY={cameraTargetY}
+                cameraFacing={cameraFacing}
                 snapToTarget={spawnSyncRef.current}
                 imageUrl={ownPetImageUrl}
                 username={ownUsername}
@@ -759,6 +802,11 @@ function WaypointMarker({ x, y, visibleForMs, onClear }: WaypointMarkerProps) {
 interface OwnPetProps {
   x: number;
   y: number;
+  path?: Array<{ x: number; y: number }> | null;
+  petVisualPosRef?: React.MutableRefObject<{ x: number; y: number }>;
+  cameraTargetX?: SharedValue<number>;
+  cameraTargetY?: SharedValue<number>;
+  cameraFacing?: SharedValue<number>;
   snapToTarget?: boolean;
   imageUrl?: string | null;
   username: string;
@@ -773,12 +821,27 @@ interface OwnPetProps {
   equippedChairEmoji?: string;
 }
 
-const POLE_WADDLE_DEG = 4;
+const POLE_WADDLE_DEG = 2;
 const POLE_REEL_DEG = 8;
 
-function OwnPet({ x, y, imageUrl, username, chatText, fishResult, fishFailed, isReeling = false, itemDefs, equippedHandToolImageUrl, equippedHandToolEmoji, equippedChairImageUrl, equippedChairEmoji, snapToTarget }: OwnPetProps) {
+function OwnPet({ x, y, path, petVisualPosRef, cameraTargetX, cameraTargetY, cameraFacing, imageUrl, username, chatText, fishResult, fishFailed, isReeling = false, itemDefs, equippedHandToolImageUrl, equippedHandToolEmoji, equippedChairImageUrl, equippedChairEmoji, snapToTarget }: OwnPetProps) {
   const { theme } = useTheme();
-  const { animX, animY, facingRight, bounceOffset } = useWalkAnimation(x, y, { snapToTarget });
+  const { animX, animY, facingRight, bounceOffset } = useWalkAnimation(x, y, { snapToTarget, path: path ?? undefined });
+  const updateVisualPos = useCallback(
+    (px: number, py: number) => {
+      if (petVisualPosRef) petVisualPosRef.current = { x: px, y: py };
+    },
+    [petVisualPosRef],
+  );
+  useAnimatedReaction(
+    () => ({ x: animX.value, y: animY.value, facing: facingRight.value }),
+    (pos) => {
+      if (cameraTargetX) cameraTargetX.value = pos.x;
+      if (cameraTargetY) cameraTargetY.value = pos.y;
+      if (cameraFacing) cameraFacing.value = -pos.facing;
+      runOnJS(updateVisualPos)(pos.x, pos.y);
+    },
+  );
   const reelRotation = useSharedValue(0);
   const isReelingSv = useSharedValue(isReeling ? 1 : 0);
   const [visibleBubble, setVisibleBubble] = useState<string | null>(null);
@@ -850,11 +913,17 @@ function OwnPet({ x, y, imageUrl, username, chatText, fishResult, fishFailed, is
 
   const poleAnimatedStyle = useAnimatedStyle(() => {
     const rot = isReelingSv.value ? reelRotation.value * POLE_REEL_DEG : bounceOffset.value * POLE_WADDLE_DEG;
-    return { transform: [{ rotate: `${-35 + rot}deg` }] };
+    return {
+      transform: [
+        { scaleX: -1 },
+        { rotate: `${-50 + rot}deg` },
+      ],
+    };
   });
 
   return (
     <Animated.View style={[styles.ownPet, style]}>
+      {/* Equipment rendered behind pet */}
       {(equippedChairImageUrl || equippedChairEmoji) && (
         <View style={equipmentStyles.chairWrap} pointerEvents="none">
           {equippedChairImageUrl ? (
@@ -864,11 +933,6 @@ function OwnPet({ x, y, imageUrl, username, chatText, fishResult, fishFailed, is
           )}
         </View>
       )}
-      {imageUrl ? (
-        <CachedImage source={{ uri: imageUrl }} style={styles.petImage} resizeMode="contain" />
-      ) : (
-        <Text style={styles.ownPetFallback}>🐾</Text>
-      )}
       {(equippedHandToolImageUrl || equippedHandToolEmoji) && (
         <Animated.View style={[equipmentStyles.poleWrap, poleAnimatedStyle]}>
           {equippedHandToolImageUrl ? (
@@ -877,6 +941,11 @@ function OwnPet({ x, y, imageUrl, username, chatText, fishResult, fishFailed, is
             <Text style={equipmentStyles.poleEmoji}>{equippedHandToolEmoji ?? '🔧'}</Text>
           )}
         </Animated.View>
+      )}
+      {imageUrl ? (
+        <CachedImage source={{ uri: imageUrl }} style={styles.petImage} resizeMode="contain" />
+      ) : (
+        <Text style={styles.ownPetFallback}>🐾</Text>
       )}
       <Animated.View style={[styles.nametagWrap, unflipStyle]}>
         <View style={styles.nametagBg}>

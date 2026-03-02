@@ -10,6 +10,8 @@ import Animated, {
 import { TILE_SIZE } from './constants';
 
 const DRAG_OPACITY = 0.6;
+/** Smaller centered hit area so taps on transparent image edges pass through to items behind (matches admin scene editor). */
+const HIT_AREA_RATIO = 0.55;
 
 /** Screen-space layout of the backpack/build palette drop zone. When drag ends over this area, item is stored. */
 export interface DropZoneLayout {
@@ -28,7 +30,8 @@ interface DraggablePlacedItemProps {
   itemType: string;
   gridCols: number;
   gridRows: number;
-  onMoveEnd: (anchorId: string, col: number, row: number) => void;
+  /** Returns true if the move was accepted (will be applied); false if rejected (e.g. invalid tile). */
+  onMoveEnd: (anchorId: string, col: number, row: number) => boolean;
   /** Called when item is dropped over the backpack zone (returns to inventory). */
   onStore?: (anchorId: string) => void;
   /** Screen bounds of backpack drop zone. When drop position is inside, onStore is used instead of onMoveEnd. */
@@ -116,31 +119,31 @@ export const DraggablePlacedItem = React.memo(function DraggablePlacedItem({
           translateX.value = withSpring(0);
           translateY.value = withSpring(0);
         } else {
-          onMoveEnd(anchorId, clampedCol, clampedRow);
-
-          // After dispatching the move, we wait to see if it was accepted.
-          // If no pending drop target shows up, we snap back.
-          setTimeout(() => {
-            if (isMounted.current && prevPendingRef.current === null && isDragging.value === 0) {
-              translateX.value = withSpring(0);
-              translateY.value = withSpring(0);
-            }
-          }, 250);
+          const accepted = onMoveEnd(anchorId, clampedCol, clampedRow);
+          if (!accepted) {
+            // Invalid placement (e.g. red tile) — animate back to original position
+            translateX.value = withSpring(0);
+            translateY.value = withSpring(0);
+          }
+          // If accepted, pendingDropTarget is set; translate resets when server confirms
         }
       }
     },
-    [anchorId, col, row, gridCols, gridRows, tileCols, tileRows, onMoveEnd, onStore, dropZoneLayout, isDragging, translateX, translateY],
+    [anchorId, col, row, gridCols, gridRows, tileCols, tileRows, onMoveEnd, onStore, dropZoneLayout, translateX, translateY],
   );
+
+  const width = tileCols * TILE_SIZE;
+  const height = tileRows * TILE_SIZE;
+  const hitW = Math.max(20, width * HIT_AREA_RATIO);
+  const hitH = Math.max(20, height * HIT_AREA_RATIO);
 
   const pan = Gesture.Pan()
     .enabled(enabled)
     .onStart((e) => {
       isDragging.value = 1;
-      const width = tileCols * TILE_SIZE;
-      const height = tileRows * TILE_SIZE;
-      // Store the offset from center so the item snaps its center to the finger
-      offsetX.value = e.x - width / 2;
-      offsetY.value = e.y - height / 2;
+      // Hit area is centered; e.x/e.y are in hit-area coords. Center of hit area = center of item.
+      offsetX.value = e.x - hitW / 2;
+      offsetY.value = e.y - hitH / 2;
       translateX.value = offsetX.value;
       translateY.value = offsetY.value;
       if (onDragPreview) runOnJS(onDragPreview)({ col, row, tileCols, tileRows, itemType, anchorId });
@@ -181,17 +184,28 @@ export const DraggablePlacedItem = React.memo(function DraggablePlacedItem({
     position: 'absolute' as const,
     left: col * TILE_SIZE,
     top: row * TILE_SIZE,
-    width: tileCols * TILE_SIZE,
-    height: tileRows * TILE_SIZE,
+    width,
+    height,
+  };
+
+  const hitAreaStyle = {
+    position: 'absolute' as const,
+    left: (width - hitW) / 2,
+    top: (height - hitH) / 2,
+    width: hitW,
+    height: hitH,
   };
 
   return (
-    <View style={outerStyle} collapsable={false}>
-      <GestureDetector gesture={pan}>
-        <Animated.View style={[{ width: '100%', height: '100%' }, animatedStyle]}>
+    <View style={outerStyle} collapsable={false} pointerEvents="box-none">
+      <Animated.View style={[{ width: '100%', height: '100%' }, animatedStyle]}>
+        <View style={{ width: '100%', height: '100%' }} pointerEvents="none">
           {children}
-        </Animated.View>
-      </GestureDetector>
+        </View>
+        <GestureDetector gesture={pan}>
+          <View style={hitAreaStyle} />
+        </GestureDetector>
+      </Animated.View>
     </View>
   );
 });

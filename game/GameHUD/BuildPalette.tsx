@@ -36,6 +36,7 @@ interface BuildPaletteProps {
   onPaletteDragStart?: (itemType: string, def: ItemDefinition) => void;
   onPaletteDragUpdate?: (x: number, y: number, def: ItemDefinition) => void;
   onPaletteDragEnd?: (itemType: string, x: number, y: number) => void;
+  paletteDismissed?: boolean;
   itemDefs: Record<string, ItemDefinition>;
   colors: { onPrimary?: string; textSecondary: string };
 }
@@ -141,6 +142,7 @@ export function BuildPalette({
   onPaletteDragStart,
   onPaletteDragUpdate,
   onPaletteDragEnd,
+  paletteDismissed,
   itemDefs,
   colors,
 }: BuildPaletteProps) {
@@ -184,7 +186,7 @@ export function BuildPalette({
         { bottom: bottomOffset },
         buildPaletteAnimatedStyle,
       ]}
-      pointerEvents={editMode && (toolMode === 'build' || toolMode === 'trash') ? 'box-none' : 'none'}
+      pointerEvents={editMode && (toolMode === 'build' || toolMode === 'trash') && !paletteDismissed ? 'box-none' : 'none'}
     >
       <View ref={buildPaletteRef} style={styles.buildPaletteInner} pointerEvents="auto" collapsable={false}>
         {isTrashMode ? (

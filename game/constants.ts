@@ -10,7 +10,7 @@ export const MIN_ZOOM = 0.75;
 export const MAX_ZOOM = 1;
 export const DEFAULT_ZOOM = 0.75;
 
-// ─── Grid Defaults (used before server snapshot arrives) ────────────────────
+// ─── Grid Defaults (placeholders before server snapshot; actual farmCols/farmRows are dynamic) ───
 
 export const DEFAULT_FARM_COLS = 16;
 export const DEFAULT_FARM_ROWS = 24;
@@ -48,11 +48,13 @@ export const WORLD_PADDING = 12;
 /** Tree footprint in tiles (larger than before for more presence). */
 export const SCENERY_TREE_COLS = 4;
 export const SCENERY_TREE_ROWS = 5;
-/** Per-tree visual scale range for size variation (applied as transform, footprint unchanged). Old max (1.35) is now min; max is 2.5× that. */
-export const SCENERY_TREE_SCALE_MIN = 1.35;
-export const SCENERY_TREE_SCALE_MAX = 1.35 * 2.5;
+/** Per-tree visual scale range. ~20% smaller than previous for better proportion. */
+export const SCENERY_TREE_SCALE_MIN = 1.5;
+export const SCENERY_TREE_SCALE_MAX = 2.2;
+/** Number of tree placement attempts (more = denser trees). */
+export const SCENERY_TREE_ATTEMPTS = 300;
 /** Bump to invalidate persisted placement cache when generation logic changes. */
-export const SCENERY_CACHE_VERSION = 10;
+export const SCENERY_CACHE_VERSION = 14;
 
 
 // ─── Fence Auto-Connect Bitmask → Variant + Rotation ────────────────────────

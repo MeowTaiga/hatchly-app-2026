@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, Image, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import type { FriendEntry } from '@/lib/api';
 import { useTheme } from '@/store/ThemeProvider';
@@ -42,7 +43,7 @@ function FriendRow({
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
       <View style={[styles.avatar, { backgroundColor: colors.border + '60' }]}>
         {user.pet?.imageUrl ? (
-          <Image source={{ uri: user.pet.imageUrl }} style={styles.avatarImg} />
+          <CachedImage source={{ uri: user.pet.imageUrl }} style={styles.avatarImg} />
         ) : (
           <Text style={styles.avatarEmoji}>👤</Text>
         )}

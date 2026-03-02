@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api, type AdminScene, type AdminScenePlacement, type AdminGameItem } from '@/lib/api';
 import { useTheme } from '@/store/ThemeProvider';
 import { TILE_SIZE } from '@/game/constants';
+import Svg, { Rect } from 'react-native-svg';
 import { AdminBottomBar } from '@/components/admin-scene-editor';
 import { TileToolsPanel } from '@/components/admin-scene-editor/TileToolsPanel';
 import { SettingsPanel } from '@/components/admin-scene-editor/SettingsPanel';
@@ -113,6 +114,49 @@ const EditorGrid = React.memo(function EditorGrid({
       {vLines}
       {hLines}
     </View>
+  );
+});
+
+/** Batched SVG overlay for unwalkable/fishing tiles — single draw call vs hundreds of Views. */
+const TileOverlays = React.memo(function TileOverlays({
+  worldW,
+  worldH,
+  unwalkableTiles,
+  fishingTiles,
+}: {
+  worldW: number;
+  worldH: number;
+  unwalkableTiles: Array<{ col: number; row: number }>;
+  fishingTiles: Array<{ col: number; row: number; spotType?: string }>;
+}) {
+  if (unwalkableTiles.length === 0 && fishingTiles.length === 0) return null;
+  return (
+    <Svg width={worldW} height={worldH} style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
+      {unwalkableTiles.map(({ col, row }) => (
+        <Rect
+          key={`uw-${col}-${row}`}
+          x={col * TILE_SIZE}
+          y={row * TILE_SIZE}
+          width={TILE_SIZE}
+          height={TILE_SIZE}
+          fill="rgba(239,68,68,0.35)"
+          stroke="rgba(239,68,68,0.6)"
+          strokeWidth={1}
+        />
+      ))}
+      {fishingTiles.map(({ col, row }) => (
+        <Rect
+          key={`fish-${col}-${row}`}
+          x={col * TILE_SIZE}
+          y={row * TILE_SIZE}
+          width={TILE_SIZE}
+          height={TILE_SIZE}
+          fill="rgba(34,197,94,0.35)"
+          stroke="rgba(34,197,94,0.6)"
+          strokeWidth={1}
+        />
+      ))}
+    </Svg>
   );
 });
 
@@ -225,6 +269,17 @@ export default function AdminSceneEditorScreen() {
       }
     })();
   }, [slug]);
+
+  const refetchItems = useCallback(async () => {
+    try {
+      const items = await api.getGameItems();
+      const map: Record<string, AdminGameItem> = {};
+      for (const it of items) map[it.itemType] = it;
+      setItemDefs(map);
+    } catch (_) {
+      // Silently fail; itemDefs unchanged
+    }
+  }, []);
 
   // ── Derived dimensions ──────────────────────────────────────────────────
 
@@ -381,23 +436,38 @@ export default function AdminSceneEditorScreen() {
     }]);
   }, [scene, selectedItemType, itemDefs, screenToWorld, areaSelectMode, paintUnwalkableMode, paintFishingMode, setSpawnMode, handleTileToggleUnwalkable, handleTileToggleFishing]);
 
+  const areaSelectRectRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const areaUpdateLastRef = useRef(0);
   const handleAreaSelectStart = useCallback((screenX: number, screenY: number) => {
     const { x, y } = screenToWorld(screenX, screenY);
-    setSelectionRect({ x1: x, y1: y, x2: x, y2: y });
+    const rect = { x1: x, y1: y, x2: x, y2: y };
+    areaSelectRectRef.current = rect;
+    setSelectionRect(rect);
     setMultiSelectedIds(new Set());
   }, [screenToWorld]);
 
   const handleAreaSelectUpdate = useCallback((screenX: number, screenY: number) => {
     const { x, y } = screenToWorld(screenX, screenY);
-    setSelectionRect((prev) => prev ? { ...prev, x2: x, y2: y } : null);
+    const prev = areaSelectRectRef.current;
+    if (!prev) return;
+    const next = { ...prev, x2: x, y2: y };
+    areaSelectRectRef.current = next;
+    const now = Date.now();
+    if (now - areaUpdateLastRef.current >= 16) {
+      areaUpdateLastRef.current = now;
+      setSelectionRect(next);
+    }
   }, [screenToWorld]);
 
   const handleAreaSelectEnd = useCallback(() => {
-    if (!selectionRect) return;
-    const rLeft = Math.min(selectionRect.x1, selectionRect.x2);
-    const rRight = Math.max(selectionRect.x1, selectionRect.x2);
-    const rTop = Math.min(selectionRect.y1, selectionRect.y2);
-    const rBottom = Math.max(selectionRect.y1, selectionRect.y2);
+    const rect = areaSelectRectRef.current;
+    areaSelectRectRef.current = null;
+    setSelectionRect(null);
+    if (!rect) return;
+    const rLeft = Math.min(rect.x1, rect.x2);
+    const rRight = Math.max(rect.x1, rect.x2);
+    const rTop = Math.min(rect.y1, rect.y2);
+    const rBottom = Math.max(rect.y1, rect.y2);
     const ids = new Set<string>();
     for (const p of placements) {
       const def = itemDefs[p.itemType];
@@ -414,8 +484,7 @@ export default function AdminSceneEditorScreen() {
       }
     }
     setMultiSelectedIds(ids);
-    setSelectionRect(null);
-  }, [selectionRect, placements, itemDefs]);
+  }, [placements, itemDefs]);
 
   const handleMassDelete = useCallback(() => {
     if (multiSelectedIds.size === 0) return;
@@ -449,13 +518,18 @@ export default function AdminSceneEditorScreen() {
     setPaintSelectionRect(rect);
   }, [screenToWorld]);
 
+  const paintUpdateLastRef = useRef(0);
   const handlePaintAreaUpdate = useCallback((screenX: number, screenY: number) => {
     const { x, y } = screenToWorld(screenX, screenY);
     const prev = paintAreaRectRef.current;
     if (prev) {
       const next = { ...prev, x2: x, y2: y };
       paintAreaRectRef.current = next;
-      setPaintSelectionRect(next);
+      const now = Date.now();
+      if (now - paintUpdateLastRef.current >= 16) {
+        paintUpdateLastRef.current = now;
+        setPaintSelectionRect(next);
+      }
     }
   }, [screenToWorld]);
 
@@ -665,6 +739,34 @@ export default function AdminSceneEditorScreen() {
       ),
     );
   }, [selectedId]);
+
+  const handleDuplicatePlacement = useCallback((direction: 'n' | 's' | 'e' | 'w') => {
+    const p = selectedPlacement;
+    if (!p || !scene) return;
+    const def = itemDefs[p.itemType];
+    const baseW = (def?.cols ?? 1) * TILE_SIZE;
+    const baseH = (def?.rows ?? 1) * TILE_SIZE;
+    const w = baseW * (p.scale ?? 1);
+    const h = baseH * (p.scale ?? 1);
+    let newX = p.x;
+    let newY = p.y;
+    const overlap = 1; // -1px so duplicated items touch
+    if (direction === 'e') newX = p.x + w - overlap;
+    else if (direction === 'w') newX = p.x - w + overlap;
+    else if (direction === 's') newY = p.y + h - overlap;
+    else if (direction === 'n') newY = p.y - h + overlap;
+    const dup: AdminScenePlacement = {
+      id: uid(),
+      itemType: p.itemType,
+      x: newX,
+      y: newY,
+      scale: p.scale ?? 1,
+      rotationDegrees: p.rotationDegrees ?? 0,
+      depthOffset: p.depthOffset,
+    };
+    setPlacements((prev) => [...prev, dup]);
+    setSelectedId(dup.id);
+  }, [selectedPlacement, scene, itemDefs]);
 
   // Stable callbacks for AdminBottomBar (avoid inline arrows breaking React.memo)
   const handleDeselectPlacement = useCallback(() => setSelectedId(null), []);
@@ -959,6 +1061,26 @@ export default function AdminSceneEditorScreen() {
     });
   }, [sortedPlacements, visibleRect, draggingId]);
 
+  const visibleUnwalkableTiles = useMemo(() => {
+    if (!visibleRect || unwalkableTiles.length === 0) return unwalkableTiles;
+    const { left, top, right, bottom } = visibleRect;
+    return unwalkableTiles.filter(({ col, row }) => {
+      const tL = col * TILE_SIZE;
+      const tT = row * TILE_SIZE;
+      return rectIntersects(left, top, right, bottom, tL, tT, tL + TILE_SIZE, tT + TILE_SIZE);
+    });
+  }, [unwalkableTiles, visibleRect]);
+
+  const visibleFishingTiles = useMemo(() => {
+    if (!visibleRect || fishingTiles.length === 0) return fishingTiles;
+    const { left, top, right, bottom } = visibleRect;
+    return fishingTiles.filter(({ col, row }) => {
+      const tL = col * TILE_SIZE;
+      const tT = row * TILE_SIZE;
+      return rectIntersects(left, top, right, bottom, tL, tT, tL + TILE_SIZE, tT + TILE_SIZE);
+    });
+  }, [fishingTiles, visibleRect]);
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   if (loading || !scene) {
@@ -985,6 +1107,8 @@ export default function AdminSceneEditorScreen() {
       <GestureDetector gesture={gesture}>
         <Animated.View style={[{ width: SCREEN_W, height: SCREEN_H }, { overflow: 'hidden' }]}>
           <Animated.View style={[{ width: worldW, height: worldH, position: 'absolute', transformOrigin: 'left top' }, cameraStyle]}>
+            {/* Color flooring always rendered first so transparent tiled flooring shows it beneath */}
+            <View style={{ width: worldW, height: worldH, position: 'absolute', backgroundColor: /^#[0-9a-fA-F]{6}$/.test(editBgColor) ? editBgColor : scene.bgColor }} />
             {editTiledFlooringItemType && itemDefs[editTiledFlooringItemType]?.imageUrl ? (
               <View style={{ width: worldW, height: worldH, position: 'absolute' }}>
                 {Array.from({ length: Math.ceil(sceneRows / 5) * Math.ceil(sceneCols / 5) }, (_, i) => {
@@ -1007,9 +1131,7 @@ export default function AdminSceneEditorScreen() {
                   );
                 })}
               </View>
-            ) : (
-              <View style={{ width: worldW, height: worldH, backgroundColor: /^#[0-9a-fA-F]{6}$/.test(editBgColor) ? editBgColor : scene.bgColor }} />
-            )}
+            ) : null}
 
             {showGrid && (visibleRect == null || (visibleRect.scale ?? initScale) > EDITOR_GRID_ZOOM_THRESHOLD) && (
               <EditorGrid cols={sceneCols} rows={sceneRows} worldW={worldW} worldH={worldH} visibleRect={visibleRect} />
@@ -1058,63 +1180,16 @@ export default function AdminSceneEditorScreen() {
               );
             })}
 
-            {showGrid && unwalkableTiles.map(({ col, row }) => {
-              if (visibleRect) {
-                const tL = col * TILE_SIZE;
-                const tT = row * TILE_SIZE;
-                if (!rectIntersects(visibleRect.left, visibleRect.top, visibleRect.right, visibleRect.bottom, tL, tT, tL + TILE_SIZE, tT + TILE_SIZE)) return null;
-              }
-              return (
-                <View
-                  key={`uw-${col},${row}`}
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    left: col * TILE_SIZE,
-                    top: row * TILE_SIZE,
-                    width: TILE_SIZE,
-                    height: TILE_SIZE,
-                    backgroundColor: 'rgba(239,68,68,0.35)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(239,68,68,0.6)',
-                    zIndex: 100,
-                  }}
+            {showGrid && (
+              <View style={{ position: 'absolute', left: 0, top: 0, width: worldW, height: worldH, zIndex: 99 }} pointerEvents="none">
+                <TileOverlays
+                  worldW={worldW}
+                  worldH={worldH}
+                  unwalkableTiles={visibleUnwalkableTiles}
+                  fishingTiles={visibleFishingTiles}
                 />
-              );
-            })}
-
-            {showGrid && fishingTiles.map(({ col, row, spotType }) => {
-              if (visibleRect) {
-                const tL = col * TILE_SIZE;
-                const tT = row * TILE_SIZE;
-                if (!rectIntersects(visibleRect.left, visibleRect.top, visibleRect.right, visibleRect.bottom, tL, tT, tL + TILE_SIZE, tT + TILE_SIZE)) return null;
-              }
-              return (
-                <View
-                  key={`fish-${col},${row}`}
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    left: col * TILE_SIZE,
-                    top: row * TILE_SIZE,
-                    width: TILE_SIZE,
-                    height: TILE_SIZE,
-                    backgroundColor: 'rgba(34,197,94,0.35)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(34,197,94,0.6)',
-                    zIndex: 99,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {spotType && spotType !== 'general' && (
-                    <Text style={{ fontSize: 7, color: '#fff', fontWeight: '700' }}>
-                      {spotType[0].toUpperCase()}
-                    </Text>
-                  )}
-                </View>
-              );
-            })}
+              </View>
+            )}
 
             {selectionRect && (
               <View
@@ -1265,6 +1340,7 @@ export default function AdminSceneEditorScreen() {
           onRotateLeft={handleRotateLeft}
           onRotateRight={handleRotateRight}
           onRotationChange={handleRotationChange}
+          onDuplicatePlacement={handleDuplicatePlacement}
           onDeselectPlacement={handleDeselectPlacement}
           multiSelectedCount={multiSelectedIds.size}
           onMassDelete={handleMassDelete}
@@ -1279,6 +1355,7 @@ export default function AdminSceneEditorScreen() {
           onStartDragItem={(itemType, def) => {
             setPaletteDragAsset({ itemType, def });
           }}
+          onItemCreated={refetchItems}
         />
       </View>
       </ScrollView>
@@ -1381,11 +1458,8 @@ const SceneItem = React.memo(function SceneItem({
         if (dragStartX && dragStartY && scale) {
           const tx = e.translationX / scale.value;
           const ty = e.translationY / scale.value;
-          const rad = (-rot * Math.PI) / 180;
-          const c = Math.cos(rad);
-          const s = Math.sin(rad);
-          const finalX = dragStartX.value + (c * tx - s * ty);
-          const finalY = dragStartY.value + (s * tx + c * ty);
+          const finalX = dragStartX.value + tx;
+          const finalY = dragStartY.value + ty;
           runOnJS(onPanEnd)(id, finalX, finalY, false);
         } else {
           runOnJS(onPanEnd)(id, 0, 0, true);
@@ -1409,33 +1483,58 @@ const SceneItem = React.memo(function SceneItem({
     };
   }, [isDragging, rotationDegrees]);
 
+  const HIT_AREA_RATIO = 0.55;
+  const hitW = Math.max(20, width * HIT_AREA_RATIO);
+  const hitH = Math.max(20, height * HIT_AREA_RATIO);
+  const hitAreaStyle = {
+    position: 'absolute' as const,
+    left: (width - hitW) / 2,
+    top: (height - hitH) / 2,
+    width: hitW,
+    height: hitH,
+  };
+
   const wrapperStyle = {
     position: 'absolute' as const,
     left: x,
     top: y,
     width,
     height,
-    borderWidth: isSelected ? 2 : 0,
-    borderColor: isSelected ? '#4ADE80' : 'transparent',
     borderRadius: 4,
   };
 
   return (
-    <GestureDetector gesture={itemGesture}>
-      <Animated.View
-        collapsable={false}
-        pointerEvents={disabled ? 'none' : 'auto'}
-        style={[wrapperStyle, animatedStyle]}
-      >
-        {imageUrl ? (
-          <CachedImage source={{ uri: imageUrl }} style={{ width, height }} resizeMode="contain" />
-        ) : (
-          <View style={{ width, height, backgroundColor: color || '#888', borderRadius: 4, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: Math.min(width, height) * 0.4 }}>{emoji}</Text>
-          </View>
-        )}
-      </Animated.View>
-    </GestureDetector>
+    <Animated.View
+      collapsable={false}
+      pointerEvents={disabled ? 'none' : 'box-none'}
+      style={[wrapperStyle, animatedStyle]}
+    >
+      {isSelected && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: -2,
+            top: -2,
+            width: width + 4,
+            height: height + 4,
+            borderWidth: 2,
+            borderColor: '#4ADE80',
+            borderRadius: 6,
+          }}
+        />
+      )}
+      {imageUrl ? (
+        <CachedImage source={{ uri: imageUrl }} style={{ width, height }} resizeMode="contain" pointerEvents="none" />
+      ) : (
+        <View style={{ width, height, backgroundColor: color || '#888', borderRadius: 4, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+          <Text style={{ fontSize: Math.min(width, height) * 0.4 }}>{emoji}</Text>
+        </View>
+      )}
+      <GestureDetector gesture={itemGesture}>
+        <View style={hitAreaStyle} />
+      </GestureDetector>
+    </Animated.View>
   );
 });
 

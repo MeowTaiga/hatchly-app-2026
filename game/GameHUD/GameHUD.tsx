@@ -6,7 +6,7 @@
  * build palette measurement, and expand/collapse state.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -51,7 +51,6 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
     toolMode,
     onOpenBestiary,
     onOpenEquip,
-    onGoFishing,
     displaySlots,
     selectedItemType,
     activeCategory,
@@ -85,6 +84,7 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
   const { width: screenWidth } = useWindowDimensions();
   const buildPaletteRef = useRef<View>(null);
   const [expanded, setExpanded] = useState(false);
+  const [paletteDismissed, setPaletteDismissed] = useState(false);
 
   const styles = React.useMemo(
     () => createHudStyles(colors, screenWidth),
@@ -117,9 +117,18 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
 
   const isHighlighted = createIsHighlighted(activeHighlight);
 
+  const handleBackpackPress = useCallback(() => {
+    if (editMode && paletteDismissed) {
+      setPaletteDismissed(false);
+    } else {
+      onSetToolMode(toolMode === 'build' ? 'none' : 'build');
+    }
+  }, [editMode, paletteDismissed, toolMode, onSetToolMode]);
+
   useEffect(() => {
     if (!onBuildPaletteLayout) return;
-    if (!editMode || (toolMode !== 'build' && toolMode !== 'trash')) {
+    const paletteVisible = editMode && (toolMode === 'build' || toolMode === 'trash') && !paletteDismissed;
+    if (!paletteVisible) {
       onBuildPaletteLayout(null);
       return;
     }
@@ -129,7 +138,7 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
       });
     }, 300);
     return () => clearTimeout(timer);
-  }, [editMode, toolMode, onBuildPaletteLayout]);
+  }, [editMode, toolMode, paletteDismissed, onBuildPaletteLayout]);
 
   const paletteTranslateY = useSharedValue(BUILD_PALETTE_SLIDE_OFFSET);
   const paletteOpacity = useSharedValue(0);
@@ -146,7 +155,12 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
   }, [editMode, toolMode]);
 
   useEffect(() => {
-    if (editMode && (toolMode === 'build' || toolMode === 'trash')) {
+    if (!editMode) setPaletteDismissed(false);
+  }, [editMode]);
+
+  useEffect(() => {
+    const paletteVisible = editMode && (toolMode === 'build' || toolMode === 'trash') && !paletteDismissed;
+    if (paletteVisible) {
       paletteTranslateY.value = withSpring(0, SPRING_CONFIG);
       paletteOpacity.value = withSpring(1, SPRING_CONFIG);
       const lift =
@@ -169,12 +183,12 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
       toolbarTranslateY.value = withTiming(0, { duration: CLOSE_DURATION });
       slotHeight.value = withTiming(SLOT_ROW_HEIGHT, { duration: CLOSE_DURATION });
     }
-  }, [editMode, toolMode, expanded]);
+  }, [editMode, toolMode, expanded, paletteDismissed]);
 
-  /** Use withTiming to avoid spring overshoot on width (was causing flicker). */
+  /** Use withTiming to avoid spring overshoot on width (was causing flicker). Width: trash btn (40) + gap (6) + arrow btn (40) = 86. */
   useEffect(() => {
     if (editMode) {
-      trashWidth.value = withTiming(46, { duration: 200 });
+      trashWidth.value = withTiming(86, { duration: 200 });
       trashOpacity.value = withTiming(1, { duration: 180 });
     } else {
       trashWidth.value = withTiming(0, { duration: 180 });
@@ -254,11 +268,12 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
         trashAnimatedStyle={trashAnimatedStyle}
         isHighlighted={isHighlighted}
         onSetToolMode={onSetToolMode}
+        onBackpackPress={handleBackpackPress}
+        paletteDismissed={paletteDismissed}
+        onTogglePalette={() => setPaletteDismissed((p) => !p)}
         onOpenShop={onOpenShop}
         onOpenBestiary={onOpenBestiary}
         onOpenEquip={onOpenEquip}
-        onGoFishing={onGoFishing}
-        isFarm={activeScene === 'farm'}
         colors={colors}
       />
 
@@ -282,6 +297,7 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
         onPaletteDragStart={onPaletteDragStart}
         onPaletteDragUpdate={onPaletteDragUpdate}
         onPaletteDragEnd={onPaletteDragEnd}
+        paletteDismissed={paletteDismissed}
         itemDefs={itemDefs}
         colors={colors}
       />

@@ -81,6 +81,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         sceneryUrl: action.payload.sceneryUrl ?? '',
         sceneWorldCols: action.payload.sceneWorldCols,
         sceneWorldRows: action.payload.sceneWorldRows,
+        scenePlacements: action.payload.scenePlacements,
         farmGrid: createFarmGridFromSnapshot(action.payload, defs),
         houseGrid: createEmptyGrid(houseCols, houseRows),
         movingItemId: null,
@@ -115,16 +116,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       let newState = { ...state };
 
       if (payload.farmXp != null) newState.farmXp = payload.farmXp;
-      if (payload.farmLevel != null) {
-        newState.farmLevel = payload.farmLevel;
-        // Resize farm grid when level changes (e.g. quest completion before SNAPSHOT)
-        const levelDef = newState.farmLevels.find((l) => l.level === payload.farmLevel);
-        if (levelDef && (newState.farmGrid.cols !== levelDef.cols || newState.farmGrid.rows !== levelDef.rows)) {
-          const newGrid = createEmptyGrid(levelDef.cols, levelDef.rows);
-          newGrid.items = new Map(newState.farmGrid.items);
-          newState.farmGrid = newGrid;
-        }
-      }
+      if (payload.farmLevel != null) newState.farmLevel = payload.farmLevel;
       if (payload.gems != null) newState.gems = payload.gems;
       if (payload.farmName != null) newState.farmName = payload.farmName;
       if (payload.inventory) {
@@ -173,6 +165,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (payload.foodDishQueues !== undefined) newState.foodDishQueues = payload.foodDishQueues;
       if (payload.quests) newState.quests = payload.quests;
       if (payload.canUpgrade != null) newState.canUpgrade = payload.canUpgrade;
+      if (payload.shakeResult?.drops?.length) {
+        const sr = payload.shakeResult;
+        const effect: import('../types').HarvestEffect = {
+          id: `shake_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+          col: sr.col,
+          row: sr.row,
+          drops: sr.drops,
+          cropEmoji: sr.cropEmoji,
+          cropImageUrl: sr.cropImageUrl,
+          tileCols: sr.tileCols,
+          tileRows: sr.tileRows,
+        };
+        newState.harvestEffects = [...(newState.harvestEffects ?? []), effect];
+      }
 
       if (payload.removedItemIds?.length || payload.addedItems?.length) {
         const gridKey = state.activeScene === 'farm' ? 'farmGrid' : 'houseGrid';
@@ -490,8 +496,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_PENDING_DROP':
       return { ...state, pendingDropTarget: action.target };
 
-    case 'PET_DIALOG':
-      return { ...state, petDialog: action.message };
+    case 'TREE_SHAKE':
+      return { ...state, shakingTreeAnchorId: action.anchorId, shakeTrigger: action.trigger };
+
+    case 'CLEAR_TREE_SHAKE':
+      return { ...state, shakingTreeAnchorId: null };
 
     case 'UPDATE_ITEM_DEFS': {
       const defs = action.defs;
@@ -601,6 +610,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         };
       }
       return { ...state, questDialogQueue: queue };
+    }
+
+    case 'SHOW_PET_DIALOG': {
+      return {
+        ...state,
+        questDialogQueue: [],
+        currentQuestDialog: [{ text: action.text }],
+        questDialogIndex: 0,
+        currentDialogSpeaker: null,
+        currentNpcItemType: null,
+        currentQuestIdToComplete: null,
+        currentDialogRewards: null,
+        currentDialogBlocking: false,
+      };
     }
 
     case 'SET_SHOP_OPEN':

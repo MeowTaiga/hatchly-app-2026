@@ -4,7 +4,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { StableFormInput } from '@/components/ui/StableFormInput';
 import {
   BottomSheetModal,
@@ -201,7 +202,7 @@ export function ItemSearchDrawer({
         ) : (
           filtered.map((item) => (
             <Pressable key={item.key} style={dynamicStyles.row} onPress={() => handleSelect(item.key)}>
-              {item.imageUrl && <Image source={{ uri: item.imageUrl }} style={dynamicStyles.thumb} />}
+              {item.imageUrl && <CachedImage source={{ uri: item.imageUrl }} style={dynamicStyles.thumb} />}
               <View style={{ flex: 1 }}>
                 <Text style={dynamicStyles.rowLabel}>{item.label}</Text>
                 <Text style={dynamicStyles.rowSub}>{item.key}</Text>

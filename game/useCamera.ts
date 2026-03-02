@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Dimensions } from 'react-native';
 import { Gesture } from 'react-native-gesture-handler';
 import {
@@ -83,6 +83,16 @@ export function useCamera({ cols, rows, worldCols, worldRows, onTileTap, tapDead
     () => ({ translateX, translateY, scale }),
     [translateX, translateY, scale],
   );
+
+  // Reset camera when dimensions change (e.g. snapshot loads with dynamic farm cols/rows)
+  useEffect(() => {
+    translateX.value = initTX;
+    translateY.value = initTY;
+    scale.value = initScale;
+    startTX.value = initTX;
+    startTY.value = initTY;
+    startScale.value = initScale;
+  }, [cols, rows, wCols, wRows, initialFocusRow, initTX, initTY, initScale]);
 
   // ── Boundary helper (worklet) ──────────────────────────────────────────
 
@@ -186,7 +196,10 @@ export function useCamera({ cols, rows, worldCols, worldRows, onTileTap, tapDead
       const wy = (e.y - translateY.value) / scale.value;
       const col = Math.floor(wx / TILE_SIZE) - padCols;
       const row = Math.floor(wy / TILE_SIZE) - padRows;
-      if (col >= 0 && col < cols && row >= 0 && row < rows) {
+      // Fire for taps anywhere in the world (farm grid + padding) so scene placements outside farm are clickable
+      const worldCol = col + padCols;
+      const worldRow = row + padRows;
+      if (worldCol >= 0 && worldCol < wCols && worldRow >= 0 && worldRow < wRows) {
         runOnJS(onTileTap)(col, row);
       }
     });

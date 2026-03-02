@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useRef } from 'react';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppDrawer, type AppDrawerRef } from '@/components/ui/AppDrawer';
 import { ItemSearchDropdown, type SearchableItem } from '@/components/ui/ItemSearchDropdown';
+import { SceneColorPickerModal } from './SceneColorPickerModal';
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -98,6 +99,7 @@ export const SettingsPanel = forwardRef<AppDrawerRef, SettingsPanelProps>(
     ref,
   ) {
     const bgColorApplyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [colorPickerVisible, setColorPickerVisible] = useState(false);
     useEffect(() => {
       return () => {
         if (bgColorApplyRef.current) clearTimeout(bgColorApplyRef.current);
@@ -165,9 +167,18 @@ export const SettingsPanel = forwardRef<AppDrawerRef, SettingsPanelProps>(
         <View style={{ flex: 1 }}>
           <Text style={s.label}>Ground Color (fallback when no tile)</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Pressable onPress={Keyboard.dismiss}>
+            <Pressable onPress={() => setColorPickerVisible(true)}>
               <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: /^#[0-9a-fA-F]{6}$/.test(editBgColor) ? editBgColor : '#7EC87E', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }} />
             </Pressable>
+            <SceneColorPickerModal
+              visible={colorPickerVisible}
+              currentColor={/^#[0-9a-fA-F]{6}$/.test(editBgColor) ? editBgColor : '#7EC87E'}
+              onSelect={(hex) => {
+                onEditBgColor(hex);
+                setColorPickerVisible(false);
+              }}
+              onClose={() => setColorPickerVisible(false)}
+            />
             <TextInput
               style={[s.input, { flex: 1, marginBottom: 0 }]}
               value={editBgColor}

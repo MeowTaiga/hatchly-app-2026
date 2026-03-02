@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, FlatList, StyleSheet, ActivityIndicator, Alert, Modal, Image,
+  View, Text, Pressable, FlatList, StyleSheet, ActivityIndicator, Alert, Modal,
 } from 'react-native';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { ItemSearchDropdown, type SearchableItem } from '@/components/ui/ItemSearchDropdown';
 import { api, type FossilLootEntry, type AdminGameItem } from '@/lib/api';
@@ -158,7 +159,7 @@ export default function AdminFossilLootScreen() {
           <View style={styles.row}>
             <View style={[s.itemThumb, { backgroundColor: (def?.color || '#888') + '22' }]}>
               {imageUrl ? (
-                <Image source={{ uri: imageUrl }} style={s.itemImage} />
+                <CachedImage source={{ uri: imageUrl }} style={s.itemImage} />
               ) : (
                 <Text style={s.emojiText}>{emoji || '📦'}</Text>
               )}

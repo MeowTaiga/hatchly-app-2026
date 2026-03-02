@@ -25,8 +25,10 @@ import {
   NpcDialogSection,
   LightSection,
   FoodSection,
+  FruitSection,
   ImageSection,
   SeedWizard,
+  TreeWizard,
 } from '@/components/admin-item-form';
 
 export default function AdminItemFormScreen() {
@@ -43,8 +45,10 @@ export default function AdminItemFormScreen() {
     generatingImage,
     isEdit,
     isSeed,
+    isTree,
     isBug,
     slug,
+    basePrompt,
     effectivePrompt,
     resetPrompt,
     handlePromptChange,
@@ -52,11 +56,15 @@ export default function AdminItemFormScreen() {
     handleSave,
     handleGenerateImage,
     handleGenerateImageAndNew,
+    handleColorSchemeSelect,
+    handleToggleColor,
+    colorSchemeItems,
     actionPayloads,
     addHarvestDrop,
     removeHarvestDrop,
     updateHarvestDrop,
     dispatch,
+    allItems,
   } = useAdminItemForm();
 
   const ts = useMemo(() => createThemedStyles(theme), [theme]);
@@ -71,6 +79,9 @@ export default function AdminItemFormScreen() {
 
   if (isSeed && !isEdit) {
     return <SeedWizard />;
+  }
+  if (isTree && !isEdit) {
+    return <TreeWizard />;
   }
 
   return (
@@ -125,11 +136,22 @@ export default function AdminItemFormScreen() {
             <FoodSection state={state} setField={setField} ts={ts} colors={colors} />
           )}
 
+          {state.subCategory === 'fruit' && (
+            <FruitSection
+              state={state}
+              setField={setField}
+              allItems={allItems}
+              ts={ts}
+              colors={colors}
+            />
+          )}
+
           <LightSection state={state} setField={setField} ts={ts} colors={colors} />
 
           <ImageSection
             state={state}
             setField={setField}
+            basePrompt={basePrompt}
             effectivePrompt={effectivePrompt}
             onPromptChange={handlePromptChange}
             resetPrompt={resetPrompt}
@@ -138,6 +160,9 @@ export default function AdminItemFormScreen() {
             generatingImage={generatingImage}
             promptTouched={state.promptTouched}
             searchableItems={searchableItems}
+            colorSchemeItems={colorSchemeItems}
+            onColorSchemeSelect={handleColorSchemeSelect}
+            onToggleColor={handleToggleColor}
             ts={ts}
             colors={colors}
             s={s}

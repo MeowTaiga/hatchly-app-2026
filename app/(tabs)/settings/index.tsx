@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, Switch, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -182,7 +183,7 @@ export default function SettingsScreen() {
         <View style={st.profileCard}>
           <View style={st.avatar}>
             {petAvatarUrl ? (
-              <Image source={{ uri: petAvatarUrl }} style={st.avatarImg} resizeMode="contain" />
+              <CachedImage source={{ uri: petAvatarUrl }} style={st.avatarImg} resizeMode="contain" />
             ) : (
               <Text style={st.avatarEmoji}>👤</Text>
             )}

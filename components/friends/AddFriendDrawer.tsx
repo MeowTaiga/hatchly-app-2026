@@ -12,10 +12,10 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Image,
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { AppDrawer, type AppDrawerRef } from '@/components/ui/AppDrawer';
@@ -117,7 +117,7 @@ function UserRow({
     <View style={[rowStyles.row, { borderBottomColor: colors.border }]}>
       <View style={[rowStyles.avatar, { backgroundColor: colors.border + '60' }]}>
         {avatar ? (
-          <Image source={{ uri: avatar }} style={rowStyles.avatarImg} />
+          <CachedImage source={{ uri: avatar }} style={rowStyles.avatarImg} />
         ) : (
           <Text style={rowStyles.avatarEmoji}>👤</Text>
         )}

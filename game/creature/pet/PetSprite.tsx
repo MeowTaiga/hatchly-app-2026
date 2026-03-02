@@ -14,7 +14,7 @@ import { equipmentStyles } from './equipmentStyles';
 const PET_SIZE = TILE_SIZE * 2;
 const HALF_PET = PET_SIZE / 2;
 
-const POLE_WADDLE_DEG = 4;
+const POLE_WADDLE_DEG = 2;
 
 interface PetSpriteProps {
   petX: SharedValue<number>;
@@ -22,7 +22,7 @@ interface PetSpriteProps {
   facingRight: SharedValue<number>;
   bounceOffset: SharedValue<number>;
   behaviorOffset?: SharedValue<number>;
-  /** Hand tool rotation (deg). -35 default; 70 when digging. */
+  /** Hand tool rotation (deg). -50 default; 70 when digging. */
   toolRotationDeg?: SharedValue<number>;
   jumpOffset: SharedValue<number>;
   imageUrl?: string | null;
@@ -77,8 +77,13 @@ export const PetSprite = React.memo(function PetSprite({
   }));
 
   const poleAnimatedStyle = useAnimatedStyle(() => {
-    const base = toolRotationDeg != null ? toolRotationDeg.value : -35;
-    return { transform: [{ rotate: `${base + bounceOffset.value * POLE_WADDLE_DEG}deg` }] };
+    const base = toolRotationDeg != null ? toolRotationDeg.value : -50;
+    return {
+      transform: [
+        { scaleX: -1 },
+        { rotate: `${base + bounceOffset.value * POLE_WADDLE_DEG}deg` },
+      ],
+    };
   });
 
   return (
@@ -93,6 +98,7 @@ export const PetSprite = React.memo(function PetSprite({
           <PetHeartEffect active onDone={onHeartDone} />
         </View>
       )}
+      {/* Equipment rendered behind pet (chair, hand tool) */}
       {(equippedChairImageUrl || equippedChairEmoji) ? (
         <View style={equipmentStyles.chairWrap} pointerEvents="none">
           {equippedChairImageUrl ? (
@@ -102,11 +108,6 @@ export const PetSprite = React.memo(function PetSprite({
           )}
         </View>
       ) : null}
-      {imageUrl ? (
-        <CachedImage source={{ uri: imageUrl }} style={styles.image} />
-      ) : (
-        <Animated.View style={styles.placeholder} />
-      )}
       {(equippedHandToolImageUrl || equippedHandToolEmoji) ? (
         <Animated.View style={[equipmentStyles.poleWrap, poleAnimatedStyle]}>
           {equippedHandToolImageUrl ? (
@@ -116,6 +117,11 @@ export const PetSprite = React.memo(function PetSprite({
           )}
         </Animated.View>
       ) : null}
+      {imageUrl ? (
+        <CachedImage source={{ uri: imageUrl }} style={styles.image} />
+      ) : (
+        <Animated.View style={styles.placeholder} />
+      )}
     </Animated.View>
   );
 });

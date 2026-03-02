@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { StepWrapper } from '@/components/onboarding/StepWrapper';
 import { useOnboarding } from '@/store/OnboardingProvider';
@@ -102,7 +103,7 @@ export default function SummaryStep() {
       {selectedPet && (
         <View style={styles.petPreview}>
           {selectedPet.image ? (
-            <Image
+            <CachedImage
               source={{ uri: selectedPet.image }}
               style={styles.petImage}
               resizeMode="contain"

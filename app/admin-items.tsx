@@ -1,13 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, Pressable, FlatList, ScrollView,
-  StyleSheet, ActivityIndicator, Alert, Image,
+  StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { api, type AdminGameItem } from '@/lib/api';
 import { useTheme } from '@/store/ThemeProvider';
@@ -16,12 +17,12 @@ import { spacing, radius } from '@/constants/theme';
 const CATEGORY_LABELS: Record<string, string> = {
   soil: 'Soil', seed: 'Seed', decoration: 'Decor', ingredient: 'Item', building: 'Building',
   scenery: 'Scenery', flooring: 'Floor', fish: 'Fish', bug: 'Bug', equip: 'Equip', food: 'Food',
-  asset: 'Asset',
+  asset: 'Asset', tree: 'Tree',
 };
 const CATEGORY_COLORS: Record<string, string> = {
   soil: '#8D6E63', seed: '#A8D860', decoration: '#C4A882', ingredient: '#E8D44D', building: '#D4A574',
   scenery: '#8BC34A', flooring: '#9E9E9E', fish: '#42A5F5', bug: '#AB47BC', equip: '#FF7043', food: '#EF5350',
-  asset: '#E91E63',
+  asset: '#E91E63', tree: '#2E7D32',
 };
 const SORT_CHIPS: { key: string; label: string }[] = [
   { key: '', label: 'All' },
@@ -80,6 +81,27 @@ export default function AdminItemsScreen() {
     ]);
   }, []);
 
+  const [granting, setGranting] = useState<string | null>(null);
+  const handleGrant = useCallback((item: AdminGameItem) => {
+    Alert.alert('Give Item', `Add 1× "${item.label}" to your inventory?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Give',
+        onPress: async () => {
+          setGranting(item.itemType);
+          try {
+            await api.grantItemToSelf(item.itemType);
+            Alert.alert('Done', `Added ${item.label} to your inventory.`);
+          } catch (err: any) {
+            Alert.alert('Error', err?.message ?? 'Failed to grant item');
+          } finally {
+            setGranting(null);
+          }
+        },
+      },
+    ]);
+  }, []);
+
   const styles = useMemo(
     () =>
       StyleSheet.create({
@@ -131,7 +153,7 @@ export default function AdminItemsScreen() {
       >
         <View style={[s.emojiCircle, { backgroundColor: (item.color || '#888') + '22' }]}>
           {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={s.itemImage} />
+            <CachedImage source={{ uri: item.imageUrl }} style={s.itemImage} />
           ) : (
             <Text style={s.emojiText}>{item.emoji}</Text>
           )}
@@ -148,13 +170,25 @@ export default function AdminItemsScreen() {
             {item.placeable && <Text style={styles.rowSub}>placeable</Text>}
           </View>
         </View>
-        <Pressable hitSlop={12} onPress={() => handleDelete(item)} style={s.deleteBtn}>
+        <Pressable
+          hitSlop={12}
+          onPress={() => handleGrant(item)}
+          style={s.actionBtn}
+          disabled={granting === item.itemType}
+        >
+          {granting === item.itemType ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Ionicons name="gift-outline" size={18} color={colors.primary} />
+          )}
+        </Pressable>
+        <Pressable hitSlop={12} onPress={() => handleDelete(item)} style={s.actionBtn}>
           <Ionicons name="trash-outline" size={18} color={colors.error} />
         </Pressable>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
     ),
-    [styles, colors, router, handleDelete],
+    [styles, colors, router, handleDelete, handleGrant, granting],
   );
   const renderItem = useCallback(
     ({ item, index }: { item: AdminGameItem; index: number }) =>
@@ -261,5 +295,5 @@ const s = StyleSheet.create({
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
   catBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   catText: { fontSize: 10, fontWeight: '700' },
-  deleteBtn: { padding: 6 },
+  actionBtn: { padding: 6 },
 });

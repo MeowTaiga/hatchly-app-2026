@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { StepWrapper } from '@/components/onboarding/StepWrapper';
 import { OnboardingInput } from '@/components/onboarding/OnboardingInput';
@@ -36,7 +37,7 @@ export default function PetNameStep() {
     >
       <View style={styles.petPreview}>
         {selectedPet?.image ? (
-          <Image
+          <CachedImage
             source={{ uri: selectedPet.image }}
             style={styles.petImage}
             resizeMode="contain"

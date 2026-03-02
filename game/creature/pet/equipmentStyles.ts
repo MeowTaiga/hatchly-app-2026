@@ -11,32 +11,29 @@ const PET_SIZE = TILE_SIZE * 2;
 export const equipmentStyles = StyleSheet.create({
   poleWrap: {
     position: 'absolute',
-    left: -20,
-    bottom: -30,
+    left: (PET_SIZE - PET_SIZE * 1.2) / 2 - 15,
+    bottom: 10,
     width: PET_SIZE * 1.2,
     height: PET_SIZE * 0.9,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'flex-end',
-    transform: [{ rotate: '-35deg' }],
-    transformOrigin: 'bottom left',
+    transformOrigin: 'bottom center',
   },
   poleImage: {
     width: PET_SIZE * 1.0,
     height: PET_SIZE * 0.8,
-    transform: [{ scaleX: -1 }],
   },
   poleEmoji: {
     fontSize: PET_SIZE * 0.8,
   },
   chairWrap: {
     position: 'absolute',
-    left: -PET_SIZE * 0.25,
-    bottom: -PET_SIZE * 0.25 - 15,
+    left: (PET_SIZE - PET_SIZE * 1.5) / 2,
+    bottom: -PET_SIZE * 0.25 - 15 + 35,
     width: PET_SIZE * 1.5,
     height: PET_SIZE * 1.5,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    zIndex: -1,
     overflow: 'visible',
   },
   chairImage: {

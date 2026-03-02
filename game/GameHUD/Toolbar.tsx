@@ -20,11 +20,12 @@ interface ToolbarProps {
   trashAnimatedStyle: object;
   isHighlighted: (type: QuestHighlight['type'], target: string) => boolean;
   onSetToolMode: (mode: ToolMode) => void;
+  onBackpackPress?: () => void;
+  paletteDismissed?: boolean;
+  onTogglePalette?: () => void;
   onOpenShop: () => void;
   onOpenBestiary?: () => void;
   onOpenEquip?: () => void;
-  onGoFishing?: () => void;
-  isFarm?: boolean;
   colors: { primary: string; onPrimary?: string; textMuted: string };
 }
 
@@ -40,11 +41,12 @@ export function Toolbar({
   trashAnimatedStyle,
   isHighlighted,
   onSetToolMode,
+  onBackpackPress,
+  paletteDismissed,
+  onTogglePalette,
   onOpenShop,
   onOpenBestiary,
   onOpenEquip,
-  onGoFishing,
-  isFarm = true,
   colors,
 }: ToolbarProps) {
   return (
@@ -57,7 +59,7 @@ export function Toolbar({
               toolMode === 'build' && { backgroundColor: colors.primary },
               isHighlighted('hud_button', 'backpack') && styles.highlightBorder,
             ]}
-            onPress={() => (toolMode === 'build' ? onSetToolMode('none' as ToolMode) : onSetToolMode('build'))}
+            onPress={onBackpackPress ?? (() => (toolMode === 'build' ? onSetToolMode('none' as ToolMode) : onSetToolMode('build')))}
           >
             <GameIcon
               name="backpack"
@@ -69,23 +71,38 @@ export function Toolbar({
 
         {trashTool && (
           <Animated.View style={trashAnimatedStyle} pointerEvents={editMode ? 'auto' : 'none'}>
-            <Animated.View style={[styles.highlightWrap, isHighlighted('hud_button', 'trash') && highlightGlowStyle]}>
-              <Pressable
-                style={[
-                  styles.toolBtn,
-                  toolMode === 'trash' && { backgroundColor: colors.primary },
-                  isHighlighted('hud_button', 'trash') && styles.highlightBorder,
-                ]}
-                onPress={() => onSetToolMode(toolMode === 'trash' ? ('none' as ToolMode) : 'trash')}
-              >
-                <GameIcon
-                  name="trash"
-                  variant={toolMode === 'trash' ? 'solid' : 'outline'}
-                  size={20}
-                  color={toolMode === 'trash' ? colors.onPrimary ?? '#fff' : colors.textMuted}
-                />
-              </Pressable>
-            </Animated.View>
+            <View style={styles.trashRow}>
+              <Animated.View style={[styles.highlightWrap, isHighlighted('hud_button', 'trash') && highlightGlowStyle]}>
+                <Pressable
+                  style={[
+                    styles.toolBtn,
+                    toolMode === 'trash' && { backgroundColor: colors.primary },
+                    isHighlighted('hud_button', 'trash') && styles.highlightBorder,
+                  ]}
+                  onPress={() => onSetToolMode(toolMode === 'trash' ? ('none' as ToolMode) : 'trash')}
+                >
+                  <GameIcon
+                    name="trash"
+                    variant={toolMode === 'trash' ? 'solid' : 'outline'}
+                    size={20}
+                    color={toolMode === 'trash' ? colors.onPrimary ?? '#fff' : colors.textMuted}
+                  />
+                </Pressable>
+              </Animated.View>
+              {onTogglePalette && (
+                <Pressable
+                  style={styles.toolBtn}
+                  onPress={onTogglePalette}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={paletteDismissed ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color={colors.textMuted}
+                  />
+                </Pressable>
+              )}
+            </View>
           </Animated.View>
         )}
 
@@ -115,15 +132,9 @@ export function Toolbar({
               style={[styles.toolBtn, isHighlighted('hud_button', 'equip') && styles.highlightBorder]}
               onPress={onOpenEquip}
             >
-              <Ionicons name="bag-handle-outline" size={20} color={colors.textMuted} />
+              <GameIcon name="pickaxe" size={20} color={colors.textMuted} />
             </Pressable>
           </Animated.View>
-        )}
-
-        {isFarm && onGoFishing && (
-          <Pressable style={styles.toolBtn} onPress={onGoFishing}>
-            <Ionicons name="fish-outline" size={20} color={colors.textMuted} />
-          </Pressable>
         )}
       </Animated.View>
     </View>

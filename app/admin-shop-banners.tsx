@@ -5,13 +5,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, Pressable, ScrollView,
-  StyleSheet, ActivityIndicator, Image, Switch, Alert,
+  StyleSheet, ActivityIndicator, Switch, Alert,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { api, type ShopBanner, type ShopBannerInput } from '@/lib/api';
 import { useToast } from '@/store/ToastProvider';
@@ -41,7 +42,7 @@ function BannerRow({
       <View style={cardStyle}>
         <View style={[s.bannerPreview, { backgroundColor: colors.surfaceElevated }]}>
           {showImage ? (
-            <Image source={{ uri: banner.imageUrl }} style={s.bannerImage} resizeMode="cover" />
+            <CachedImage source={{ uri: banner.imageUrl }} style={s.bannerImage} resizeMode="cover" />
           ) : (
             <View style={s.bannerPlaceholder}>
               <Ionicons name="image-outline" size={32} color={colors.textMuted} />

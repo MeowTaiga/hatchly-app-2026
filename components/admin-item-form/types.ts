@@ -79,6 +79,14 @@ export interface FormState {
 
   // Reference item for image generation (local only)
   referenceItemType: string;
+
+  // Color scheme from another item (local only)
+  colorSchemeItemType: string;
+  extractedColors: string[];
+  selectedColorIndices: number[];
+
+  // Fruit (subCategory 'fruit')
+  growsOnTrees: string[];
 }
 
 export type FormField = keyof Omit<FormState, 'harvestYield' | 'directionalImages'>;

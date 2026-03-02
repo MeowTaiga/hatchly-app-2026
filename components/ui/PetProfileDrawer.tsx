@@ -7,11 +7,12 @@
  */
 
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppDrawer, type AppDrawerRef } from '@/components/ui/AppDrawer';
 import { useAuth } from '@/store/AuthProvider';
 import { useTheme } from '@/store/ThemeProvider';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { createDrawerContentStyles } from '@/components/ui/drawerStyles';
 import { spacing, radius } from '@/constants/theme';
 
@@ -132,7 +133,7 @@ export const PetProfileDrawer = forwardRef<PetProfileDrawerRef, Record<string, n
           <View style={[st.card, styles.headerCard]}>
             <View style={styles.avatarWrap}>
               {petImageUrl ? (
-                <Image
+                <CachedImage
                   source={{ uri: petImageUrl }}
                   style={styles.avatar}
                   resizeMode="cover"

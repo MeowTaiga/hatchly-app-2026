@@ -4,7 +4,8 @@
  */
 
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, Image } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useFriends } from '@/store/FriendsProvider';
 import { useTheme } from '@/store/ThemeProvider';
 import { spacing, radius } from '@/constants/theme';
@@ -142,7 +143,7 @@ export function FriendsActivityRow() {
             <View key={entry.id} style={styles.friendItem}>
               <View style={styles.avatarWrap}>
                 {entry.user.pet?.imageUrl ? (
-                  <Image
+                  <CachedImage
                     source={{ uri: entry.user.pet.imageUrl }}
                     style={styles.avatarImg}
                     resizeMode="cover"

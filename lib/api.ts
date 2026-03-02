@@ -382,7 +382,7 @@ export interface AdminDirectionalImages {
 export type ItemCategory =
   | 'seed' | 'decoration' | 'ingredient' | 'building' | 'scenery'
   | 'flooring' | 'tiled_flooring' | 'fish' | 'bug' | 'equip' | 'soil' | 'food' | 'material' | 'asset'
-  | 'npc';
+  | 'npc' | 'tree';
 
 export type BugRarity = 'common' | 'rare' | 'epic' | 'unique' | 'legendary' | 'mythic';
 export type BugActiveTime = 'all_day' | 'night' | 'morning' | 'afternoon';
@@ -450,6 +450,10 @@ export interface AdminGameItem {
   foodBuffDurationMs?: number;
   /** Dialog steps when subCategory is 'npc'. */
   npcDialog?: { text: string; highlight?: { type: string; target: string } }[];
+  /** For fully grown trees: itemType of fruit this tree produces. */
+  treeFruit?: string;
+  /** For fruit items: tree variant slugs this fruit can grow on. */
+  growsOnTrees?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -500,6 +504,8 @@ export interface AdminGameItemInput {
   foodBuffType?: string | null;
   foodBuffDurationMs?: number | null;
   npcDialog?: { text: string }[] | null;
+  treeFruit?: string | null;
+  growsOnTrees?: string[] | null;
 }
 
 // ─── Admin Scene Types ──────────────────────────────────────────────────────
@@ -1333,6 +1339,11 @@ class ApiClient {
     return this.request('PUT', '/admin/fossil-loot', { body: { entries } });
   }
 
+  /** Extracts dominant colors from an item's image. Requires admin. */
+  async extractImageColors(itemType: string): Promise<{ colors: string[] }> {
+    return this.request('GET', `/admin/extract-image-colors?itemType=${encodeURIComponent(itemType)}`);
+  }
+
   /** Generates an AI image for a game item and uploads to R2. For autoConnect items, generates all 6 directional variants. */
   async generateGameItemImage(
     itemType: string,
@@ -1400,8 +1411,6 @@ class ApiClient {
     overrides?: {
       outerBushType?: string;
       treeTypes?: string[];
-      smallDecoTypes?: string[];
-      largeRockType?: string;
     },
   ): Promise<{
     placements: AdminScenePlacement[];
@@ -1529,6 +1538,21 @@ class ApiClient {
     farmLevel: number;
   }> {
     return this.request('PATCH', '/admin/my-farm', { body: data });
+  }
+
+  /** Admin: add item to current user's inventory for testing. Requires admin. */
+  async grantItemToSelf(itemType: string, qty?: number): Promise<{ inventory: Record<string, number> }> {
+    return this.request('POST', '/admin/my-farm/grant-item', { body: { itemType, qty: qty ?? 1 } });
+  }
+
+  /** Admin: spawn stress test bots into current multiplayer instance. Requires admin, must be in MP scene. */
+  async spawnStressTestBots(count?: number): Promise<{ spawned: number }> {
+    return this.request('POST', '/admin/multiplayer/stress-test', { body: { count: count ?? 10 } });
+  }
+
+  /** Admin: remove all stress test bots from current multiplayer instance. */
+  async removeStressTestBots(): Promise<{ removed: number }> {
+    return this.request('POST', '/admin/multiplayer/stress-test/remove');
   }
 
   // ── Game (authenticated) ────────────────────────────────────────────────

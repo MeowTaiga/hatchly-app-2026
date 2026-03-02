@@ -17,6 +17,8 @@ import { buildDefaultPrompt, nameToSlug } from './utils';
 import type { FormState } from './types';
 import type { SearchableItem } from '@/components/ui/ItemSearchDropdown';
 
+const NONE_OPTION: SearchableItem = { key: '', label: 'None' };
+
 export function useAdminItemForm() {
   const router = useRouter();
   const params = useLocalSearchParams<{ itemType?: string }>();
@@ -31,12 +33,21 @@ export function useAdminItemForm() {
   const [actionPayloads, setActionPayloads] = useState<string[]>([]);
 
   const isSeed = state.category === 'seed';
+  const isTree = state.category === 'tree';
   const isBug = state.category === 'bug';
   const isFish = state.category === 'fish';
 
   const slug = isEdit ? state.itemType : (state.itemType || nameToSlug(state.label));
   const defaultPrompt = useMemo(() => buildDefaultPrompt(state.label, state.category, state.subCategory), [state.label, state.category, state.subCategory]);
-  const effectivePrompt = state.promptTouched ? state.imagePrompt : defaultPrompt;
+  const basePrompt = state.promptTouched ? state.imagePrompt : defaultPrompt;
+  const selectedColors = useMemo(
+    () => state.selectedColorIndices.map((i) => state.extractedColors[i]).filter(Boolean),
+    [state.selectedColorIndices, state.extractedColors],
+  );
+  const effectivePrompt = useMemo(() => {
+    if (selectedColors.length === 0) return basePrompt;
+    return `${basePrompt} Use these exact hex colors in the palette: ${selectedColors.join(', ')}.`;
+  }, [basePrompt, selectedColors]);
 
   // Sync itemType from label when creating new item. Debounced to avoid double
   // state updates per keystroke which causes inputs to lose text while typing.
@@ -86,6 +97,24 @@ export function useAdminItemForm() {
       }
     })();
   }, [params.itemType, toast, router]);
+
+  // Fetch colors when color scheme item is selected
+  useEffect(() => {
+    if (!state.colorSchemeItemType) {
+      dispatch({ type: 'SET_EXTRACTED_COLORS', itemType: '', colors: [] });
+      return;
+    }
+    let cancelled = false;
+    api
+      .extractImageColors(state.colorSchemeItemType)
+      .then(({ colors }) => {
+        if (!cancelled) dispatch({ type: 'SET_EXTRACTED_COLORS', itemType: state.colorSchemeItemType, colors });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) toast(err instanceof Error ? err.message : 'Failed to extract colors', 'error');
+      });
+    return () => { cancelled = true; };
+  }, [state.colorSchemeItemType, toast]);
 
   const searchableItems: SearchableItem[] = useMemo(() => {
     const items = allItems.map((i) => ({ key: i.itemType, label: i.label, imageUrl: i.imageUrl }));
@@ -162,6 +191,11 @@ export function useAdminItemForm() {
       data.npcDialog = state.npcDialog.filter((s) => s.text.trim()).map((s) => ({ text: s.text.trim() }));
     } else if (isEdit) {
       data.npcDialog = null;
+    }
+    if (state.subCategory === 'fruit') {
+      data.growsOnTrees = state.growsOnTrees ?? [];
+    } else if (isEdit) {
+      data.growsOnTrees = null;
     }
     if (state.category === 'food') {
       if (state.foodHunger) data.foodHunger = parseInt(state.foodHunger, 10) || 0;
@@ -316,6 +350,14 @@ export function useAdminItemForm() {
     dispatch({ type: 'SET_FIELD', field: 'imagePrompt', value: t });
   }, []);
 
+  const handleColorSchemeSelect = useCallback((itemType: string) => {
+    dispatch({ type: 'SET_FIELD', field: 'colorSchemeItemType', value: itemType });
+  }, []);
+
+  const handleToggleColor = useCallback((index: number) => {
+    dispatch({ type: 'TOGGLE_COLOR_INDEX', index });
+  }, []);
+
   const addHarvestDrop = useCallback(() => {
     const currentSlug = slug || nameToSlug(state.label);
     dispatch({ type: 'ADD_HARVEST_DROP', currentSlug });
@@ -329,6 +371,11 @@ export function useAdminItemForm() {
     dispatch({ type: 'UPDATE_HARVEST_DROP', index: idx, field, value });
   }, []);
 
+  const colorSchemeItems: SearchableItem[] = useMemo(
+    () => [NONE_OPTION, ...searchableItems.filter((i) => i.imageUrl)],
+    [searchableItems],
+  );
+
   return {
     state,
     dispatch,
@@ -338,10 +385,12 @@ export function useAdminItemForm() {
     generatingImage,
     isEdit,
     isSeed,
+    isTree,
     isBug,
     isFish,
     slug,
     defaultPrompt,
+    basePrompt,
     effectivePrompt,
     resetPrompt,
     handlePromptChange,
@@ -349,9 +398,13 @@ export function useAdminItemForm() {
     handleSave,
     handleGenerateImage,
     handleGenerateImageAndNew,
+    handleColorSchemeSelect,
+    handleToggleColor,
+    colorSchemeItems,
     actionPayloads,
     addHarvestDrop,
     removeHarvestDrop,
     updateHarvestDrop,
+    allItems,
   };
 }

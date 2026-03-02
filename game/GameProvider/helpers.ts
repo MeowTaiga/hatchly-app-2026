@@ -44,6 +44,9 @@ export function snapshotItemToPlacedItem(
     plantedAt: si.plantedAt,
     growthMs: si.growthMs,
     watered: si.watered,
+    treePlantedDate: si.treePlantedDate,
+    treeFruitCount: si.treeFruitCount,
+    fruitLastHarvestedDate: si.fruitLastHarvestedDate,
   };
 }
 

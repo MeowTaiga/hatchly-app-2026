@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Image, StyleSheet, Dimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -460,7 +461,7 @@ export default function HatchingStep() {
                 {/* Revealed pet */}
                 <Animated.View style={[styles.petCenter, petStyle]}>
                   {selectedPet?.image ? (
-                    <Image
+                    <CachedImage
                       source={{ uri: selectedPet.image }}
                       style={styles.petImage}
                       resizeMode="contain"

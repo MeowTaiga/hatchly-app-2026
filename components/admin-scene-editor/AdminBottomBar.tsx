@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { useTheme } from '@/store/ThemeProvider';
+import { useToast } from '@/store/ToastProvider';
 import { hexToRgba } from '@/utils/colorUtils';
 import Animated, {
   useSharedValue,
@@ -44,6 +45,7 @@ interface AdminBottomBarProps {
   onRotateLeft: () => void;
   onRotateRight: () => void;
   onRotationChange: (degrees: number) => void;
+  onDuplicatePlacement: (direction: 'n' | 's' | 'e' | 'w') => void;
   onDeselectPlacement: () => void;
 
   multiSelectedCount: number;
@@ -63,6 +65,9 @@ interface AdminBottomBarProps {
 
   /** Drag-to-place: called when user long-presses a palette item. */
   onStartDragItem?: (itemType: string, def: AdminGameItem) => void;
+
+  /** Called after Quick Create successfully creates an item (to refresh itemDefs). */
+  onItemCreated?: () => void;
 }
 
 /** Lightweight inline rotation slider (0-360°). */
@@ -133,6 +138,7 @@ export function AdminBottomBar({
   onRotateLeft,
   onRotateRight,
   onRotationChange,
+  onDuplicatePlacement,
   onDeselectPlacement,
   multiSelectedCount,
   onMassDelete,
@@ -145,8 +151,10 @@ export function AdminBottomBar({
   setSpawnMode,
   onToggleSetSpawn,
   onStartDragItem,
+  onItemCreated,
 }: AdminBottomBarProps) {
   const { theme } = useTheme();
+  const { toast } = useToast();
   const primary = theme.colors.primary;
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
@@ -248,6 +256,8 @@ export function AdminBottomBar({
       });
       const prompt = quickPrompt.trim() || defaultImagePrompt;
       await api.generateGameItemImage(itemType, prompt);
+      onItemCreated?.();
+      toast(`Item created: ${name}`, 'success');
       onSelectItemType(itemType);
       setShowQuickCreate(false);
       setQuickName('');
@@ -257,7 +267,7 @@ export function AdminBottomBar({
     } finally {
       setQuickGenerating(false);
     }
-  }, [quickName, quickCategory, quickCols, quickRows, quickPrompt, defaultImagePrompt, onSelectItemType]);
+  }, [quickName, quickCategory, quickCols, quickRows, quickPrompt, defaultImagePrompt, onSelectItemType, onItemCreated, toast]);
 
   const showMultiSelect = multiSelectedCount > 0;
   const showItemTools = !!selectedPlacement && !showMultiSelect;
@@ -281,44 +291,62 @@ export function AdminBottomBar({
         </View>
       )}
 
-      {/* Selected item tool bar */}
+      {/* Selected item tool bar — Row 1: Delete | Send Down/Up | Duplicate | Deselect; Row 2: Scale | Rotate */}
       {showItemTools && (
-        <View style={s.toolBarRow}>
-          <View style={s.toolBar}>
-            <Pressable style={s.iconBtn} onPress={onDeleteSelected}>
-              <Ionicons name="trash-outline" size={16} color="#EF4444" />
-            </Pressable>
-            <Pressable style={s.iconBtn} onPress={onSendDown}>
-              <Ionicons name="chevron-down" size={16} color="#fff" />
-            </Pressable>
-            <Pressable style={s.iconBtn} onPress={onSendUp}>
-              <Ionicons name="chevron-up" size={16} color="#fff" />
-            </Pressable>
-            <View style={s.scaleGroup}>
-              <Pressable style={s.scaleBtn} onPress={() => onScaleChange(-0.1)}>
-                <Ionicons name="remove" size={14} color="#fff" />
+        <View style={s.toolBarRows}>
+          <View style={s.toolBarRow}>
+            <View style={s.toolBar}>
+              <Pressable style={s.iconBtn} onPress={onDeleteSelected}>
+                <Ionicons name="trash-outline" size={16} color="#EF4444" />
               </Pressable>
-              <Text style={s.scaleLabel}>{selectedPlacement!.scale.toFixed(1)}x</Text>
-              <Pressable style={s.scaleBtn} onPress={() => onScaleChange(0.1)}>
-                <Ionicons name="add" size={14} color="#fff" />
+              <Pressable style={s.iconBtn} onPress={onSendDown}>
+                <Ionicons name="chevron-down" size={16} color="#fff" />
+              </Pressable>
+              <Pressable style={s.iconBtn} onPress={onSendUp}>
+                <Ionicons name="chevron-up" size={16} color="#fff" />
+              </Pressable>
+            <Pressable style={s.iconBtn} onPress={() => onDuplicatePlacement('n')} accessibilityLabel="Duplicate N">
+              <Ionicons name="arrow-up" size={16} color="#fff" />
+            </Pressable>
+            <Pressable style={s.iconBtn} onPress={() => onDuplicatePlacement('s')} accessibilityLabel="Duplicate S">
+              <Ionicons name="arrow-down" size={16} color="#fff" />
+            </Pressable>
+            <Pressable style={s.iconBtn} onPress={() => onDuplicatePlacement('e')} accessibilityLabel="Duplicate E">
+              <Ionicons name="arrow-forward" size={16} color="#fff" />
+            </Pressable>
+            <Pressable style={s.iconBtn} onPress={() => onDuplicatePlacement('w')} accessibilityLabel="Duplicate W">
+              <Ionicons name="arrow-back" size={16} color="#fff" />
+            </Pressable>
+              <Pressable style={s.iconBtn} onPress={onDeselectPlacement}>
+                <Ionicons name="close" size={16} color="#fff" />
               </Pressable>
             </View>
-            <View style={s.rotationGroup}>
-              <Pressable style={s.scaleBtn} onPress={onRotateLeft}>
-                <Ionicons name="arrow-undo" size={14} color="#fff" />
-              </Pressable>
-              <RotationSlider
-                value={selectedPlacement?.rotationDegrees ?? 0}
-                onChange={onRotationChange}
-              />
-              <Pressable style={s.scaleBtn} onPress={onRotateRight}>
-                <Ionicons name="arrow-redo" size={14} color="#fff" />
-              </Pressable>
-              <Text style={s.scaleLabel}>{selectedPlacement?.rotationDegrees ?? 0}°</Text>
+          </View>
+          <View style={s.toolBarRow}>
+            <View style={s.toolBar}>
+              <View style={s.scaleGroup}>
+                <Pressable style={s.scaleBtn} onPress={() => onScaleChange(-0.1)}>
+                  <Ionicons name="remove" size={14} color="#fff" />
+                </Pressable>
+                <Text style={s.scaleLabel}>{selectedPlacement!.scale.toFixed(1)}x</Text>
+                <Pressable style={s.scaleBtn} onPress={() => onScaleChange(0.1)}>
+                  <Ionicons name="add" size={14} color="#fff" />
+                </Pressable>
+              </View>
+              <View style={s.rotationGroup}>
+                <Pressable style={s.scaleBtn} onPress={onRotateLeft}>
+                  <Ionicons name="arrow-undo" size={14} color="#fff" />
+                </Pressable>
+                <RotationSlider
+                  value={selectedPlacement?.rotationDegrees ?? 0}
+                  onChange={onRotationChange}
+                />
+                <Pressable style={s.scaleBtn} onPress={onRotateRight}>
+                  <Ionicons name="arrow-redo" size={14} color="#fff" />
+                </Pressable>
+                <Text style={s.scaleLabel}>{selectedPlacement?.rotationDegrees ?? 0}°</Text>
+              </View>
             </View>
-            <Pressable style={s.iconBtn} onPress={onDeselectPlacement}>
-              <Ionicons name="close" size={16} color="#fff" />
-            </Pressable>
           </View>
         </View>
       )}
@@ -697,10 +725,13 @@ const s = StyleSheet.create({
   slotLabel: { fontSize: 9, fontWeight: '600', color: '#ccc', textAlign: 'center' },
   emptyText: { fontSize: 12, color: '#888', paddingVertical: 12, paddingHorizontal: 8 },
   // Tool bar (selected item / multi-select)
+  toolBarRows: {
+    marginBottom: 8,
+  },
   toolBarRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   toolBar: {
     flexDirection: 'row',

@@ -1,10 +1,9 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSequence,
   Easing,
   runOnJS,
   cancelAnimation,
@@ -27,7 +26,8 @@ interface CircleRevealOverlaySeqProps {
   mode: 'conceal-then-reveal';
   backgroundColor: string;
   duration?: number;
-  onConcealComplete: () => void;
+  /** Called when conceal finishes. May return a Promise; reveal waits for it before starting. */
+  onConcealComplete: () => void | Promise<void>;
   onComplete: () => void;
   children?: React.ReactNode;
 }
@@ -57,28 +57,31 @@ export function CircleRevealOverlay(props: CircleRevealOverlayProps) {
 
   const circleScale = useSharedValue(isSeqProps(props) ? 0 : (props as CircleRevealOverlayBaseProps).variant === 'reveal' ? 1 : 0);
 
-  const onCompleteRef = useRef(isSeqProps(props) ? props.onComplete : props.onComplete);
-  const onConcealRef = useRef(isSeqProps(props) ? props.onConcealComplete : () => {});
-  if (isSeqProps(props)) {
-    onCompleteRef.current = props.onComplete;
-    onConcealRef.current = props.onConcealComplete;
-  } else {
-    onCompleteRef.current = props.onComplete;
-  }
+  const onConceal = isSeqProps(props) ? props.onConcealComplete : () => {};
+  const onComplete = props.onComplete;
 
   useEffect(() => {
     cancelAnimation(circleScale);
 
     if (isSeqProps(props)) {
       circleScale.value = 0;
-      circleScale.value = withSequence(
-        withTiming(1, { duration, easing: EASING }, (f) => {
-          if (f) runOnJS(onConcealRef.current)();
-        }),
-        withTiming(0, { duration, easing: EASING }, (f) => {
-          if (f) runOnJS(onCompleteRef.current)();
-        }),
-      );
+      const runConcealComplete = () => {
+        const result = onConceal();
+        if (result instanceof Promise) {
+          result.then(() => {
+            circleScale.value = withTiming(0, { duration, easing: EASING }, (f) => {
+              if (f) runOnJS(onComplete)();
+            });
+          });
+        } else {
+          circleScale.value = withTiming(0, { duration, easing: EASING }, (f) => {
+            if (f) runOnJS(onComplete)();
+          });
+        }
+      };
+      circleScale.value = withTiming(1, { duration, easing: EASING }, (f) => {
+        if (f) runOnJS(runConcealComplete)();
+      });
       return;
     }
 
@@ -86,15 +89,15 @@ export function CircleRevealOverlay(props: CircleRevealOverlayProps) {
     if (variant === 'reveal') {
       circleScale.value = 1;
       circleScale.value = withTiming(0, { duration, easing: EASING }, (f) => {
-        if (f) runOnJS(onCompleteRef.current)();
+        if (f) runOnJS(onComplete)();
       });
     } else {
       circleScale.value = 0;
       circleScale.value = withTiming(1, { duration, easing: EASING }, (f) => {
-        if (f) runOnJS(onCompleteRef.current)();
+        if (f) runOnJS(onComplete)();
       });
     }
-  }, [isSeqProps(props) ? 'seq' : (props as CircleRevealOverlayBaseProps).variant, duration]);
+  }, [isSeqProps(props) ? 'seq' : (props as CircleRevealOverlayBaseProps).variant, duration, onConceal, onComplete]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: circleScale.value }],

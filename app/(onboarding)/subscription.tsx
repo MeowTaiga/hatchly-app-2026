@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   Pressable,
   ActivityIndicator,
@@ -12,6 +11,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -413,7 +413,7 @@ export default function SubscriptionStep() {
 
           <Animated.View style={[styles.petContainer, petAnimStyle]}>
             {petImage ? (
-              <Image source={{ uri: petImage }} style={styles.petImage} resizeMode="contain" />
+              <CachedImage source={{ uri: petImage }} style={styles.petImage} resizeMode="contain" />
             ) : (
               <Text style={styles.petFallback}>🐣</Text>
             )}
@@ -660,7 +660,7 @@ function FlashDealOverlay({
           <Animated.View entering={SlideInDown.delay(300).springify()} style={fd.petSection}>
             <Animated.View style={[fd.petImageWrapper, petWobbleStyle]}>
               {petImage ? (
-                <Image source={{ uri: petImage }} style={fd.petImage} resizeMode="contain" />
+                <CachedImage source={{ uri: petImage }} style={fd.petImage} resizeMode="contain" />
               ) : (
                 <Text style={fd.petFallback}>🥺</Text>
               )}

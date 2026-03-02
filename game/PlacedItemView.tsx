@@ -4,9 +4,11 @@ import React, { useEffect, useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -22,13 +24,12 @@ const CENTER_OVERFLOW_SCALE = 1.25;
 
 
 /**
- * Seeds always render at 1x1 tile scale (not scaled by crop footprint).
- * Larger crops (e.g. watermelon 2x2) reserve space for the grown plant but
- * the seed phase stays small and centered.
+ * Renders a small image centered in a larger tile area.
+ * Used for seeds (1x1 in 2x2 crop footprint).
  */
-function seedImage(tileW: number, tileH: number) {
-  const w = TILE_SIZE * SEED_SCALE;
-  const h = TILE_SIZE * SEED_SCALE;
+export function centeredSmallImageStyle(tileW: number, tileH: number, scale = SEED_SCALE) {
+  const w = TILE_SIZE * scale;
+  const h = TILE_SIZE * scale;
   return {
     position: 'absolute' as const,
     width: w,
@@ -36,6 +37,27 @@ function seedImage(tileW: number, tileH: number) {
     left: (tileW - w) / 2,
     top: (tileH - h) / 2,
   };
+}
+
+/**
+ * Renders a small image at bottom-center of a larger tile area.
+ * Used for tree saplings (1x1 image in 2x2 placement).
+ */
+export function bottomCenterImageStyle(tileW: number, tileH: number, scale = 1) {
+  const w = TILE_SIZE * scale;
+  const h = TILE_SIZE * scale;
+  return {
+    position: 'absolute' as const,
+    width: w,
+    height: h,
+    left: (tileW - w) / 2,
+    top: tileH - h,
+  };
+}
+
+/** @deprecated Use centeredSmallImageStyle */
+function seedImage(tileW: number, tileH: number) {
+  return centeredSmallImageStyle(tileW, tileH);
 }
 
 function centerOverflowImage(tileW: number, tileH: number) {
@@ -60,6 +82,52 @@ function overflowCrop(tileW: number, tileH: number) {
     left: (tileW - w) / 2,
     top: tileH / 2 - h,
   };
+}
+
+/** Tap-shake for trees. No key = no flicker. Explicit reset + cancel before replay. */
+function TreeShakeWrapper({ width, height, trigger, children }: {
+  width: number; height: number; trigger?: number; children: React.ReactNode;
+}) {
+  const rot = useSharedValue(0);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const cx = width / 2;
+  const cy = height;
+  useEffect(() => {
+    if (!trigger) return;
+    cancelAnimation(rot);
+    cancelAnimation(tx);
+    cancelAnimation(ty);
+    rot.value = 0;
+    tx.value = 0;
+    ty.value = 0;
+    const seq = (mid: number) =>
+      withSequence(
+        withTiming(mid, { duration: 45, easing: Easing.out(Easing.quad) }),
+        withTiming(-mid, { duration: 50, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: 45, easing: Easing.in(Easing.quad) }),
+      );
+    rot.value = seq(-1.8);
+    tx.value = seq(1.5);
+    ty.value = seq(-0.8);
+  }, [trigger]);
+  const style = useAnimatedStyle(() => ({
+    width,
+    height,
+    position: 'absolute' as const,
+    left: 0,
+    top: 0,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    transform: [
+      { translateX: cx + tx.value },
+      { translateY: cy + ty.value },
+      { rotate: `${rot.value}deg` },
+      { translateX: -cx },
+      { translateY: -cy },
+    ],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
 }
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
@@ -354,6 +422,10 @@ interface PlacedItemViewProps {
   isMoving?: boolean;
   fenceConnectionMask?: number;
   highlighted?: boolean;
+  /** When true, plays a subtle tap-shake animation (trees only). */
+  isShaking?: boolean;
+  /** Changes each tap so animation can replay on same tree. */
+  shakeTrigger?: number;
 }
 
 export const PlacedItemView = React.memo(function PlacedItemView({
@@ -363,9 +435,10 @@ export const PlacedItemView = React.memo(function PlacedItemView({
   isMoving,
   fenceConnectionMask,
   highlighted,
+  isShaking,
+  shakeTrigger,
 }: PlacedItemViewProps) {
   const { theme } = useTheme();
-
   if (item.anchorId) return null;
 
   const def = itemDefs?.[item.itemType];
@@ -373,8 +446,9 @@ export const PlacedItemView = React.memo(function PlacedItemView({
   const isFlat = def?.category === 'flooring' || def?.category === 'tiled_flooring' || def?.category === 'soil';
   const needsWater = isCrop && item.watered === false;
   const isGrowing = !!item.plantedAt && isCrop && item.watered;
-  const cols = def?.cols ?? item.tileCols;
-  const rows = def?.rows ?? item.tileRows;
+  // Trees use placement footprint (tileCols/tileRows) for display; def.cols/rows may be larger (e.g. 4x4 image scaled to 2x2)
+  const cols = def?.category === 'tree' ? item.tileCols : (def?.cols ?? item.tileCols);
+  const rows = def?.category === 'tree' ? item.tileRows : (def?.rows ?? item.tileRows);
   const isBuilding = def?.category === 'building';
   const pxW = TILE_SIZE * cols;
   const pxH = isBuilding
@@ -418,6 +492,172 @@ export const PlacedItemView = React.memo(function PlacedItemView({
         ) : (
           <Text style={styles.emoji}>{item.emoji ?? '🪵'}</Text>
         )}
+      </View>
+    );
+  }
+
+  // ── Tree sapling: 1x1 image centered in 2x2 footprint (reuse seed-style rendering) ──
+  const isTreeSapling = def?.category === 'tree' && item.itemType.startsWith('tree_sappling_');
+  if (isTreeSapling && (item.imageUrl || def?.imageUrl)) {
+    const imgUrl = item.imageUrl || def?.imageUrl;
+    const saplingContent = (
+      <CachedImage
+        source={{ uri: imgUrl! }}
+        style={bottomCenterImageStyle(pxW, pxH, 1)}
+        resizeMode="contain"
+      />
+    );
+    return (
+      <View
+        style={[
+          styles.item,
+          {
+            left: item.col * TILE_SIZE,
+            top: item.row * TILE_SIZE,
+            width: pxW,
+            height: pxH,
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+            overflow: 'visible',
+          },
+          selectedStyle,
+          movingStyle,
+          highlightStyle,
+        ]}
+      >
+        <TreeShakeWrapper width={pxW} height={pxH} trigger={isShaking ? shakeTrigger : undefined}>
+          {saplingContent}
+        </TreeShakeWrapper>
+      </View>
+    );
+  }
+  if (isTreeSapling) {
+    const emojiContent = <Text style={styles.emoji}>{item.emoji ?? def?.emoji ?? '🌱'}</Text>;
+    return (
+      <View
+        style={[
+          styles.item,
+          {
+            left: item.col * TILE_SIZE,
+            top: item.row * TILE_SIZE,
+            width: pxW,
+            height: pxH,
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+            overflow: 'visible',
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          selectedStyle,
+          movingStyle,
+          highlightStyle,
+        ]}
+      >
+        <TreeShakeWrapper width={pxW} height={pxH} trigger={isShaking ? shakeTrigger : undefined}>
+          {emojiContent}
+        </TreeShakeWrapper>
+      </View>
+    );
+  }
+
+  // ── Fully grown tree: 4x4 image scaled and centered over 2x2 footprint ──
+  const isFullyGrownTree = def?.category === 'tree' && item.itemType.startsWith('tree_fully_grown_');
+  if (isFullyGrownTree && (item.imageUrl || def?.imageUrl)) {
+    const imgUrl = item.imageUrl || def?.imageUrl;
+    const footprintW = TILE_SIZE * (item.tileCols ?? 2);
+    const footprintH = TILE_SIZE * (item.tileRows ?? 2);
+    const imgSize = TILE_SIZE * 4;
+    const treeImageStyle = {
+      position: 'absolute' as const,
+      width: imgSize,
+      height: imgSize,
+      left: (footprintW - imgSize) / 2,
+      top: footprintH - imgSize,
+    };
+    const fruitCount = Math.min(item.treeFruitCount ?? 0, 3);
+    const fruitDef = def?.treeFruit ? itemDefs?.[def.treeFruit] : null;
+    const fruitImageUrl = fruitDef?.imageUrl;
+    const fruitSize = TILE_SIZE;
+    // Tree is 4x4 visually; fruit in canopy (top half), middle above the other two, spread out
+    const fruitOffsets = [
+      { left: (footprintW - fruitSize) / 2, top: -TILE_SIZE * 1.5 },
+      { left: -TILE_SIZE * 0.3, top: -TILE_SIZE * 0.7 },
+      { left: footprintW - fruitSize + TILE_SIZE * 0.3, top: -TILE_SIZE * 0.7 },
+    ];
+    const treeContent = (
+      <>
+        <CachedImage
+          source={{ uri: imgUrl! }}
+          style={treeImageStyle}
+          resizeMode="contain"
+        />
+        {fruitImageUrl && fruitCount > 0 && fruitOffsets.slice(0, fruitCount).map((pos, i) => (
+          <CachedImage
+            key={i}
+            source={{ uri: fruitImageUrl }}
+            style={{
+              position: 'absolute',
+              width: fruitSize,
+              height: fruitSize,
+              left: pos.left,
+              top: pos.top,
+            }}
+            resizeMode="contain"
+          />
+        ))}
+      </>
+    );
+    return (
+      <View
+        style={[
+          styles.item,
+          {
+            left: item.col * TILE_SIZE,
+            top: item.row * TILE_SIZE,
+            width: footprintW,
+            height: footprintH,
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+            overflow: 'visible',
+          },
+          selectedStyle,
+          movingStyle,
+          highlightStyle,
+        ]}
+      >
+        <TreeShakeWrapper width={footprintW} height={footprintH} trigger={isShaking ? shakeTrigger : undefined}>
+          {treeContent}
+        </TreeShakeWrapper>
+      </View>
+    );
+  }
+  if (isFullyGrownTree) {
+    const footprintW = TILE_SIZE * (item.tileCols ?? 2);
+    const footprintH = TILE_SIZE * (item.tileRows ?? 2);
+    const emojiContent = <Text style={styles.emoji}>{item.emoji ?? def?.emoji ?? '🌳'}</Text>;
+    return (
+      <View
+        style={[
+          styles.item,
+          {
+            left: item.col * TILE_SIZE,
+            top: item.row * TILE_SIZE,
+            width: footprintW,
+            height: footprintH,
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+            overflow: 'visible',
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          selectedStyle,
+          movingStyle,
+          highlightStyle,
+        ]}
+      >
+        <TreeShakeWrapper width={footprintW} height={footprintH} trigger={isShaking ? shakeTrigger : undefined}>
+          {emojiContent}
+        </TreeShakeWrapper>
       </View>
     );
   }
@@ -560,11 +800,15 @@ export const PlacedItemView = React.memo(function PlacedItemView({
     prev.item.plantedAt === next.item.plantedAt &&
     prev.item.growthMs === next.item.growthMs &&
     prev.item.anchorId === next.item.anchorId &&
+    prev.item.treeFruitCount === next.item.treeFruitCount &&
+    prev.item.fruitLastHarvestedDate === next.item.fruitLastHarvestedDate &&
     prev.item.clientId === next.item.clientId &&
     prev.isSelected === next.isSelected &&
     prev.isMoving === next.isMoving &&
     prev.fenceConnectionMask === next.fenceConnectionMask &&
     prev.highlighted === next.highlighted &&
+    prev.isShaking === next.isShaking &&
+    prev.shakeTrigger === next.shakeTrigger &&
     prev.itemDefs === next.itemDefs
   );
 });

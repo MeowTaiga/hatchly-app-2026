@@ -1,5 +1,6 @@
 import React, { useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,7 +24,7 @@ function FriendRow({ entry, onRemove }: { entry: FriendEntry; onRemove: (id: str
     <View style={[styles.friendRow, { borderBottomColor: colors.border }]}>
       <View style={[styles.avatar, { backgroundColor: colors.border + '60' }]}>
         {user.pet?.imageUrl ? (
-          <Image source={{ uri: user.pet.imageUrl }} style={styles.avatarImg} />
+          <CachedImage source={{ uri: user.pet.imageUrl }} style={styles.avatarImg} />
         ) : (
           <Text style={styles.avatarEmoji}>👤</Text>
         )}

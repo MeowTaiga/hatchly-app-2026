@@ -44,3 +44,22 @@ export function getSuggestedGoalWeight(
   const clamped = Math.max(min, Math.min(max, Math.round(currentWeight)));
   return clamped;
 }
+
+/**
+ * Calculate BMI from weight (lbs) and height (inches).
+ * Formula: (weight_lbs * 703) / (height_inches²)
+ */
+export function calculateBMI(weightLbs: number, heightInches: number): number | null {
+  if (heightInches <= 0) return null;
+  return (weightLbs * LBS_PER_BMI_UNIT) / (heightInches * heightInches);
+}
+
+/** BMI category for display (CDC standard ranges). */
+export type BMICategory = 'Underweight' | 'Normal' | 'Overweight' | 'Obese';
+
+export function getBMICategory(bmi: number): BMICategory {
+  if (bmi < 18.5) return 'Underweight';
+  if (bmi < 25) return 'Normal';
+  if (bmi < 30) return 'Overweight';
+  return 'Obese';
+}

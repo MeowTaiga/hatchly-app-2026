@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Image,
   ActivityIndicator,
   ScrollView,
   TextInput,
 } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -190,7 +190,7 @@ export default function PetPoseScreen() {
           <Text style={[styles.sectionLabel, { color: colors.text }]}>Current Pet</Text>
           <View style={styles.currentPetRow}>
             {petImageUrl ? (
-              <Image source={{ uri: petImageUrl }} style={styles.petThumb} resizeMode="contain" />
+              <CachedImage source={{ uri: petImageUrl }} style={styles.petThumb} resizeMode="contain" />
             ) : (
               <View style={[styles.petThumbPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
                 <Ionicons name="paw" size={32} color={colors.textMuted} />
@@ -256,7 +256,7 @@ export default function PetPoseScreen() {
                     disabled={isRegenerating || generatingAllPoses}
                   >
                     <View style={[styles.poseThumbWrap, { backgroundColor: colors.surfaceElevated }]}>
-                      <Image source={{ uri: url }} style={[styles.poseThumb, isRegenerating && styles.poseThumbDimmed]} resizeMode="contain" />
+                      <CachedImage source={{ uri: url }} style={[styles.poseThumb, isRegenerating && styles.poseThumbDimmed]} resizeMode="contain" />
                       {isRegenerating && (
                         <View style={styles.poseThumbOverlay}>
                           <ActivityIndicator color={colors.primary} size="small" />

@@ -128,6 +128,11 @@ export function createHudStyles(colors: Theme['colors'], screenWidth: number) {
       height: 24,
       backgroundColor: colors.border,
     },
+    trashRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
     buildPalette: {
       position: 'absolute' as const,
       left: 12,

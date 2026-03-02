@@ -221,7 +221,7 @@ export default function HomeScreen() {
             value={totals.calories}
             max={calorieGoal}
             color={colors.primary}
-            displayValue={`${Math.max(calorieGoal - totals.calories, 0)} cal`}
+            displayValue={`${calorieGoal - totals.calories} cal`}
             onPress={() => openExclusiveDrawer('food')}
             hint={totals.calories === 0 ? 'tap me!' : undefined}
           />

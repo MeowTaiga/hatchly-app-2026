@@ -31,7 +31,6 @@ export interface GameHUDProps {
   onSetToolMode: (mode: ToolMode) => void;
   onOpenBestiary?: () => void;
   onOpenEquip?: () => void;
-  onGoFishing?: () => void;
   onBuildPaletteLayout?: (layout: DropZoneLayout | null) => void;
   onPaletteDragStart?: (itemType: string, def: ItemDefinition) => void;
   onPaletteDragUpdate?: (x: number, y: number, def: ItemDefinition) => void;

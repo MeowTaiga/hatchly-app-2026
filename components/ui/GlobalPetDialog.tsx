@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import { PetDialog } from '@/game/creature/pet/PetDialog';
+import { QuestDialogOverlay } from '@/game/QuestDialogOverlay';
 import { usePetHero } from '@/store/PetHeroProvider';
 import { useAuth } from '@/store/AuthProvider';
 import { getPoseForContext, useNeutralPoseCycle } from '@/game/creature/pet';
 
 /**
  * Renders the pet dialog when the server pushes a message (e.g. hunger reminder).
- * Shown on all tabs — home, health, settings, explore, game.
+ * Uses the same NPC dialog UI/UX as quest dialogs. Shown on all tabs.
  */
 export function GlobalPetDialog() {
   const { serverPetDialog, dismissServerPetDialog } = usePetHero();
@@ -29,17 +29,15 @@ export function GlobalPetDialog() {
 
   if (!serverPetDialog) return null;
 
-  const message = {
-    id: `server_${Date.now()}`,
-    text: serverPetDialog.text,
-  };
-
   return (
-    <PetDialog
-      message={message}
+    <QuestDialogOverlay
+      steps={[{ text: serverPetDialog.text }]}
+      stepIndex={0}
       petName={petName}
       petImageUrl={petImageUrl}
-      onDismiss={dismissServerPetDialog}
+      playerName={petName}
+      blocking={false}
+      onAdvance={dismissServerPetDialog}
     />
   );
 }

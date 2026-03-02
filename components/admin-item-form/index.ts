@@ -14,6 +14,8 @@ export { InteractSection } from './sections/InteractSection';
 export { NpcDialogSection } from './sections/NpcDialogSection';
 export { LightSection } from './sections/LightSection';
 export { FoodSection } from './sections/FoodSection';
+export { FruitSection } from './sections/FruitSection';
 export { ImageSection } from './sections/ImageSection';
 export { SeedWizard } from './SeedWizard';
+export { TreeWizard } from './TreeWizard';
 export type { FormState } from './types';

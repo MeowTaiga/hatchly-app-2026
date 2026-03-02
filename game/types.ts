@@ -17,7 +17,7 @@ export function tileKey(col: number, row: number): string {
 export type ItemCategory =
   | 'seed' | 'decoration' | 'ingredient' | 'building' | 'scenery'
   | 'flooring' | 'tiled_flooring' | 'fish' | 'bug' | 'equip' | 'soil' | 'food' | 'material' | 'asset'
-  | 'npc';
+  | 'npc' | 'tree';
 
 /** Ionicons name for each category. */
 export type CategoryIconName =
@@ -41,6 +41,7 @@ export const ITEM_CATEGORIES: { key: ItemCategory | 'all'; label: string; ionico
   { key: 'food', label: 'Food', ionicon: 'cube' },
   { key: 'asset', label: 'Assets', ionicon: 'balloon' },
   { key: 'npc', label: 'NPCs', ionicon: 'person' },
+  { key: 'tree', label: 'Trees', ionicon: 'leaf' },
 ];
 
 export interface HarvestDrop {
@@ -130,6 +131,10 @@ export interface ItemDefinition {
   foodBuffDurationMs?: number;
   /** Dialog steps when subCategory is 'npc' — tapping shows dialog with item label + imageUrl as speaker. */
   npcDialog?: DialogStep[];
+  /** For fully grown trees: itemType of fruit this tree produces (e.g. 'apple'). */
+  treeFruit?: string;
+  /** For fruit items: tree variant slugs this fruit can grow on. */
+  growsOnTrees?: string[];
 }
 
 // ─── Placed Items ───────────────────────────────────────────────────────────
@@ -150,6 +155,12 @@ export interface PlacedItem {
   watered?: boolean;
   /** Stable React key for optimistic items; preserved during server reconciliation to prevent flicker. */
   clientId?: string;
+  /** For trees: YYYY-MM-DD when planted or last growth stage advanced. */
+  treePlantedDate?: string;
+  /** For fully grown fruit trees: 0–3 fruit currently on tree. */
+  treeFruitCount?: number;
+  /** For fruit trees: YYYY-MM-DD when fruit was last harvested. */
+  fruitLastHarvestedDate?: string;
 }
 
 /** Active tool the player has selected in the toolbar. */
@@ -430,6 +441,9 @@ export interface GameSnapshot {
     plantedAt?: number;
     growthMs?: number;
     watered?: boolean;
+    treePlantedDate?: string;
+    treeFruitCount?: number;
+    fruitLastHarvestedDate?: string;
   }[];
   equipped?: EquippedSnapshot;
   itemDefs: Record<string, ItemDefinition>;
@@ -442,6 +456,8 @@ export interface GameSnapshot {
   /** When farm has a scene with baked image, use these for world size instead of padded procedural dims. */
   sceneWorldCols?: number;
   sceneWorldRows?: number;
+  /** Scene placements for tap detection when using scene bake (buildings baked into image). */
+  scenePlacements?: Array<{ id: string; itemType: string; x: number; y: number; scale: number; depthOffset?: number }>;
   quests: QuestProgress[];
   canUpgrade: boolean;
   /** Pending quest start dialogs bundled with the snapshot (avoids race with separate event). */
@@ -475,4 +491,14 @@ export interface StateUpdate {
   farmName?: string;
   quests?: QuestProgress[];
   canUpgrade?: boolean;
+  /** Tree shake result — show jiggle+shrink harvest effect and bubble. */
+  shakeResult?: {
+    drops: HarvestDrop[];
+    col: number;
+    row: number;
+    tileCols: number;
+    tileRows: number;
+    cropEmoji?: string;
+    cropImageUrl?: string;
+  };
 }

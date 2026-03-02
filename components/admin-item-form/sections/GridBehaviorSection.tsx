@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Text } from 'react-native';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { Section, Field, SwitchField } from '../FormField';
 import { StableFormInput } from '@/components/ui/StableFormInput';
 import { DIRECTIONAL_VARIANT_KEYS } from '../constants';
@@ -71,7 +72,7 @@ export function GridBehaviorSection({ state, setField, ts, colors, s }: GridBeha
             {DIRECTIONAL_VARIANT_KEYS.map((v) => (
               <View key={v} style={s.dirImageItem}>
                 {state.directionalImages[v] ? (
-                  <Image source={{ uri: state.directionalImages[v] }} style={ts.dirImageThumb} />
+                  <CachedImage source={{ uri: state.directionalImages[v] }} style={ts.dirImageThumb} />
                 ) : (
                   <View style={ts.dirImageThumb} />
                 )}

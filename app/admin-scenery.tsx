@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Image } from 'expo-image';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -187,11 +187,10 @@ export default function AdminSceneryScreen() {
 
                 {bake ? (
                   <>
-                    <Image
+                    <CachedImage
                       source={{ uri: bake.imageUrl }}
                       style={styles.previewImage}
-                      contentFit="cover"
-                      cachePolicy="disk"
+                      resizeMode="cover"
                     />
                     <View style={styles.statusRow}>
                       <Ionicons name="checkmark-circle" size={14} color="#10B981" />

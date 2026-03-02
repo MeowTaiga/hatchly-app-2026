@@ -111,7 +111,7 @@ export function usePetAI({
   const facingRight = useSharedValue(1);
   const bounceOffset = useSharedValue(0);
   const behaviorOffset = useSharedValue(0);
-  const toolRotationDeg = useSharedValue(-35);
+  const toolRotationDeg = useSharedValue(-50);
   const jumpOffset = useSharedValue(0);
 
   const triggerJump = useCallback(() => {
@@ -147,7 +147,7 @@ export function usePetAI({
       petY.value = y;
       bounceOffset.value = 0;
       behaviorOffset.value = 0;
-      toolRotationDeg.value = -35;
+      toolRotationDeg.value = -50;
       posRef.current = { col, row };
       setBehavior(beh);
     },
@@ -169,7 +169,7 @@ export function usePetAI({
     cancelAnimation(behaviorOffset);
     cancelAnimation(toolRotationDeg);
     behaviorOffset.value = withTiming(0, { duration: 100 });
-    toolRotationDeg.value = withTiming(-35, { duration: 100 });
+    toolRotationDeg.value = withTiming(-50, { duration: 100 });
     setBehavior('idle');
     emitBehavior?.('idle');
   }, [behaviorOffset, toolRotationDeg, emitBehavior]);
@@ -275,7 +275,7 @@ export function usePetAI({
     );
     timerRef.current = setTimeout(() => {
       cancelAnimation(toolRotationDeg);
-      toolRotationDeg.value = withTiming(-35, { duration: 150 });
+      toolRotationDeg.value = withTiming(-50, { duration: 150 });
       transitionToIdle();
     }, PET_DIGGING_DURATION_MS);
   }, [toolRotationDeg, transitionToIdle, emitBehavior]);
@@ -331,7 +331,7 @@ export function usePetAI({
         PET_TURN_DURATION_MS,
         withRepeat(
           withSequence(
-            withTiming(3, { duration: 115, easing: Easing.out(Easing.quad) }),
+            withTiming(1.5, { duration: 115, easing: Easing.out(Easing.quad) }),
             withTiming(0, { duration: 115, easing: Easing.in(Easing.quad) }),
           ),
           -1,
