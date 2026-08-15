@@ -1,0 +1,217 @@
+🦋 Common (40)
+Bug	Location	Time
+House Fly	Town	Day
+Honey Bee	Flower Field	Day
+Bumblebee	Flower Field	Morning
+Ladybug	Garden	Day
+Ant	Everywhere	Day
+Grasshopper	Grasslands	Day
+Cricket	Grasslands	Evening
+Mosquito	Pond	Night
+Dragonfly	Pond	Day
+Damselfly	Pond	Morning
+Firefly	Forest	Night
+Butterfly	Flower Field	Day
+White Butterfly	Garden	Day
+Yellow Butterfly	Meadow	Morning
+Blue Butterfly	Meadow	Day
+Snail	Garden	Rain
+Slug	Garden	Rain
+Pill Bug	Rocks	Day
+Earthworm	Dirt	Rain
+Beetle	Forest	Day
+Stag Beetle	Forest	Evening
+Weevil	Garden	Day
+Leafhopper	Grasslands	Day
+Cicada	Trees	Summer Day
+Praying Mantis	Meadow	Day
+Stick Bug	Forest	Day
+Walking Leaf	Forest	Day
+Green Caterpillar	Garden	Day
+Silk Moth	Forest	Night
+Brown Moth	Forest	Evening
+Water Strider	Pond	Day
+Pond Skater	Pond	Day
+Orb Weaver Spider	Forest	Night
+Wolf Spider	Forest	Evening
+Tiny Frog Hopper	Marsh	Day
+Crane Fly	Meadow	Evening
+Gnat	Swamp	Evening
+Leaf Beetle	Forest	Morning
+June Bug	Forest	Night
+Aphid	Garden	Day
+💎 Rare (25)
+Bug	Location	Time
+Blue Morpho Butterfly	Flower Field	Day
+Monarch Butterfly	Meadow	Day
+Luna Moth	Forest	Night
+Atlas Moth	Forest	Night
+Orchid Mantis	Garden	Day
+Jewel Beetle	Forest	Morning
+Rhinoceros Beetle	Forest	Evening
+Hercules Beetle	Forest	Night
+Giant Dragonfly	Pond	Day
+Emerald Damselfly	Pond	Morning
+Scarlet Ladybug	Garden	Day
+Golden Bee	Flower Field	Day
+Rainbow Beetle	Forest	Rain
+Crystal Spider	Cave	Night
+Moss Cricket	Forest	Evening
+Sapphire Butterfly	Meadow	Morning
+Glow Firefly	Forest	Night
+Azure Dragonfly	Pond	Day
+Giant Snail	Garden	Rain
+Violet Moth	Forest	Night
+Emerald Katydid	Meadow	Evening
+Pearl Cicada	Trees	Summer
+Amber Beetle	Forest	Day
+Rose Chafer	Garden	Morning
+Twilight Firefly	Forest	Dusk
+⭐ Unique (15)
+Bug	Location	Time
+Spirit Butterfly	Shrine Garden	Dawn
+Celestial Dragonfly	Sacred Pond	Morning
+Crystal Mantis	Crystal Cave	Day
+Moon Moth	Forest	Full Moon
+Whisper Beetle	Ancient Forest	Night
+Echo Cicada	Ancient Tree	Evening
+Prism Butterfly	Rainbow Meadow	Day
+Dream Firefly	Dream Forest	Night
+Singing Cricket	Meadow	Night
+Mirror Beetle	Crystal Cave	Day
+Bloom Bee	Flower Garden	Spring
+Ancient Scarab	Desert Ruins	Day
+Cloud Butterfly	Mountain Meadow	Morning
+Starlight Moth	Forest	Midnight
+Spirit Spider	Shrine	Night
+👑 Legendary (12)
+Bug	Location	Time
+Galactic Butterfly	Cosmic Meadow	Night
+Phoenix Dragonfly	Sacred Lake	Dawn
+Astral Firefly	Sky Forest	Night
+Royal Scarab	Ancient Temple	Day
+Crown Beetle	King's Forest	Evening
+Aurora Moth	Frozen Forest	Night
+Nebula Spider	Crystal Cave	Midnight
+Sun Jewel Beetle	Flower Valley	Noon
+Celest Bee	Sacred Garden	Day
+Rainbow Emperor Butterfly	Meadow	Morning
+Titan Mantis	Ancient Forest	Day
+Moon Emperor Moth	Forest	Full Moon
+🌌 Mythic (8)
+Bug	Location	Time
+Void Butterfly	Void Meadow	Midnight
+Cosmic Firefly	Celestial Forest	Meteor Shower
+Timekeeper Cicada	Ancient Tree	Dawn
+Infinity Dragonfly	Sky Lake	Random
+Dream Weaver Spider	Dream Forest	Night
+Worldtree Beetle	World Tree	Sunrise
+Ethereal Scarab	Celestial Ruins	Eclipse
+Stardust Butterfly	Star Meadow	Meteor Shower
+🎃 Autumn / Halloween Exclusive Bugs (30)
+
+Only catchable during the Autumn Event.
+
+Bug	Location	Time
+Ghost Butterfly	Meadow	Night
+Phantom Moth	Forest	Midnight
+Haunted Firefly	Forest	Night
+Skeleton Beetle	Forest	Night
+Pumpkin Ladybug	Garden	Day
+Witch Mantis	Meadow	Evening
+Bone Spider	Forest	Midnight
+Cursed Cricket	Grasslands	Night
+Vampire Moth	Forest	Midnight
+Jack-o'-Lantern Beetle	Pumpkin Patch	Evening
+Ghost Bee	Flower Field	Fog
+Specter Dragonfly	Pond	Foggy Morning
+Haunted Cicada	Trees	Night
+Rotten Scarab	Graveyard	Evening
+Graveyard Cricket	Cemetery	Night
+Spider Queen	Haunted Forest	Midnight
+Soul Firefly	Swamp	Night
+Cursed Caterpillar	Pumpkin Patch	Day
+Crow Beetle	Forest	Evening
+Fog Mantis	Meadow	Fog
+Hollow Butterfly	Meadow	Twilight
+Nightmare Moth	Forest	Midnight
+Phantom Snail	Graveyard	Rain
+Bone Grasshopper	Grasslands	Evening
+Witch's Bee	Flower Garden	Dusk
+Raven Wing Butterfly	Forest	Sunset
+Haunted Orb Weaver	Forest	Midnight
+Ghost Leaf Bug	Forest	Night
+Spirit Dragonfly	Pond	Full Moon
+Grim Scarab	Cemetery	Midnight
+🗺️ Bug Locations
+🌸 Flower Field
+🌼 Meadow
+🌳 Forest
+🌲 Ancient Forest
+🌿 Garden
+🏞️ Grasslands
+🌾 Marsh
+🐸 Swamp
+💧 Pond
+🪨 Rocky Area
+🌳 Trees
+🎃 Pumpkin Patch
+⛩️ Shrine Garden
+🪦 Cemetery (Autumn only)
+🏛️ Ancient Temple
+💎 Crystal Cave
+☁️ Sky Forest
+🌌 Cosmic Meadow
+🌠 Star Meadow
+🌳 World Tree
+🌙 Dream Forest
+📖 Collections
+
+These mirror the fishing collections and encourage players to explore every biome and season.
+
+🌼 Meadow Collection
+
+Butterfly • Monarch Butterfly • Blue Morpho Butterfly • Grasshopper • Cricket • Praying Mantis • Ghost Butterfly
+
+🌸 Garden Collection
+
+Ladybug • Honey Bee • Bumblebee • Orchid Mantis • Bloom Bee • Pumpkin Ladybug
+
+🌳 Forest Collection
+
+Stag Beetle • Stick Bug • Walking Leaf • Luna Moth • Atlas Moth • Aurora Moth • Titan Mantis
+
+💧 Pond Collection
+
+Dragonfly • Damselfly • Water Strider • Giant Dragonfly • Celestial Dragonfly • Infinity Dragonfly
+
+🌙 Night Collection
+
+Firefly • Glow Firefly • Dream Firefly • Haunted Firefly • Astral Firefly • Cosmic Firefly
+
+🕷️ Spider Collection
+
+Orb Weaver Spider • Wolf Spider • Crystal Spider • Spirit Spider • Nebula Spider • Dream Weaver Spider • Spider Queen
+
+👑 Royal Collection
+
+Royal Scarab • Crown Beetle • Rainbow Emperor Butterfly • Moon Emperor Moth • Celest Bee
+
+🌌 Celestial Collection
+
+Galactic Butterfly • Phoenix Dragonfly • Cosmic Firefly • Stardust Butterfly • Worldtree Beetle • Ethereal Scarab
+
+🎃 Haunted Collection (Autumn Only)
+
+Ghost Butterfly • Phantom Moth • Skeleton Beetle • Bone Spider • Soul Firefly • Grim Scarab • Haunted Orb Weaver • Ghost Leaf Bug
+
+🏆 Completion Rewards (Example)
+Meadow Collection: Flower Crown
+Garden Collection: Bee Wings Backpack
+Forest Collection: Mossy Tent
+Pond Collection: Dragonfly Kite
+Night Collection: Firefly Lantern
+Spider Collection: Spider Web Rug
+Royal Collection: Golden Bug Terrarium
+Celestial Collection: Starlight Butterfly Display
+Haunted Collection: Ghost Bug Terrarium

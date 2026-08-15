@@ -27,6 +27,7 @@ interface UseQuestHighlightResult {
   setShopOpen: (open: boolean) => void;
   setSellBoxOpen: (open: boolean) => void;
   setCookingOpen: (open: boolean) => void;
+  setCraftingOpen: (open: boolean) => void;
   setFoodDishOpen: (open: boolean) => void;
   setEquipOpen: (open: boolean) => void;
   /** Called when user selects a shop category chip (triggers auto-advance if matching). */
@@ -41,10 +42,20 @@ interface UseQuestHighlightResult {
  */
 export function useQuestHighlight({ state, dispatch }: UseQuestHighlightParams): UseQuestHighlightResult {
   const rawHighlight: QuestHighlight | null = useMemo(() => {
-    if (!state.currentQuestDialog) return null;
-    const step = state.currentQuestDialog[state.questDialogIndex];
-    return step?.highlight ?? null;
-  }, [state.currentQuestDialog, state.questDialogIndex]);
+    const dialog = state.currentDialog;
+    const highlight = dialog?.steps[state.questDialogIndex]?.highlight ?? null;
+    if (!highlight) return null;
+
+    // A finished quest should never keep glowing a HUD button. Completing the
+    // quest usually strips the highlight in the reducer; this is the backstop
+    // for a dialog that outlives its quest (or a stale step).
+    if (dialog?.questId) {
+      const quest = state.quests.find((q) => q.questId === dialog.questId);
+      if (quest && quest.status !== 'active') return null;
+    }
+
+    return highlight;
+  }, [state.currentDialog, state.questDialogIndex, state.quests]);
 
   const activeHighlight: QuestHighlight | null = useMemo(() => {
     if (!rawHighlight) return null;
@@ -56,10 +67,17 @@ export function useQuestHighlight({ state, dispatch }: UseQuestHighlightParams):
     if (needsShop && !state.shopOpen) {
       return { type: 'hud_button', target: 'shop' };
     }
-    const drawerTypes: DrawerHighlightType[] = ['sell_item', 'cook_item', 'food_dish_item', 'equip_item'];
+    const drawerTypes: DrawerHighlightType[] = [
+      'sell_item',
+      'cook_item',
+      'craft_item',
+      'food_dish_item',
+      'equip_item',
+    ];
     const drawerOpenMap: Record<DrawerHighlightType, boolean> = {
       sell_item: state.sellBoxOpen,
       cook_item: state.cookingOpen,
+      craft_item: state.craftingOpen,
       food_dish_item: state.foodDishOpen,
       equip_item: state.equipOpen,
     };
@@ -70,12 +88,21 @@ export function useQuestHighlight({ state, dispatch }: UseQuestHighlightParams):
       }
     }
     return rawHighlight;
-  }, [rawHighlight, state.editMode, state.shopOpen, state.sellBoxOpen, state.cookingOpen, state.foodDishOpen, state.equipOpen]);
+  }, [
+    rawHighlight,
+    state.editMode,
+    state.shopOpen,
+    state.sellBoxOpen,
+    state.cookingOpen,
+    state.craftingOpen,
+    state.foodDishOpen,
+    state.equipOpen,
+  ]);
 
   const tryAutoAdvanceDialog = useCallback(
     (action: string, itemType?: string) => {
       if (!rawHighlight) return;
-      const step = state.currentQuestDialog?.[state.questDialogIndex];
+      const step = state.currentDialog?.steps[state.questDialogIndex];
       if (!step?.highlight) return;
 
       let shouldAdvance = false;
@@ -83,14 +110,32 @@ export function useQuestHighlight({ state, dispatch }: UseQuestHighlightParams):
       const tgt = step.highlight.target;
       switch (ht) {
         case 'inventory_item':
-          if (action === 'place' && tgt === itemType) shouldAdvance = true;
+          // Placeables advance on drop; recipe scrolls advance when learned.
+          if ((action === 'place' || action === 'learn') && tgt === itemType) shouldAdvance = true;
           break;
         case 'world_item':
-          if ((action === 'harvest' || action === 'water' || action === 'interact') && tgt === itemType) shouldAdvance = true;
+          // itemType match (placed object) or open_modal payload alias (e.g. "crafting").
+          if (
+            (action === 'harvest' ||
+              action === 'water' ||
+              action === 'interact' ||
+              action === 'open_modal') &&
+            tgt === itemType
+          ) {
+            shouldAdvance = true;
+          }
+          // Crafting at a table: advance when the highlighted bench (or result) matches.
+          if (
+            action === 'craft' &&
+            (tgt === itemType || tgt === 'crafting' || tgt === 'primitive_crafting_table')
+          ) {
+            shouldAdvance = true;
+          }
           break;
         case 'hud_button':
+          // Reported by the HUD itself; nothing else can tell us the button was
+          // pressed, and a step pointing at one used to have no way to advance.
           if (action === 'hud_action' && tgt === itemType) shouldAdvance = true;
-          else if (action === tgt) shouldAdvance = true;
           break;
         case 'category_chip':
           if (action === 'select_category' && tgt === itemType) shouldAdvance = true;
@@ -107,6 +152,9 @@ export function useQuestHighlight({ state, dispatch }: UseQuestHighlightParams):
         case 'cook_item':
           if (action === 'cook' && tgt === itemType) shouldAdvance = true;
           break;
+        case 'craft_item':
+          if (action === 'craft' && tgt === itemType) shouldAdvance = true;
+          break;
         case 'food_dish_item':
           if (action === 'add_to_food_dish' && tgt === itemType) shouldAdvance = true;
           break;
@@ -118,7 +166,7 @@ export function useQuestHighlight({ state, dispatch }: UseQuestHighlightParams):
         dispatch({ type: 'ADVANCE_QUEST_DIALOG' });
       }
     },
-    [rawHighlight, state.currentQuestDialog, state.questDialogIndex, dispatch],
+    [rawHighlight, state.currentDialog, state.questDialogIndex, dispatch],
   );
 
   const setShopOpen = useCallback(
@@ -131,6 +179,10 @@ export function useQuestHighlight({ state, dispatch }: UseQuestHighlightParams):
   );
   const setCookingOpen = useCallback(
     (open: boolean) => dispatch({ type: 'SET_COOKING_OPEN', open }),
+    [dispatch],
+  );
+  const setCraftingOpen = useCallback(
+    (open: boolean) => dispatch({ type: 'SET_CRAFTING_OPEN', open }),
     [dispatch],
   );
   const setFoodDishOpen = useCallback(
@@ -154,6 +206,7 @@ export function useQuestHighlight({ state, dispatch }: UseQuestHighlightParams):
     setShopOpen,
     setSellBoxOpen,
     setCookingOpen,
+    setCraftingOpen,
     setFoodDishOpen,
     setEquipOpen,
     onShopCategorySelect,

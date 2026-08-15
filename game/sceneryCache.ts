@@ -52,7 +52,7 @@ export async function setCachedPlacements(
 ): Promise<void> {
   try {
     const file = new File(SCENERY_STORAGE_DIR, cacheFileName(farmCols, farmRows, worldCols, worldRows));
-    file.create({ idempotent: true });
+    file.create({ overwrite: true });
     file.write(JSON.stringify(placements));
   } catch {
     // Non-fatal; next load will regenerate

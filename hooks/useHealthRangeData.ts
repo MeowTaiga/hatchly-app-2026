@@ -40,7 +40,17 @@ export function useHealthRangeData(period: HealthPeriod): HealthRangeData {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { start, end } = useMemo(() => getDateRange(period), [period]);
+  const { start, end } = useMemo(() => {
+    // Food/water/steps APIs expect a bounded range; for "all" use a year window.
+    if (period === 'all') {
+      const now = new Date();
+      const endDate = now.toISOString().slice(0, 10);
+      const startDate = new Date(now);
+      startDate.setFullYear(startDate.getFullYear() - 1);
+      return { start: startDate.toISOString().slice(0, 10), end: endDate };
+    }
+    return getDateRange(period);
+  }, [period]);
 
   const fetchRange = useCallback(async () => {
     setIsLoading(true);

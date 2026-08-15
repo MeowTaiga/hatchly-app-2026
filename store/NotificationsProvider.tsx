@@ -10,6 +10,7 @@ Notifications.setNotificationHandler({
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 import { api, type ApiNotification } from '@/lib/api';

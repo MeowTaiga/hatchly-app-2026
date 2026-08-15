@@ -16,6 +16,14 @@ export function ShopSection({ state, setField, ts, colors, s }: ShopSectionProps
   return (
     <Section label="Shop" sectionLabelStyle={ts.sectionLabel} cardStyle={ts.card}>
       <SwitchField
+        label="Treat as currency"
+        value={state.isCurrency}
+        onValueChange={(v) => setField('isCurrency', v)}
+        switchLabelStyle={ts.switchLabel}
+        primaryColor={colors.primary}
+        borderColor={colors.border}
+      />
+      <SwitchField
         label="Buyable in Shop"
         value={state.buyable}
         onValueChange={(v) => setField('buyable', v)}
@@ -25,7 +33,7 @@ export function ShopSection({ state, setField, ts, colors, s }: ShopSectionProps
       />
       {state.buyable && (
         <>
-          <Field label="Gem Price" fieldLabelStyle={ts.fieldLabel}>
+          <Field label="Price" fieldLabelStyle={ts.fieldLabel}>
             <StableFormInput
               style={ts.input}
               value={state.gemPrice}
@@ -33,6 +41,16 @@ export function ShopSection({ state, setField, ts, colors, s }: ShopSectionProps
               placeholder="e.g. 10"
               placeholderTextColor={colors.textMuted}
               keyboardType="number-pad"
+            />
+          </Field>
+          <Field label="Currency item" fieldLabelStyle={ts.fieldLabel}>
+            <StableFormInput
+              style={ts.input}
+              value={state.shopCurrency}
+              onChangeText={(v) => setField('shopCurrency', v)}
+              placeholder="Leave empty for gems (e.g. candy_corn)"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
             />
           </Field>
           <View style={s.rowFields}>

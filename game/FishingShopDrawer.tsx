@@ -15,6 +15,8 @@ export interface FishingShopDrawerRef {
 
 interface FishingShopDrawerProps {
   gems: number;
+  farmLevel: number;
+  petLevel: number;
   itemDefs: Record<string, ItemDefinition>;
   inventory: InventorySlot[];
   onPurchase: (itemType: string) => void;
@@ -30,12 +32,17 @@ const FISHING_SHOP_CONFIG: ShopDrawerConfig = {
 };
 
 export const FishingShopDrawer = forwardRef<FishingShopDrawerRef, FishingShopDrawerProps>(
-  function FishingShopDrawer({ gems, itemDefs, inventory, onPurchase, onClose, activeHighlight }, ref) {
+  function FishingShopDrawer(
+    { gems, farmLevel, petLevel, itemDefs, inventory, onPurchase, onClose, activeHighlight },
+    ref,
+  ) {
     return (
       <ShopDrawer
         ref={ref}
         config={FISHING_SHOP_CONFIG}
         gems={gems}
+        farmLevel={farmLevel}
+        petLevel={petLevel}
         itemDefs={itemDefs}
         inventory={inventory}
         onPurchase={onPurchase}

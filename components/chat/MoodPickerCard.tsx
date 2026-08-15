@@ -19,7 +19,7 @@ export interface MoodPickerCardProps {
 
 export function MoodPickerCard({
   title = "How are you feeling today?",
-  subtitle = "Tap a face to start the conversation",
+  subtitle = "Tap a face — diary rewards every few hours",
   onSelect,
 }: MoodPickerCardProps) {
   const { theme, themeMode } = useTheme();

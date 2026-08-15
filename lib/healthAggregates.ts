@@ -26,7 +26,7 @@ export function aggregateWeightByPeriod(
 ): WeightAggregate {
   const { start, end } = getDateRange(period);
   const filtered = logs
-    .filter((l) => l.date >= start && l.date <= end)
+    .filter((l) => (start ? l.date >= start && l.date <= end : l.date <= end))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (filtered.length === 0) {
@@ -43,8 +43,23 @@ export function aggregateWeightByPeriod(
     trend = +(latest.weight - filtered[0].weight).toFixed(1);
   }
 
-  const points = filtered.map((l) => ({ date: l.date, weight: l.weight }));
-  return { points, min, max, avg, trend, latest };
+  // Cap dense all-time series so the polyline stays readable on mobile.
+  const MAX_ALL_POINTS = 90;
+  let series = filtered.map((l) => ({ date: l.date, weight: l.weight }));
+  if (period === 'all' && series.length > MAX_ALL_POINTS) {
+    const sampled: typeof series = [];
+    const lastIdx = series.length - 1;
+    for (let i = 0; i < MAX_ALL_POINTS; i++) {
+      const idx = Math.round((i / (MAX_ALL_POINTS - 1)) * lastIdx);
+      const pt = series[idx];
+      if (!sampled.length || sampled[sampled.length - 1].date !== pt.date) {
+        sampled.push(pt);
+      }
+    }
+    series = sampled;
+  }
+
+  return { points: series, min, max, avg, trend, latest };
 }
 
 export interface NutritionAggregate {

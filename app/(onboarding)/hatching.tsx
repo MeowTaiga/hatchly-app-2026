@@ -13,6 +13,7 @@ import Animated, {
   Easing,
   interpolate,
   interpolateColor,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -94,6 +95,19 @@ const Particle = React.memo(function Particle({ config, trigger }: { config: Par
 
 // ─── Crack Lines ────────────────────────────────────────────────────────────
 
+const crackStyles = StyleSheet.create({
+  crackContainer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crackLine: {
+    position: 'absolute',
+    fontSize: 24,
+    color: '#FFA500',
+  },
+});
+
 function CrackLines({ visible }: { visible: boolean }) {
   const opacity = useSharedValue(0);
 
@@ -106,10 +120,10 @@ function CrackLines({ visible }: { visible: boolean }) {
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
   return (
-    <Animated.View style={[styles.crackContainer, style]} pointerEvents="none">
-      <Text style={[styles.crackLine, { top: '25%', left: '35%', transform: [{ rotate: '-30deg' }] }]}>⚡</Text>
-      <Text style={[styles.crackLine, { top: '45%', right: '30%', transform: [{ rotate: '25deg' }] }]}>⚡</Text>
-      <Text style={[styles.crackLine, { bottom: '30%', left: '40%', transform: [{ rotate: '60deg' }] }]}>⚡</Text>
+    <Animated.View style={[crackStyles.crackContainer, style]} pointerEvents="none">
+      <Text style={[crackStyles.crackLine, { top: '25%', left: '35%', transform: [{ rotate: '-30deg' }] }]}>⚡</Text>
+      <Text style={[crackStyles.crackLine, { top: '45%', right: '30%', transform: [{ rotate: '25deg' }] }]}>⚡</Text>
+      <Text style={[crackStyles.crackLine, { bottom: '30%', left: '40%', transform: [{ rotate: '60deg' }] }]}>⚡</Text>
     </Animated.View>
   );
 }
@@ -378,16 +392,6 @@ export default function HatchingStep() {
           justifyContent: 'center',
         },
         egg: { fontSize: 140 },
-        crackContainer: {
-          ...StyleSheet.absoluteFillObject,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        crackLine: {
-          position: 'absolute',
-          fontSize: 24,
-          color: '#FFA500',
-        },
         flash: {
           ...StyleSheet.absoluteFillObject,
           backgroundColor: theme.colors.surface,
@@ -510,7 +514,7 @@ const OrbitalSparkle = React.memo(function OrbitalSparkle({
 }: {
   emoji: string;
   offsetDeg: number;
-  angleValue: Animated.SharedValue<number>;
+  angleValue: SharedValue<number>;
   radiusValue: number;
 }) {
   const opacity = useSharedValue(0);

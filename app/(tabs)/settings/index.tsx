@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Switch, ScrollView, Platform } from 'react-native';
 import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { useAuth } from '@/store/AuthProvider';
 import { useFriends } from '@/store/FriendsProvider';
 import { useNotifications } from '@/store/NotificationsProvider';
 import { useTheme } from '@/store/ThemeProvider';
+import { useFasting } from '@/store/FastingProvider';
 import { spacing, radius } from '@/constants/theme';
 import { getPoseForContext, useNeutralPoseCycle } from '@/game/creature/pet';
 
@@ -75,6 +76,7 @@ export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const { friends, received } = useFriends();
   const { unreadCount } = useNotifications();
+  const { liveActivityEnabled, setLiveActivityEnabled } = useFasting();
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
   const insets = useSafeAreaInsets();
 
@@ -233,6 +235,25 @@ export default function SettingsScreen() {
               />
             }
           />
+          {Platform.OS === 'ios' ? (
+            <MenuRow
+              icon="phone-portrait-outline"
+              label="Lock Screen widget"
+              color={colors.primary}
+              onPress={() => {
+                void setLiveActivityEnabled(!liveActivityEnabled);
+              }}
+              right={
+                <View pointerEvents="none">
+                  <Switch
+                    value={liveActivityEnabled}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor={colors.surface}
+                  />
+                </View>
+              }
+            />
+          ) : null}
         </View>
 
         {/* Admin */}

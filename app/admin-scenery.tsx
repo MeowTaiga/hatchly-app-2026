@@ -118,7 +118,7 @@ export default function AdminSceneryScreen() {
           width: '100%' as any,
           height: 140,
           borderRadius: radius.md,
-          backgroundColor: colors.surfaceAlt,
+          backgroundColor: colors.surfaceElevated,
           marginTop: spacing.sm,
         },
         statusRow: {

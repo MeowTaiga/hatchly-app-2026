@@ -29,6 +29,15 @@ import { useWeight } from '@/store/WeightProvider';
 import { api, type FoodItem, type FoodDetail, type FoodServing, type RecentFood, type MealType, type RateOption } from '@/lib/api';
 import { useTheme } from '@/store/ThemeProvider';
 import { spacing, radius } from '@/constants/theme';
+import { CustomFoodView } from '@/components/food/CustomFoodView';
+import { useLabelScan } from '@/components/food/useLabelScan';
+import {
+  draftToFood,
+  emptyCustomDraft,
+  draftFromFood,
+  isCustomDraftReady,
+  type CustomFoodDraft,
+} from '@/components/food/customFood';
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -140,7 +149,7 @@ function buildServingOptions(servings: FoodServing[]) {
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
-type Mode = 'browse' | 'scan' | 'log' | 'goal' | 'goalConfirm';
+type Mode = 'browse' | 'scan' | 'custom' | 'log' | 'goal' | 'goalConfirm';
 
 interface LogState {
   foodId: string;
@@ -183,6 +192,7 @@ export const FoodDrawer = forwardRef<FoodDrawerRef, FoodDrawerProps>(
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [log, setLog] = useState<LogState>(EMPTY);
+    const [customDraft, setCustomDraft] = useState<CustomFoodDraft>(emptyCustomDraft);
     const [confirmedOption, setConfirmedOption] = useState<RateOption | null>(null);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const searchGenRef = useRef(0);
@@ -261,6 +271,20 @@ export const FoodDrawer = forwardRef<FoodDrawerRef, FoodDrawerProps>(
       openLogForFood(food);
     }, [openLogForFood]);
 
+    const openCustom = useCallback((food?: FoodDetail) => {
+      setCustomDraft(food ? draftFromFood(food) : emptyCustomDraft());
+      setMode('custom');
+    }, []);
+
+    const handleLabelScanned = useCallback((food: FoodDetail) => {
+      openCustom(food);
+    }, [openCustom]);
+
+    const handleCustomContinue = useCallback(() => {
+      if (!isCustomDraftReady(customDraft)) return;
+      openLogForFood(draftToFood(customDraft));
+    }, [customDraft, openLogForFood]);
+
     const handleLog = useCallback(async () => {
       if (!log.serving || submitting) return;
       setSubmitting(true);
@@ -337,6 +361,7 @@ export const FoodDrawer = forwardRef<FoodDrawerRef, FoodDrawerProps>(
       : mode === 'goalConfirm' ? undefined
       : mode === 'log' ? undefined
       : mode === 'scan' ? undefined
+      : mode === 'custom' ? undefined
       : 'Log Food';
 
     const browseFooter = mode === 'browse' ? (
@@ -363,6 +388,23 @@ export const FoodDrawer = forwardRef<FoodDrawerRef, FoodDrawerProps>(
         <Pressable onPress={() => setMode('scan')} hitSlop={8} style={({ pressed }) => [st.toolbarBtn, pressed && { opacity: 0.6 }]}>
           <Ionicons name="barcode-outline" size={18} color={colors.primary} />
         </Pressable>
+        <Pressable onPress={() => openCustom()} hitSlop={8} style={({ pressed }) => [st.toolbarBtn, pressed && { opacity: 0.6 }]}>
+          <Ionicons name="add" size={22} color={colors.primary} />
+        </Pressable>
+      </View>
+    ) : undefined;
+
+    const customReady = isCustomDraftReady(customDraft);
+    const customFooter = mode === 'custom' ? (
+      <View style={[st.searchWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <Pressable
+          onPress={handleCustomContinue}
+          disabled={!customReady}
+          style={[st.logBtn, { flex: 1 }, !customReady && st.logBtnOff]}
+        >
+          <Ionicons name="arrow-forward-circle" size={20} color={colors.onPrimary ?? '#fff'} />
+          <Text style={st.logBtnText}>Continue</Text>
+        </Pressable>
       </View>
     ) : undefined;
 
@@ -373,7 +415,8 @@ export const FoodDrawer = forwardRef<FoodDrawerRef, FoodDrawerProps>(
         snapPoints={['92%']}
         showCloseButton={mode === 'browse' || mode === 'goal'}
         scrollable={mode !== 'scan'}
-        footer={browseFooter}
+        footerKey={mode}
+        footer={browseFooter ?? customFooter}
         onClose={() => { setMode('browse'); clearSearch(); }}
       >
         <FoodDrawerThemeContext.Provider value={themeValue}>
@@ -395,7 +438,9 @@ export const FoodDrawer = forwardRef<FoodDrawerRef, FoodDrawerProps>(
             onSkip={() => setMode('browse')}
           />
         ) : mode === 'scan' ? (
-          <ScanView onScanned={handleBarcodeScanned} onBack={goBack} />
+          <ScanView onScanned={handleBarcodeScanned} onLabel={handleLabelScanned} onBack={goBack} />
+        ) : mode === 'custom' ? (
+          <CustomFoodView draft={customDraft} setDraft={setCustomDraft} onBack={goBack} />
         ) : mode === 'log' ? (
           <LogView
             log={log} setLog={setLog} n={n} today={today} daily={daily}
@@ -461,16 +506,26 @@ function BrowseView({ query, results, recent, loading, onSelect }: {
 // Scan View — barcode scanner using device camera
 // ═══════════════════════════════════════════════════════════════════════════
 
-function ScanView({ onScanned, onBack }: {
+function ScanView({ onScanned, onLabel, onBack }: {
   onScanned: (food: FoodDetail) => void;
+  onLabel: (food: FoodDetail) => void;
   onBack: () => void;
 }) {
   const { st, colors } = useFoodDrawerTheme();
+  const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [foundFood, setFoundFood] = useState<FoodDetail | null>(null);
+  const [foundKind, setFoundKind] = useState<'barcode' | 'label'>('barcode');
+
+  const labelEnabled = !!permission?.granted && !scanned && !scanning && !foundFood && !scanError;
+  useLabelScan(cameraRef, labelEnabled, (food) => {
+    setScanned(true);
+    setFoundKind('label');
+    setFoundFood(food);
+  });
 
   const handleBarCodeScanned = useCallback(async ({ data }: { type: string; data: string }) => {
     if (scanned || scanning) return;
@@ -480,9 +535,10 @@ function ScanView({ onScanned, onBack }: {
     setFoundFood(null);
     try {
       const { food } = await api.getFoodByBarcode(data);
+      setFoundKind('barcode');
       setFoundFood(food);
     } catch {
-      setScanError('Could not find food for this barcode. Try searching manually.');
+      setScanError('Could not find food for this barcode. Try a Nutrition Facts label or search.');
       setTimeout(() => setScanned(false), 2000);
     } finally {
       setScanning(false);
@@ -496,8 +552,10 @@ function ScanView({ onScanned, onBack }: {
   }, []);
 
   const handleContinueWithFood = useCallback(() => {
-    if (foundFood) onScanned(foundFood);
-  }, [foundFood, onScanned]);
+    if (!foundFood) return;
+    if (foundKind === 'label') onLabel(foundFood);
+    else onScanned(foundFood);
+  }, [foundFood, foundKind, onLabel, onScanned]);
 
   if (!permission) {
     return (
@@ -505,8 +563,8 @@ function ScanView({ onScanned, onBack }: {
         <View style={st.scanHeader}>
           <View style={st.scanBackBtn} />
           <View style={st.scanTitleWrap}>
-            <Ionicons name="barcode" size={20} color={colors.primary} />
-            <Text style={st.scanTitle}>Scan Barcode</Text>
+            <Ionicons name="scan-outline" size={20} color={colors.primary} />
+            <Text style={st.scanTitle}>Scan food</Text>
           </View>
           <View style={st.scanBackBtn} />
         </View>
@@ -525,7 +583,7 @@ function ScanView({ onScanned, onBack }: {
         <PermissionCard
           icon="camera-outline"
           title="Camera Access Required"
-          subtitle="Hatchly uses your camera to scan food barcodes so you can log meals in seconds."
+          subtitle="Hatchly uses your camera to scan barcodes and Nutrition Facts labels so you can log meals in seconds."
           actionLabel={showOpenSettings ? 'Open Settings' : 'Allow Camera'}
           onAction={showOpenSettings ? () => Linking.openSettings() : requestPermission}
           color={colors.primary}
@@ -542,16 +600,18 @@ function ScanView({ onScanned, onBack }: {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <View style={st.scanTitleWrap}>
-          <Ionicons name="barcode" size={20} color={colors.primary} />
-          <Text style={st.scanTitle}>Scan Barcode</Text>
+            <Ionicons name="scan-outline" size={20} color={colors.primary} />
+            <Text style={st.scanTitle}>Scan food</Text>
         </View>
         <View style={st.scanBackBtn} />
       </View>
 
       <View style={st.cameraWrap}>
         <CameraView
+          ref={cameraRef}
           style={st.camera}
           facing="back"
+          animateShutter={false}
           barcodeScannerSettings={{
             barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
           }}
@@ -583,7 +643,7 @@ function ScanView({ onScanned, onBack }: {
             <Ionicons name="checkmark-circle" size={20} color={colors.success} />
           </View>
           <View style={st.scanFoundBody}>
-            <Text style={st.scanFoundLabel}>Found</Text>
+            <Text style={st.scanFoundLabel}>{foundKind === 'label' ? 'Nutrition facts' : 'Found'}</Text>
             <Text style={st.scanFoundName} numberOfLines={1}>{foundFood.name}</Text>
           </View>
           <Ionicons name="arrow-forward" size={22} color={colors.onPrimary ?? '#fff'} />
@@ -614,7 +674,7 @@ function ScanView({ onScanned, onBack }: {
       {!foundFood && !scanError && !scanning && (
         <View style={st.scanHintCard}>
           <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
-          <Text style={st.scanHint}>Point your camera at the barcode on the food package</Text>
+          <Text style={st.scanHint}>Point at a barcode, or a Nutrition Facts label to start a custom food</Text>
         </View>
       )}
     </View>

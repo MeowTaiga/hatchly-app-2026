@@ -11,6 +11,12 @@ import { spacing, radius } from '@/constants/theme';
 const NOTIFICATION_ICONS: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   friend_request: 'person-add-outline',
   friend_accepted: 'people-outline',
+  fasting_complete: 'timer-outline',
+  goal_reminder: 'checkbox-outline',
+  marriage_proposal: 'heart-outline',
+  marriage_accepted: 'heart',
+  shared_goal_complete: 'checkbox-outline',
+  shared_goal_added: 'heart-outline',
 };
 
 function formatRelativeTime(iso: string): string {

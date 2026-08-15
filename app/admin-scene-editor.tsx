@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api, type AdminScene, type AdminScenePlacement, type AdminGameItem } from '@/lib/api';
 import { useTheme } from '@/store/ThemeProvider';
 import { TILE_SIZE } from '@/game/constants';
+import { placementRect } from '@/game/placementRect';
 import Svg, { Rect } from 'react-native-svg';
 import { AdminBottomBar } from '@/components/admin-scene-editor';
 import { TileToolsPanel } from '@/components/admin-scene-editor/TileToolsPanel';
@@ -123,13 +124,15 @@ const TileOverlays = React.memo(function TileOverlays({
   worldH,
   unwalkableTiles,
   fishingTiles,
+  miningTiles,
 }: {
   worldW: number;
   worldH: number;
   unwalkableTiles: Array<{ col: number; row: number }>;
   fishingTiles: Array<{ col: number; row: number; spotType?: string }>;
+  miningTiles: Array<{ col: number; row: number; oreType?: string }>;
 }) {
-  if (unwalkableTiles.length === 0 && fishingTiles.length === 0) return null;
+  if (unwalkableTiles.length === 0 && fishingTiles.length === 0 && miningTiles.length === 0) return null;
   return (
     <Svg width={worldW} height={worldH} style={{ position: 'absolute', left: 0, top: 0 }} pointerEvents="none">
       {unwalkableTiles.map(({ col, row }) => (
@@ -153,6 +156,18 @@ const TileOverlays = React.memo(function TileOverlays({
           height={TILE_SIZE}
           fill="rgba(34,197,94,0.35)"
           stroke="rgba(34,197,94,0.6)"
+          strokeWidth={1}
+        />
+      ))}
+      {miningTiles.map(({ col, row }) => (
+        <Rect
+          key={`mine-${col}-${row}`}
+          x={col * TILE_SIZE}
+          y={row * TILE_SIZE}
+          width={TILE_SIZE}
+          height={TILE_SIZE}
+          fill="rgba(245,158,11,0.4)"
+          stroke="rgba(245,158,11,0.75)"
           strokeWidth={1}
         />
       ))}
@@ -196,6 +211,9 @@ export default function AdminSceneEditorScreen() {
   const [fishingTiles, setFishingTiles] = useState<Array<{ col: number; row: number; spotType?: string }>>([]);
   const [paintFishingMode, setPaintFishingMode] = useState(false);
   const [selectedSpotType, setSelectedSpotType] = useState('general');
+  const [miningTiles, setMiningTiles] = useState<Array<{ col: number; row: number; oreType?: string }>>([]);
+  const [paintMiningMode, setPaintMiningMode] = useState(false);
+  const [selectedOreType, setSelectedOreType] = useState('copper');
   const [setSpawnMode, setSetSpawnMode] = useState(false);
   const [spawnPoint, setSpawnPoint] = useState<{ x: number; y: number } | null>(null);
 
@@ -221,8 +239,8 @@ export default function AdminSceneEditorScreen() {
 
   /** When true, skip viewport sync entirely — no culling benefit, eliminates runOnJS during pan. */
   const needsCulling = useMemo(
-    () => placements.length > 0 || unwalkableTiles.length > 0 || fishingTiles.length > 0,
-    [placements.length, unwalkableTiles.length, fishingTiles.length],
+    () => placements.length > 0 || unwalkableTiles.length > 0 || fishingTiles.length > 0 || miningTiles.length > 0,
+    [placements.length, unwalkableTiles.length, fishingTiles.length, miningTiles.length],
   );
   const needsCullingShared = useSharedValue(needsCulling);
   useEffect(() => {
@@ -256,6 +274,7 @@ export default function AdminSceneEditorScreen() {
         setEditGrassNoise(String(sceneData.grassNoiseStrength ?? 0.04));
         setUnwalkableTiles(sceneData.unwalkableTiles ?? []);
         setFishingTiles(sceneData.fishingTiles ?? []);
+        setMiningTiles(sceneData.miningTiles ?? []);
         if (sceneData.spawnX != null && sceneData.spawnY != null) {
           setSpawnPoint({ x: sceneData.spawnX, y: sceneData.spawnY });
         }
@@ -312,7 +331,7 @@ export default function AdminSceneEditorScreen() {
   }, [worldW, worldH]);
 
   const pan = useMemo(() => Gesture.Pan()
-    .enabled(!areaSelectMode && !paintUnwalkableMode && !paintFishingMode)
+    .enabled(!areaSelectMode && !paintUnwalkableMode && !paintFishingMode && !paintMiningMode)
     .minPointers(1).maxPointers(2)
     .onStart(() => {
       'worklet';
@@ -332,7 +351,7 @@ export default function AdminSceneEditorScreen() {
       if (isPinching.value) return;
       translateX.value = withDecay({ velocity: e.velocityX });
       translateY.value = withDecay({ velocity: e.velocityY });
-    }), [areaSelectMode, paintUnwalkableMode, paintFishingMode, isPanning]);
+    }), [areaSelectMode, paintUnwalkableMode, paintFishingMode, paintMiningMode, isPanning]);
 
   const pinch = useMemo(() => Gesture.Pinch()
     .onStart(() => {
@@ -403,6 +422,20 @@ export default function AdminSceneEditorScreen() {
     });
   }, [screenToWorld, editCols, editRows, scene, selectedSpotType]);
 
+  const handleTileToggleMining = useCallback((screenX: number, screenY: number) => {
+    const { x: worldX, y: worldY } = screenToWorld(screenX, screenY);
+    const col = Math.floor(worldX / TILE_SIZE);
+    const row = Math.floor(worldY / TILE_SIZE);
+    const sceneColsVal = (parseInt(editCols) || scene?.cols) ?? 40;
+    const sceneRowsVal = (parseInt(editRows) || scene?.rows) ?? 48;
+    if (col < 0 || row < 0 || col >= sceneColsVal || row >= sceneRowsVal) return;
+    setMiningTiles((prev) => {
+      const has = prev.some((t) => t.col === col && t.row === row);
+      if (has) return prev.filter((t) => !(t.col === col && t.row === row));
+      return [...prev, { col, row, oreType: selectedOreType }];
+    });
+  }, [screenToWorld, editCols, editRows, scene, selectedOreType]);
+
   const handleTap = useCallback((screenX: number, screenY: number) => {
     if (areaSelectMode) {
       setMultiSelectedIds(new Set());
@@ -415,6 +448,10 @@ export default function AdminSceneEditorScreen() {
     }
     if (paintFishingMode) {
       handleTileToggleFishing(screenX, screenY);
+      return;
+    }
+    if (paintMiningMode) {
+      handleTileToggleMining(screenX, screenY);
       return;
     }
     if (setSpawnMode) {
@@ -434,7 +471,7 @@ export default function AdminSceneEditorScreen() {
       scale: 1,
       rotationDegrees: 0,
     }]);
-  }, [scene, selectedItemType, itemDefs, screenToWorld, areaSelectMode, paintUnwalkableMode, paintFishingMode, setSpawnMode, handleTileToggleUnwalkable, handleTileToggleFishing]);
+  }, [scene, selectedItemType, itemDefs, screenToWorld, areaSelectMode, paintUnwalkableMode, paintFishingMode, paintMiningMode, setSpawnMode, handleTileToggleUnwalkable, handleTileToggleFishing, handleTileToggleMining]);
 
   const areaSelectRectRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const areaUpdateLastRef = useRef(0);
@@ -470,15 +507,9 @@ export default function AdminSceneEditorScreen() {
     const rBottom = Math.max(rect.y1, rect.y2);
     const ids = new Set<string>();
     for (const p of placements) {
-      const def = itemDefs[p.itemType];
-      const baseW = (def?.cols ?? 1) * TILE_SIZE;
-      const baseH = (def?.rows ?? 1) * TILE_SIZE;
-      const w = baseW * p.scale;
-      const h = baseH * p.scale;
-      const rx = p.x + (baseW - w) / 2;
-      const ry = p.y + (baseH - h);
-      const cx = rx + w / 2;
-      const cy = ry + h / 2;
+      const { left, top, width, height } = placementRect(p, itemDefs[p.itemType]);
+      const cx = left + width / 2;
+      const cy = top + height / 2;
       if (cx >= rLeft && cx <= rRight && cy >= rTop && cy <= rBottom) {
         ids.add(p.id);
       }
@@ -580,8 +611,21 @@ export default function AdminSceneEditorScreen() {
         }
         return next;
       });
+    } else if (paintMiningMode) {
+      setMiningTiles((prev) => {
+        const prevSet = new Set(prev.map((t) => `${t.col},${t.row}`));
+        const next: Array<{ col: number; row: number; oreType?: string }> = [];
+        for (const t of prev) {
+          const inRect = tilesInRect.some((r) => r.col === t.col && r.row === t.row);
+          if (!inRect) next.push(t);
+        }
+        for (const t of tilesInRect) {
+          if (!prevSet.has(`${t.col},${t.row}`)) next.push({ ...t, oreType: selectedOreType });
+        }
+        return next;
+      });
     }
-  }, [editCols, editRows, scene, paintUnwalkableMode, paintFishingMode, selectedSpotType]);
+  }, [editCols, editRows, scene, paintUnwalkableMode, paintFishingMode, paintMiningMode, selectedSpotType, selectedOreType]);
 
   const areaPan = useMemo(() => Gesture.Pan()
     .enabled(areaSelectMode)
@@ -591,11 +635,11 @@ export default function AdminSceneEditorScreen() {
     .onEnd(() => { 'worklet'; runOnJS(handleAreaSelectEnd)(); }), [areaSelectMode, handleAreaSelectStart, handleAreaSelectUpdate, handleAreaSelectEnd]);
 
   const paintAreaPan = useMemo(() => Gesture.Pan()
-    .enabled(paintUnwalkableMode || paintFishingMode)
+    .enabled(paintUnwalkableMode || paintFishingMode || paintMiningMode)
     .minDistance(8)
     .onStart((e) => { 'worklet'; runOnJS(handlePaintAreaStart)(e.absoluteX, e.absoluteY); })
     .onUpdate((e) => { 'worklet'; runOnJS(handlePaintAreaUpdate)(e.absoluteX, e.absoluteY); })
-    .onEnd(() => { 'worklet'; runOnJS(handlePaintAreaEnd)(); }), [paintUnwalkableMode, paintFishingMode, handlePaintAreaStart, handlePaintAreaUpdate, handlePaintAreaEnd]);
+    .onEnd(() => { 'worklet'; runOnJS(handlePaintAreaEnd)(); }), [paintUnwalkableMode, paintFishingMode, paintMiningMode, handlePaintAreaStart, handlePaintAreaUpdate, handlePaintAreaEnd]);
 
   const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(250)
@@ -604,9 +648,9 @@ export default function AdminSceneEditorScreen() {
   const gesture = useMemo(() => {
     const cameraPanPinch = Gesture.Simultaneous(pan, pinch);
     if (areaSelectMode) return Gesture.Race(areaPan, tapGesture);
-    if (paintUnwalkableMode || paintFishingMode) return Gesture.Race(paintAreaPan, tapGesture);
+    if (paintUnwalkableMode || paintFishingMode || paintMiningMode) return Gesture.Race(paintAreaPan, tapGesture);
     return Gesture.Race(cameraPanPinch, tapGesture);
-  }, [pan, pinch, areaPan, paintAreaPan, tapGesture, areaSelectMode, paintUnwalkableMode, paintFishingMode]);
+  }, [pan, pinch, areaPan, paintAreaPan, tapGesture, areaSelectMode, paintUnwalkableMode, paintFishingMode, paintMiningMode]);
 
   const cameraStyle = useAnimatedStyle(() => ({
     transform: [
@@ -683,7 +727,7 @@ export default function AdminSceneEditorScreen() {
     if (!selectedId) return;
     setPlacements((prev) => prev.map((p) =>
       p.id === selectedId
-        ? { ...p, scale: Math.max(0.1, Math.min(5, +(p.scale + delta).toFixed(2))) }
+        ? { ...p, scale: Math.max(0.1, Math.min(20, +(p.scale + delta).toFixed(2))) }
         : p,
     ));
   }, [selectedId]);
@@ -743,11 +787,7 @@ export default function AdminSceneEditorScreen() {
   const handleDuplicatePlacement = useCallback((direction: 'n' | 's' | 'e' | 'w') => {
     const p = selectedPlacement;
     if (!p || !scene) return;
-    const def = itemDefs[p.itemType];
-    const baseW = (def?.cols ?? 1) * TILE_SIZE;
-    const baseH = (def?.rows ?? 1) * TILE_SIZE;
-    const w = baseW * (p.scale ?? 1);
-    const h = baseH * (p.scale ?? 1);
+    const { width: w, height: h } = placementRect(p, itemDefs[p.itemType]);
     let newX = p.x;
     let newY = p.y;
     const overlap = 1; // -1px so duplicated items touch
@@ -804,7 +844,7 @@ export default function AdminSceneEditorScreen() {
     try {
       const updated = await api.updateScene(slug, {
         cols, rows, farmCols, farmRows, bgColor, tiledFlooringItemType: editTiledFlooringItemType, grassNoiseStrength,
-        unwalkableTiles, fishingTiles,
+        unwalkableTiles, fishingTiles, miningTiles,
       });
       setScene(updated);
       setEditCols(String(updated.cols));
@@ -816,12 +856,13 @@ export default function AdminSceneEditorScreen() {
       setEditGrassNoise(String(updated.grassNoiseStrength ?? 0.04));
       setUnwalkableTiles(updated.unwalkableTiles ?? []);
       setFishingTiles(updated.fishingTiles ?? []);
+      setMiningTiles(updated.miningTiles ?? []);
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Failed to update');
     } finally {
       setSaving(false);
     }
-  }, [slug, scene, editCols, editRows, editFarmCols, editFarmRows, editBgColor, editTiledFlooringItemType, editGrassNoise, unwalkableTiles, fishingTiles]);
+  }, [slug, scene, editCols, editRows, editFarmCols, editFarmRows, editBgColor, editTiledFlooringItemType, editGrassNoise, unwalkableTiles, fishingTiles, miningTiles]);
 
   const handleSave = useCallback(async () => {
     if (!slug || !scene) return;
@@ -837,25 +878,27 @@ export default function AdminSceneEditorScreen() {
       const grassNoiseStrength = Number.isFinite(grassNoiseVal) && grassNoiseVal >= 0 && grassNoiseVal <= 0.2 ? grassNoiseVal : (scene.grassNoiseStrength ?? 0.04);
       const updated = await api.updateScene(slug, {
         placements, cols, rows, farmCols, farmRows, bgColor, tiledFlooringItemType: editTiledFlooringItemType, grassNoiseStrength,
-        unwalkableTiles, fishingTiles,
+        unwalkableTiles, fishingTiles, miningTiles,
         ...(spawnPoint ? { spawnX: spawnPoint.x, spawnY: spawnPoint.y } : {}),
       });
       setScene(updated);
       setUnwalkableTiles(updated.unwalkableTiles ?? []);
       setFishingTiles(updated.fishingTiles ?? []);
+      setMiningTiles(updated.miningTiles ?? []);
       Alert.alert('Saved', 'Scene saved.');
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Failed to save');
     } finally {
       setSaving(false);
     }
-  }, [slug, scene, placements, editCols, editRows, editFarmCols, editFarmRows, editBgColor, editTiledFlooringItemType, editGrassNoise, unwalkableTiles, fishingTiles, spawnPoint]);
+  }, [slug, scene, placements, editCols, editRows, editFarmCols, editFarmRows, editBgColor, editTiledFlooringItemType, editGrassNoise, unwalkableTiles, fishingTiles, miningTiles, spawnPoint]);
 
   // ── Tile tool toggles (used by TileToolsPanel) ─────────────────────────
 
   const handleToggleAreaSelect = useCallback(() => {
     setPaintUnwalkableMode(false);
     setPaintFishingMode(false);
+    setPaintMiningMode(false);
     setPaintSelectionRect(null);
     paintAreaRectRef.current = null;
     setAreaSelectMode((v) => {
@@ -871,6 +914,7 @@ export default function AdminSceneEditorScreen() {
     setSelectionRect(null);
     setSelectedId(null);
     setPaintFishingMode(false);
+    setPaintMiningMode(false);
     setPaintSelectionRect(null);
     paintAreaRectRef.current = null;
     setPaintUnwalkableMode((v) => {
@@ -885,9 +929,25 @@ export default function AdminSceneEditorScreen() {
     setSelectionRect(null);
     setSelectedId(null);
     setPaintUnwalkableMode(false);
+    setPaintMiningMode(false);
     setPaintSelectionRect(null);
     paintAreaRectRef.current = null;
     setPaintFishingMode((v) => {
+      if (v) { setPaintSelectionRect(null); paintAreaRectRef.current = null; }
+      return !v;
+    });
+  }, []);
+
+  const handleTogglePaintMining = useCallback(() => {
+    setAreaSelectMode(false);
+    setMultiSelectedIds(new Set());
+    setSelectionRect(null);
+    setSelectedId(null);
+    setPaintUnwalkableMode(false);
+    setPaintFishingMode(false);
+    setPaintSelectionRect(null);
+    paintAreaRectRef.current = null;
+    setPaintMiningMode((v) => {
       if (v) { setPaintSelectionRect(null); paintAreaRectRef.current = null; }
       return !v;
     });
@@ -1016,9 +1076,6 @@ export default function AdminSceneEditorScreen() {
   );
 
   // ── Depth-sorted renderables (matches bake layer order) ─────────────────
-  // Compute the visual rect for each placement identically to bakeScene:
-  //   left = p.x + (baseW - w) / 2   (center scaled image in unscaled bounds)
-  //   top  = p.y + (baseH - h)        (anchor to bottom of unscaled bounds)
 
   interface RenderablePlacement extends AdminScenePlacement {
     depth: number;
@@ -1032,17 +1089,14 @@ export default function AdminSceneEditorScreen() {
     return placements
       .map((p) => {
         const def = itemDefs[p.itemType];
-        const baseW = (def?.cols ?? 1) * TILE_SIZE;
-        const baseH = (def?.rows ?? 1) * TILE_SIZE;
-        const w = baseW * p.scale;
-        const h = baseH * p.scale;
+        const rect = placementRect(p, def);
         return {
           ...p,
           depth: computeDepth(p, def),
-          renderX: p.x + (baseW - w) / 2,
-          renderY: p.y + (baseH - h),
-          renderW: w,
-          renderH: h,
+          renderX: rect.left,
+          renderY: rect.top,
+          renderW: rect.width,
+          renderH: rect.height,
         };
       })
       .sort((a, b) => a.depth - b.depth);
@@ -1080,6 +1134,16 @@ export default function AdminSceneEditorScreen() {
       return rectIntersects(left, top, right, bottom, tL, tT, tL + TILE_SIZE, tT + TILE_SIZE);
     });
   }, [fishingTiles, visibleRect]);
+
+  const visibleMiningTiles = useMemo(() => {
+    if (!visibleRect || miningTiles.length === 0) return miningTiles;
+    const { left, top, right, bottom } = visibleRect;
+    return miningTiles.filter(({ col, row }) => {
+      const tL = col * TILE_SIZE;
+      const tT = row * TILE_SIZE;
+      return rectIntersects(left, top, right, bottom, tL, tT, tL + TILE_SIZE, tT + TILE_SIZE);
+    });
+  }, [miningTiles, visibleRect]);
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -1175,7 +1239,8 @@ export default function AdminSceneEditorScreen() {
                   dragStartX={isDragging ? dragStartX : undefined}
                   dragStartY={isDragging ? dragStartY : undefined}
                   rotationDegrees={p.rotationDegrees ?? 0}
-                  disabled={paintUnwalkableMode || paintFishingMode || areaSelectMode}
+                  stretch={(p.scaleX ?? p.scale) !== (p.scaleY ?? p.scale)}
+                  disabled={paintUnwalkableMode || paintFishingMode || paintMiningMode || areaSelectMode}
                 />
               );
             })}
@@ -1187,6 +1252,7 @@ export default function AdminSceneEditorScreen() {
                   worldH={worldH}
                   unwalkableTiles={visibleUnwalkableTiles}
                   fishingTiles={visibleFishingTiles}
+                  miningTiles={visibleMiningTiles}
                 />
               </View>
             )}
@@ -1326,6 +1392,10 @@ export default function AdminSceneEditorScreen() {
           onTogglePaintFishing={handleTogglePaintFishing}
           selectedSpotType={selectedSpotType}
           onSelectSpotType={setSelectedSpotType}
+          paintMiningMode={paintMiningMode}
+          onTogglePaintMining={handleTogglePaintMining}
+          selectedOreType={selectedOreType}
+          onSelectOreType={setSelectedOreType}
         />
 
         <AdminBottomBar
@@ -1349,7 +1419,7 @@ export default function AdminSceneEditorScreen() {
           showGrid={showGrid}
           onOpenSettings={handleOpenSettings}
           onOpenTileTools={handleOpenTileTools}
-          tileToolActive={areaSelectMode || paintUnwalkableMode || paintFishingMode}
+          tileToolActive={areaSelectMode || paintUnwalkableMode || paintFishingMode || paintMiningMode}
           setSpawnMode={setSpawnMode}
           onToggleSetSpawn={handleToggleSetSpawn}
           onStartDragItem={(itemType, def) => {
@@ -1418,6 +1488,8 @@ interface SceneItemProps {
   dragStartX?: SharedValue<number>;
   dragStartY?: SharedValue<number>;
   rotationDegrees?: number;
+  /** Unevenly scaled items fill their box; evenly scaled ones keep their aspect. */
+  stretch?: boolean;
   /** When true, gestures are disabled (e.g. during tile painting). */
   disabled?: boolean;
 }
@@ -1427,6 +1499,7 @@ const SceneItem = React.memo(function SceneItem({
   onSelect, onPanStart, onPanEnd,
   scale, isDragging, dragOffsetX, dragOffsetY, dragStartX, dragStartY,
   rotationDegrees = 0,
+  stretch = false,
   disabled = false,
 }: SceneItemProps) {
   const itemGesture = useMemo(() => {
@@ -1525,7 +1598,7 @@ const SceneItem = React.memo(function SceneItem({
         />
       )}
       {imageUrl ? (
-        <CachedImage source={{ uri: imageUrl }} style={{ width, height }} resizeMode="contain" pointerEvents="none" />
+        <CachedImage source={{ uri: imageUrl }} style={{ width, height }} resizeMode={stretch ? 'fill' : 'contain'} pointerEvents="none" />
       ) : (
         <View style={{ width, height, backgroundColor: color || '#888', borderRadius: 4, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
           <Text style={{ fontSize: Math.min(width, height) * 0.4 }}>{emoji}</Text>

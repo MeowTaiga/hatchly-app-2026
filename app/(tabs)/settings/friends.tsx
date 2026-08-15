@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { CachedImage } from '@/components/ui/CachedImage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,13 +9,24 @@ import { TAB_BAR_TOTAL_HEIGHT } from '@/components/ui/FloatingTabBar';
 import { COLLAPSED_HEIGHT } from '@/components/ui/PetHeroBar';
 import { AddFriendDrawer, type AddFriendDrawerRef } from '@/components/friends/AddFriendDrawer';
 import { useFriends } from '@/store/FriendsProvider';
+import { useGoals } from '@/store/GoalsProvider';
 import { useTheme } from '@/store/ThemeProvider';
 import { spacing, radius } from '@/constants/theme';
 import type { FriendEntry } from '@/lib/api';
 
 // ─── Friend Row ─────────────────────────────────────────────────────────────
 
-function FriendRow({ entry, onRemove }: { entry: FriendEntry; onRemove: (id: string) => void }) {
+function FriendRow({
+  entry,
+  onRemove,
+  onMarry,
+  marryLabel,
+}: {
+  entry: FriendEntry;
+  onRemove: (id: string) => void;
+  onMarry?: (id: string, name: string) => void;
+  marryLabel?: string;
+}) {
   const { theme } = useTheme();
   const { colors } = theme;
   const { user } = entry;
@@ -39,6 +50,17 @@ function FriendRow({ entry, onRemove }: { entry: FriendEntry; onRemove: (id: str
           </Text>
         ) : null}
       </View>
+      {onMarry && !marryLabel ? (
+        <Pressable
+          onPress={() => onMarry(user.id, user.username ?? user.phone)}
+          hitSlop={8}
+          style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.5 }]}
+        >
+          <Ionicons name="heart-outline" size={18} color={colors.primary} />
+        </Pressable>
+      ) : marryLabel ? (
+        <Text style={[styles.marryTag, { color: colors.primary }]}>{marryLabel}</Text>
+      ) : null}
       <Pressable
         onPress={() => onRemove(user.id)}
         hitSlop={8}
@@ -58,9 +80,33 @@ export default function FriendsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { friends, isLoading, removeFriend, refresh } = useFriends();
+  const { state: goalsState, proposeMarriage } = useGoals();
   const addFriendRef = useRef<AddFriendDrawerRef>(null);
 
   const onFriendAdded = useCallback(() => refresh(), [refresh]);
+
+  const onMarry = useCallback(
+    (userId: string, name: string) => {
+      Alert.alert(
+        `Marry ${name}?`,
+        'You’ll share a Together goal list, separate from your personal goals. They have to say yes.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Propose',
+            onPress: () => {
+              void proposeMarriage(userId).catch((err) =>
+                Alert.alert('Couldn’t send that', err instanceof Error ? err.message : 'Try again'),
+              );
+            },
+          },
+        ],
+      );
+    },
+    [proposeMarriage],
+  );
+
+  const marriage = goalsState.marriage;
 
   const st = useMemo(
     () =>
@@ -127,7 +173,7 @@ export default function FriendsScreen() {
       >
         {/* Header */}
         <View style={st.header}>
-          <Pressable onPress={() => router.back()} style={st.backBtn} hitSlop={12}>
+          <Pressable onPress={() => router.navigate('/(tabs)/settings')} style={st.backBtn} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.text} />
           </Pressable>
           <Text style={st.headerTitle}>Friends</Text>
@@ -156,9 +202,27 @@ export default function FriendsScreen() {
           <>
             <Text style={st.countLabel}>{friends.length} friend{friends.length !== 1 ? 's' : ''}</Text>
             <View style={st.card}>
-              {friends.map((entry) => (
-                <FriendRow key={entry.id} entry={entry} onRemove={removeFriend} />
-              ))}
+              {friends.map((entry) => {
+                const withThis = marriage?.partner.id === entry.user.id;
+                const marryLabel = withThis
+                  ? marriage?.status === 'married'
+                    ? 'Married'
+                    : marriage?.proposedByMe
+                      ? 'Pending'
+                      : 'Proposal'
+                  : marriage
+                    ? undefined
+                    : undefined;
+                return (
+                  <FriendRow
+                    key={entry.id}
+                    entry={entry}
+                    onRemove={removeFriend}
+                    onMarry={!marriage ? onMarry : undefined}
+                    marryLabel={marryLabel}
+                  />
+                );
+              })}
             </View>
           </>
         )}
@@ -194,4 +258,5 @@ const styles = StyleSheet.create({
   friendName: { fontSize: 15, fontWeight: '700' },
   friendSub: { fontSize: 12, marginTop: 1 },
   removeBtn: { padding: 8 },
+  marryTag: { fontSize: 11, fontWeight: '800', marginRight: 4 },
 });

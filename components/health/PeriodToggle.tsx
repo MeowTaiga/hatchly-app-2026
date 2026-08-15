@@ -1,6 +1,5 @@
 /**
- * Period Toggle — segmented control for Week | Month on the health overview.
- * Consumes HealthPeriodContext; calls setPeriod on press.
+ * Period Toggle — Week | Month | All on the health overview.
  */
 
 import React from 'react';
@@ -13,6 +12,7 @@ import { spacing, radius } from '@/constants/theme';
 const OPTIONS: { value: HealthPeriod; label: string }[] = [
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
+  { value: 'all', label: 'All' },
 ];
 
 export function PeriodToggle() {
@@ -64,6 +64,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

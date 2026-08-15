@@ -1,20 +1,20 @@
 import { useEffect, useRef } from 'react';
 import {
-  useSharedValue,
-  withTiming,
-  withRepeat,
-  withSequence,
-  withDelay,
   cancelAnimation,
   Easing,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated';
 import { TILE_SIZE } from '../constants';
 import { PET_WALK_MS_PER_TILE } from './pathfinding';
 
-/** Subtle downward squat when stepping (no upward pop at start) */
-const BOUNCE_PX = 0.5;
+/** Upward bounce when stepping — visible walk animation */
+const BOUNCE_PX = 1.2;
 const BOUNCE_HALF_MS = 90;
-const BOUNCE_DELAY_MS = 120;
+const BOUNCE_DELAY_MS = 40;
 
 function segDuration(x1: number, y1: number, x2: number, y2: number): number {
   const dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
@@ -33,13 +33,18 @@ export function useWalkAnimation(
   const prevPos = useRef({ x: targetX, y: targetY });
 
   useEffect(() => {
+    // Always cancel in-flight animations immediately to prevent stale
+    // withSequence chains from interfering with the new path/target.
+    cancelAnimation(animX);
+    cancelAnimation(animY);
+    cancelAnimation(bounceOffset);
+
     const curX = animX.value;
     const curY = animY.value;
 
     if (options?.snapToTarget) {
       animX.value = targetX;
       animY.value = targetY;
-      cancelAnimation(bounceOffset);
       bounceOffset.value = 0;
       prevPos.current = { x: targetX, y: targetY };
       return;
@@ -57,8 +62,9 @@ export function useWalkAnimation(
       const trim = path.slice(startIdx);
       if (trim.length < 1) return;
 
+      const SNAP_THRESHOLD = TILE_SIZE / 4;
       const distToFirst = Math.sqrt((trim[0].x - curX) ** 2 + (trim[0].y - curY) ** 2);
-      const firstSegMs = distToFirst < 1 ? 0 : Math.max(16, Math.min(PET_WALK_MS_PER_TILE * 2, segDuration(curX, curY, trim[0].x, trim[0].y)));
+      const firstSegMs = distToFirst < SNAP_THRESHOLD ? 0 : Math.max(16, Math.min(PET_WALK_MS_PER_TILE * 2, segDuration(curX, curY, trim[0].x, trim[0].y)));
 
       const segsX: ReturnType<typeof withTiming>[] = [];
       const segsY: ReturnType<typeof withTiming>[] = [];
@@ -81,19 +87,19 @@ export function useWalkAnimation(
         cancelAnimation(bounceOffset);
         bounceOffset.value = withTiming(0, { duration: 80 });
       } else {
-        animX.value = withSequence(...segsX);
-        animY.value = withSequence(...segsY);
+        animX.value = withSequence(...segsX) as number;
+        animY.value = withSequence(...segsY) as number;
       }
       prevPos.current = { x: trim[trim.length - 1].x, y: trim[trim.length - 1].y };
 
       if (trim.length > 1) {
         const dx = (trim[1]?.x ?? trim[0].x) - trim[0].x;
-        if (Math.abs(dx) > 2) facingRight.value = dx > 0 ? -1 : 1;
+        if (Math.abs(dx) > 4) facingRight.value = dx > 0 ? -1 : 1;
         bounceOffset.value = withDelay(
           BOUNCE_DELAY_MS,
           withRepeat(
             withSequence(
-              withTiming(-BOUNCE_PX, { duration: BOUNCE_HALF_MS, easing: Easing.inOut(Easing.quad) }),
+              withTiming(BOUNCE_PX, { duration: BOUNCE_HALF_MS, easing: Easing.inOut(Easing.quad) }),
               withTiming(0, { duration: BOUNCE_HALF_MS, easing: Easing.inOut(Easing.quad) }),
             ),
             -1,
@@ -118,7 +124,7 @@ export function useWalkAnimation(
     const duration = Math.max(150, segDuration(curX, curY, targetX, targetY));
     prevPos.current = { x: targetX, y: targetY };
 
-    if (absDx > 2) facingRight.value = dx > 0 ? -1 : 1;
+    if (absDx > 8) facingRight.value = dx > 0 ? -1 : 1;
 
     animX.value = withTiming(targetX, { duration, easing: Easing.out(Easing.quad) });
     animY.value = withTiming(targetY, { duration, easing: Easing.out(Easing.quad) });
@@ -131,7 +137,7 @@ export function useWalkAnimation(
         BOUNCE_DELAY_MS,
         withRepeat(
           withSequence(
-            withTiming(-BOUNCE_PX, { duration: BOUNCE_HALF_MS, easing: Easing.inOut(Easing.quad) }),
+            withTiming(BOUNCE_PX, { duration: BOUNCE_HALF_MS, easing: Easing.inOut(Easing.quad) }),
             withTiming(0, { duration: BOUNCE_HALF_MS, easing: Easing.inOut(Easing.quad) }),
           ),
           -1,

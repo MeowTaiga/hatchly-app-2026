@@ -1,10 +1,10 @@
 /**
- * Modular tool-required checks for interactions (fishing, digging, etc.).
+ * Modular tool-required checks for interactions (fishing, digging, bug catching).
  */
-import { isFishingPole, isShovel } from './equipConfig';
+import { isBugNet, isFishingPole, isPickaxe, isShovel } from './equipConfig';
 import { pickRandomMessage } from './fishingUtils';
 
-export type InteractionTool = 'fishing' | 'digging';
+export type InteractionTool = 'fishing' | 'digging' | 'bug_catching' | 'mining';
 
 const NO_SHOVEL_MESSAGES = [
   "I need a shovel to dig that up!",
@@ -22,6 +22,22 @@ const NO_POLE_MESSAGES = [
   "If only I had a fishing pole!",
 ] as const;
 
+const NO_NET_MESSAGES = [
+  "Oops — we need a net equipped first!",
+  "Almost! Equip your bug net, then we can catch them.",
+  "A little net would help a lot right now.",
+  "Let's put on a net before we say hi to the bugs!",
+  "Net first, catch second. You've got this!",
+] as const;
+
+const NO_PICKAXE_MESSAGES = [
+  "I need a pickaxe for that!",
+  "A pickaxe would help chip this open...",
+  "Can't mine without a pickaxe equipped.",
+  "If only I had a pickaxe!",
+  "Let's equip a pickaxe first.",
+] as const;
+
 const TOOL_CONFIG: Record<
   InteractionTool,
   {
@@ -36,6 +52,14 @@ const TOOL_CONFIG: Record<
   digging: {
     check: isShovel,
     messages: NO_SHOVEL_MESSAGES,
+  },
+  bug_catching: {
+    check: isBugNet,
+    messages: NO_NET_MESSAGES,
+  },
+  mining: {
+    check: isPickaxe,
+    messages: NO_PICKAXE_MESSAGES,
   },
 };
 

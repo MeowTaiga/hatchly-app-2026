@@ -352,9 +352,18 @@ export function isTileActionable(
   return false;
 }
 
+function isNpcItem(
+  item: PlacedItem,
+  grid: GridData,
+  itemDefs: Record<string, ItemDefinition>,
+): PlacedItem | null {
+  const target = item.anchorId ? resolveAnchor(grid, item) ?? item : item;
+  return itemDefs[target.itemType]?.category === 'npc' ? target : null;
+}
+
 /**
  * Check 8 neighbors for a tile with an actionable item.
- * Returns the first neighbor that has something the player can interact with, or null.
+ * NPCs win over other interactables so dig spots / crops don't steal talk taps.
  */
 export function findNearbyInteractable(
   grid: GridData,
@@ -362,13 +371,64 @@ export function findNearbyInteractable(
   row: number,
   itemDefs: Record<string, ItemDefinition>,
 ): { col: number; row: number } | null {
+  let fallback: { col: number; row: number } | null = null;
   for (const [dc, dr] of NEIGHBOR_OFFSETS) {
     const nc = col + dc;
     const nr = row + dr;
     if (nc < 0 || nc >= grid.cols || nr < 0 || nr >= grid.rows) continue;
-    if (isTileActionable(grid, nc, nr, itemDefs)) return { col: nc, row: nr };
+    if (!isTileActionable(grid, nc, nr, itemDefs)) continue;
+    const hasNpc = getItemsAt(grid, nc, nr).some((it) => isNpcItem(it, grid, itemDefs));
+    if (hasNpc) return { col: nc, row: nr };
+    if (!fallback) fallback = { col: nc, row: nr };
   }
-  return null;
+  return fallback;
+}
+
+/**
+ * Match diggable radius so NPCs near dig holes still win the tap.
+ * Footprint hits take priority; near-misses use the same generous radius.
+ */
+const NPC_TAP_RADIUS = 2;
+
+/** Find an NPC under the tap (footprint) or within radius. Prefer closest. */
+export function findNpcAtTap(
+  grid: GridData,
+  col: number,
+  row: number,
+  itemDefs: Record<string, ItemDefinition>,
+): PlacedItem | null {
+  for (const item of getAllPlacedItems(grid)) {
+    if (item.anchorId) continue;
+    if (itemDefs[item.itemType]?.category !== 'npc') continue;
+    if (
+      col >= item.col &&
+      col < item.col + item.tileCols &&
+      row >= item.row &&
+      row < item.row + item.tileRows
+    ) {
+      return item;
+    }
+  }
+
+  let closest: PlacedItem | null = null;
+  let closestDist = Infinity;
+  for (let dr = -NPC_TAP_RADIUS; dr <= NPC_TAP_RADIUS; dr++) {
+    for (let dc = -NPC_TAP_RADIUS; dc <= NPC_TAP_RADIUS; dc++) {
+      const tc = col + dc;
+      const tr = row + dr;
+      if (tc < 0 || tc >= grid.cols || tr < 0 || tr >= grid.rows) continue;
+      for (const item of getItemsAt(grid, tc, tr)) {
+        const npc = isNpcItem(item, grid, itemDefs);
+        if (!npc) continue;
+        const dist = Math.abs(dc) + Math.abs(dr);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = npc;
+        }
+      }
+    }
+  }
+  return closest;
 }
 
 /** Radius (tiles) for fossil/dig hole hit detection. 2 = 5x5 area so fossils are always tappable. */
@@ -394,6 +454,44 @@ export function findDiggableAtTap(
         const isDiggable =
           item.itemType === 'fossil_hole' || def?.subCategory === 'dig_hole';
         if (!isDiggable) continue;
+        const dist = Math.abs(dc) + Math.abs(dr);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = item;
+        }
+      }
+    }
+  }
+  return closest;
+}
+
+const GROUND_PICKUP_TAP_RADIUS = 1;
+
+export function isGroundPickupItem(
+  itemType: string,
+  itemDefs: Record<string, ItemDefinition>,
+): boolean {
+  if (itemType === 'stone' || itemType === 'stick') return true;
+  return itemDefs[itemType]?.subCategory === 'ground_pickup';
+}
+
+/** Find a daily ground pickup (stone/stick) at tap or within a small radius. */
+export function findGroundPickupAtTap(
+  grid: GridData,
+  col: number,
+  row: number,
+  itemDefs: Record<string, ItemDefinition>,
+): PlacedItem | null {
+  let closest: PlacedItem | null = null;
+  let closestDist = Infinity;
+  for (let dr = -GROUND_PICKUP_TAP_RADIUS; dr <= GROUND_PICKUP_TAP_RADIUS; dr++) {
+    for (let dc = -GROUND_PICKUP_TAP_RADIUS; dc <= GROUND_PICKUP_TAP_RADIUS; dc++) {
+      const tc = col + dc;
+      const tr = row + dr;
+      if (tc < 0 || tc >= grid.cols || tr < 0 || tr >= grid.rows) continue;
+      const items = getItemsAt(grid, tc, tr);
+      for (const item of items) {
+        if (!isGroundPickupItem(item.itemType, itemDefs)) continue;
         const dist = Math.abs(dc) + Math.abs(dr);
         if (dist < closestDist) {
           closestDist = dist;
@@ -467,16 +565,12 @@ export type SoilPlacementResult =
   | { ok: true }
   | { ok: false; reason: 'soil_overlap' };
 
-export function canPlaceSoil(
+/** Tile keys covering the inner plantable area of every soil patch on the grid. */
+function getSoilInnerKeys(
   grid: GridData,
   itemDefs: Record<string, ItemDefinition>,
-  col: number,
-  row: number,
-  cols: number,
-  rows: number,
-  /** When moving, exclude this anchor id so we don't block the item's current position. */
   excludeAnchorId?: string,
-): SoilPlacementResult {
+): Set<string> {
   const innerKeys = new Set<string>();
   for (const item of getAllPlacedItems(grid)) {
     const aid = item.anchorId ?? item.id;
@@ -495,6 +589,43 @@ export function canPlaceSoil(
       }
     }
   }
+  return innerKeys;
+}
+
+/**
+ * Tiles a tree may not cover: other trees' footprints and soil plantable areas.
+ * Trees overlap every other category freely.
+ */
+function getTreeBlockedKeys(
+  grid: GridData,
+  itemDefs: Record<string, ItemDefinition>,
+  excludeAnchorId?: string,
+): Set<string> {
+  const blocked = getSoilInnerKeys(grid, itemDefs, excludeAnchorId);
+  for (const item of getAllPlacedItems(grid)) {
+    if (item.anchorId) continue;
+    if (excludeAnchorId && item.id === excludeAnchorId) continue;
+    if (itemDefs[item.itemType]?.category !== 'tree') continue;
+    for (let dr = 0; dr < item.tileRows; dr++) {
+      for (let dc = 0; dc < item.tileCols; dc++) {
+        blocked.add(tileKey(item.col + dc, item.row + dr));
+      }
+    }
+  }
+  return blocked;
+}
+
+export function canPlaceSoil(
+  grid: GridData,
+  itemDefs: Record<string, ItemDefinition>,
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  /** When moving, exclude this anchor id so we don't block the item's current position. */
+  excludeAnchorId?: string,
+): SoilPlacementResult {
+  const innerKeys = getSoilInnerKeys(grid, itemDefs, excludeAnchorId);
 
   for (let dr = 0; dr < rows; dr++) {
     for (let dc = 0; dc < cols; dc++) {
@@ -517,12 +648,17 @@ export type TreePlacementResult =
 /**
  * Checks if a tree can be placed at (col, row) with the given footprint.
  * Sapling: 1x1, in_growth/fully_grown: 2x2.
+ *
+ * Trees may sit on top of any other item — only other trees and soil's
+ * plantable area block them.
+ *
  * @param cols - Footprint width (1 for sapling, 2 for in_growth/fully_grown).
  * @param rows - Footprint height.
  * @param excludeAnchorId - When moving, exclude this anchor so we don't block the item's current position.
  */
 export function canPlaceTree(
   grid: GridData,
+  itemDefs: Record<string, ItemDefinition>,
   col: number,
   row: number,
   cols: number,
@@ -532,17 +668,7 @@ export function canPlaceTree(
   if (col + cols > grid.cols || row + rows > grid.rows || col < 0 || row < 0) {
     return { ok: false, reason: 'out_of_bounds' };
   }
-  const blocked = new Set<string>();
-  for (const item of getAllPlacedItems(grid)) {
-    if (item.anchorId) continue;
-    const aid = item.id;
-    if (excludeAnchorId && aid === excludeAnchorId) continue;
-    for (let dr = 0; dr < item.tileRows; dr++) {
-      for (let dc = 0; dc < item.tileCols; dc++) {
-        blocked.add(tileKey(item.col + dc, item.row + dr));
-      }
-    }
-  }
+  const blocked = getTreeBlockedKeys(grid, itemDefs, excludeAnchorId);
   for (let dr = 0; dr < rows; dr++) {
     for (let dc = 0; dc < cols; dc++) {
       if (blocked.has(tileKey(col + dc, row + dr))) {
@@ -561,6 +687,7 @@ export function canPlaceTree(
  */
 export function getTreeInvalidTileKeys(
   grid: GridData,
+  itemDefs: Record<string, ItemDefinition>,
   col: number,
   row: number,
   cols: number,
@@ -568,17 +695,7 @@ export function getTreeInvalidTileKeys(
   excludeAnchorId?: string,
 ): Set<string> {
   const invalid = new Set<string>();
-  const blocked = new Set<string>();
-  for (const item of getAllPlacedItems(grid)) {
-    if (item.anchorId) continue;
-    const aid = item.id;
-    if (excludeAnchorId && aid === excludeAnchorId) continue;
-    for (let dr = 0; dr < item.tileRows; dr++) {
-      for (let dc = 0; dc < item.tileCols; dc++) {
-        blocked.add(tileKey(item.col + dc, item.row + dr));
-      }
-    }
-  }
+  const blocked = getTreeBlockedKeys(grid, itemDefs, excludeAnchorId);
   for (let dr = 0; dr < rows; dr++) {
     for (let dc = 0; dc < cols; dc++) {
       const nc = col + dc;
@@ -629,6 +746,76 @@ export function getSoilInvalidTileKeys(
     }
   }
   return invalid;
+}
+
+/** Trees occupy 2x2 whatever their art size. */
+export const TREE_FOOTPRINT = 2;
+
+export type PlacementReason =
+  | 'not_placeable'
+  | 'food'
+  | 'out_of_bounds'
+  | 'soil_overlap'
+  | 'collision'
+  | 'no_soil'
+  | 'has_crop'
+  | 'too_small';
+
+export type PlacementCheck =
+  | { ok: true; col: number; row: number }
+  | { ok: false; reason: PlacementReason };
+
+/**
+ * Whether an item can go at (col, row), and where it would actually land.
+ *
+ * Seeds snap to the nearest free slot on the soil under the finger, so the
+ * answer is a position rather than a yes/no. Both the drop highlight and the
+ * placement itself go through here: they used to carry separate copies of these
+ * rules, and the highlight's copy only knew about soil and trees, so dragging
+ * anything else showed a green footprint right up until the drop was refused.
+ */
+export function resolvePlacement(
+  grid: GridData,
+  itemDefs: Record<string, ItemDefinition>,
+  def: ItemDefinition,
+  col: number,
+  row: number,
+  /** When moving an existing item, its own tiles must not block it. */
+  excludeAnchorId?: string,
+): PlacementCheck {
+  if (!def.placeable) return { ok: false, reason: 'not_placeable' };
+  if (def.category === 'food') return { ok: false, reason: 'food' };
+
+  if (def.category === 'seed') {
+    let result = findSeedPlacement(grid, itemDefs, col, row, def.cols, def.rows);
+    if (!result.ok) {
+      for (const [dc, dr] of NEIGHBOR_OFFSETS) {
+        const retry = findSeedPlacement(grid, itemDefs, col + dc, row + dr, def.cols, def.rows);
+        if (retry.ok) { result = retry; break; }
+      }
+    }
+    return result.ok
+      ? { ok: true, col: result.col, row: result.row }
+      : { ok: false, reason: result.reason };
+  }
+
+  if (def.category === 'tree') {
+    const tree = canPlaceTree(grid, itemDefs, col, row, TREE_FOOTPRINT, TREE_FOOTPRINT, excludeAnchorId);
+    return tree.ok ? { ok: true, col, row } : { ok: false, reason: tree.reason };
+  }
+
+  const cols = def.cols ?? 1;
+  const rows = def.rows ?? 1;
+  if (col < 0 || row < 0 || col + cols > grid.cols || row + rows > grid.rows) {
+    return { ok: false, reason: 'out_of_bounds' };
+  }
+
+  if (def.category === 'soil') {
+    const soil = canPlaceSoil(grid, itemDefs, col, row, cols, rows, excludeAnchorId);
+    if (!soil.ok) return { ok: false, reason: soil.reason };
+  }
+
+  return { ok: true, col, row };
 }
 
 const TAP_NEIGHBOR_OFFSETS: [number, number][] = [

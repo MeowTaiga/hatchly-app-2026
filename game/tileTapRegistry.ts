@@ -3,13 +3,15 @@
  * Worklets serialize captured values; refs must not be passed.
  * This module-level indirection keeps the handler out of worklet scope.
  */
-let currentHandler: ((col: number, row: number) => void) | null = null;
+export type TileTapHandler = (col: number, row: number, worldX: number, worldY: number) => void;
 
-export function setTileTapHandler(handler: ((col: number, row: number) => void) | null): void {
+let currentHandler: TileTapHandler | null = null;
+
+export function setTileTapHandler(handler: TileTapHandler | null): void {
   currentHandler = handler;
 }
 
 /** Called from worklet via runOnJS - must not capture refs. */
-export function invokeTileTap(col: number, row: number): void {
-  currentHandler?.(col, row);
+export function invokeTileTap(col: number, row: number, worldX: number, worldY: number): void {
+  currentHandler?.(col, row, worldX, worldY);
 }

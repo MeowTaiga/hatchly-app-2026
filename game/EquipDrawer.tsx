@@ -21,7 +21,7 @@ const TOOLS_SLOTS: {
   subCategories: readonly string[];
   icon: keyof typeof Ionicons.glyphMap;
 }[] = [
-  { key: 'handTool', label: 'Tool', subCategories: ['fishing_poles', 'fishing_pole', 'bug_net', 'bug_nets', 'pickaxe', 'pickaxes', 'shovel', 'shovels'], icon: 'hammer-outline' },
+  { key: 'handTool', label: 'Tool', subCategories: ['fishing_poles', 'fishing_pole', 'net', 'bug_net', 'bug_nets', 'pickaxe', 'pickaxes', 'axe', 'axes', 'shovel', 'shovels'], icon: 'hammer-outline' },
   { key: 'bobber', label: 'Bobber', subCategories: ['fishing_bobber'], icon: 'ellipse-outline' },
   { key: 'bait', label: 'Bait', subCategories: ['bait'], icon: 'leaf-outline' },
 ];

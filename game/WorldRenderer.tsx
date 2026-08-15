@@ -1,216 +1,93 @@
-import { CachedImage } from '@/components/ui/CachedImage';
-import { GemIcon } from '@/components/ui/GemIcon';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Dimensions, InteractionManager, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
-import Animated, { type SharedValue, Easing, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle } from 'react-native-reanimated';
 import { BakedSceneryLayer } from './BakedSceneryLayer';
-import { BestiaryDrawer, type BestiaryDrawerRef } from './BestiaryDrawer';
-import { CookingDrawer, type CookingDrawerRef } from './CookingDrawer';
-import { CraftingDrawer, type CraftingDrawerRef } from './CraftingDrawer';
-import { BalloonInstance, BugInstance, PetSprite, usePetAI, usePetBubble } from './creature';
+import { BalloonInstance, PetSprite, usePetAI, usePetBubble } from './creature';
 import { getPoseForContext, useNeutralPoseCycle } from './creature/pet';
-import { CropInfoDrawer, type CropInfoDrawerRef } from './CropInfoDrawer';
 import { DayNightOverlay, useDarkness } from './DayNightOverlay';
-import type { DropZoneLayout } from './DraggablePlacedItem';
-import { EquipDrawer, type EquipDrawerRef } from './EquipDrawer';
-import { hasRequiredTool, getNoToolMessage } from './toolRequiredUtils';
-import { FarmInfoDrawer, type FarmInfoDrawerRef } from './FarmInfoDrawer';
-import { FishingShopDrawer, type FishingShopDrawerRef } from './FishingShopDrawer';
-import { MailBoxDrawer, type MailBoxDrawerRef } from './MailBoxDrawer';
-import { SellBoxDrawer, type SellBoxDrawerRef } from './SellBoxDrawer';
-import { FoodDishDrawer, type FoodDishDrawerRef } from './FoodDishDrawer';
+import { WeatherOverlay } from './WeatherOverlay';
 import { GameHUD } from './GameHUD';
 import { useGame } from './GameProvider';
 import { GridLines } from './GridLines';
 import { HarvestEffectView } from './HarvestEffectView';
-import { ItemRewardModal } from './ItemRewardModal';
 import { ItemActionBar } from './ItemActionBar';
 import { LightGlow } from './LightGlow';
-import { PlacedItemView } from './PlacedItemView';
+import { QuestCelebration } from './QuestCelebration';
 import { QuestDialogOverlay } from './QuestDialogOverlay';
+import { PetPoseWarmup } from './PetPoseWarmup';
+import { SceneLoadingScreen } from './SceneLoadingScreen';
 import { SceneTransition } from './SceneTransition';
-import { Shop, type ShopRef } from './Shop';
 import { useCamera } from './useCamera';
-import { WellDrawer, type WellDrawerRef } from './WellDrawer';
 
 import { CircleRevealOverlay } from '@/components/transitions';
 import { api } from '@/lib/api';
 import { useAuth } from '@/store/AuthProvider';
-import { usePetHero } from '@/store/PetHeroProvider';
 import { useTheme } from '@/store/ThemeProvider';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { executeAction, registerAction } from './actionRegistry';
-import { tryInteractWithPlacedItem } from './interactWithPlacedItem';
 import { FARM_GRASS_COLOR, HOUSE_FLOOR_COLOR, TILE_SIZE, WORLD_PADDING } from './constants';
-import { DraggablePlacedItem } from './DraggablePlacedItem';
-import { findDiggableAtTap, findNearbyInteractable, findTreeAtTap, getAllPlacedItems, getFishingTileKeys, getItemAt, getPlantableTiles, getSoilInvalidTileKeys, getTreeInvalidTileKeys, isTileActionable, resolveAnchor, resolveSoilAction } from './gridHelpers';
-import { MPBottomBar, MultiplayerProvider, MultiplayerScene } from './multiplayer';
-import { QuestBubble, getQuestStatusForNpc } from './multiplayer/QuestBubble';
-import { screenToGrid, type CameraSnapshot, type GridDimensions } from './screenToGrid';
-import { invokeTileTap, setTileTapHandler } from './tileTapRegistry';
-import type { BalloonPopResult, BugCatchResult, FossilDigResult } from './types';
-import { isMultiplayerScene, type Scene } from './types';
-let _sceneryLoadedOnce = false;
+import { getAllPlacedItems, getItemAt, getPlantableTiles, resolvePlacement } from './gridHelpers';
+import { MPBottomBar, MultiplayerProvider, MultiplayerScene, TradeProvider } from './multiplayer';
+import type { GridDimensions } from './screenToGrid';
+import { GameDrawers, type GameDrawersHandle } from './world/GameDrawers';
+import { MPTopBar } from './world/MPTopBar';
+import { PaletteDragPreview } from './world/PaletteDragPreview';
+import { BalloonPopModal, BugCatchModal, FossilDigModal } from './world/RewardModals';
+import { useBugPositions } from './world/useBugPositions';
+import { usePaletteDrag } from './world/usePaletteDrag';
+import { useSceneReadiness } from './world/useSceneReadiness';
+import { useTileTap } from './world/useTileTap';
+import type { DragPreview, DropZoneLayout } from './world/WorldItem';
+import { WorldItemsLayer } from './world/WorldItemsLayer';
+import { invokeTileTap } from './tileTapRegistry';
+import { isMultiplayerScene, type PlacedItem } from './types';
 
 
 export function WorldRenderer() {
   const {
-    activeScene, targetScene, activeGrid, selectedTile, isTransitioning,
-    editMode, activeCategory, toolMode,
-    inventory, placeableSlots, displaySlots, selectedItemType, harvestEffects, farm, equipped, foodDishQueues,
-    farmLevel, farmLevels, itemDefs, pendingInteraction, movingItemId,
-    selectTile, selectInventoryItem, switchScene, applySceneChange, completeTransition,
-    setCategory, dismissHarvestEffect, setFarmName,
-    clearInteraction, startMoveItem, cancelMove, storeSelectedItem,
-    destroySelectedItem, setToolMode, showPetDialog,
-    harvestCrop, gems, purchaseItem, sellItem, sellItemsBatch, addToFoodDish, equipItem, moveItem, setPendingDropTarget, pendingDropTarget,
-    storeItemByAnchorId, placeItemAt,
-    waterTile,
-    loading, sceneryUrl, sceneWorldCols, sceneWorldRows, scenePlacements,
-    activeBugs, catchBug,
+    // ── Scene / world ──
+    activeScene, targetScene, activeGrid, isTransitioning, loading,
+    sceneryUrl, sceneWorldCols, sceneWorldRows, scenePlacements,
+    switchScene, applySceneChange, completeTransition, refreshGame,
+    // ── Build & edit ──
+    editMode, activeCategory, toolMode, selectedTile, selectedItemType, movingItemId,
+    placeableSlots, displaySlots, inventory, pendingDropTarget, itemDefs,
+    selectInventoryItem, setCategory, setToolMode, emitLearnRecipe,
+    startMoveItem, cancelMove, storeSelectedItem, storeItemByAnchorId, destroySelectedItem,
+    moveItem, placeItemAt, setPendingDropTarget,
+    // ── Farm & player ──
+    farm, farmLevel, gems, equipped, canUpgrade, foodDishQueues, backpackSlots,
+    harvestEffects, dismissHarvestEffect,
+    // ── Creatures & pet ──
+    activeBugs, activeBalloons,
+    petState, petBehaviorSync, clearPetBehaviorSync, decorationReactionRef,
+    emitFeedPet, emitConsumeFromFoodDish, emitPetBehavior, emitPetActionComplete,
+    // ── Results ──
     lastCatchResult, dismissCatchResult,
-    activeBalloons, popBalloon,
     lastBalloonPopResult, dismissBalloonPopResult,
-    lastFossilDigResult, dismissFossilDigResult, digFossil, shakeTree, shakingTreeAnchorId, shakeTrigger,
-    canUpgrade, quests, completeQuest,
-    queueNpcDialog, setPendingNpcDialog, optimisticallyActivateQuest, emitQuestActivateByNpc, emitQuestModalOpened,
-    setPendingInteraction,
-    currentQuestDialog, questDialogIndex, activeHighlight, currentDialogSpeaker, currentDialogRewards, currentDialogBlocking, advanceQuestDialog,
-    refreshGame, setShopOpen, setSellBoxOpen, setCookingOpen, setFoodDishOpen, setEquipOpen, onShopCategorySelect, tryAutoAdvanceDialog,
-    cookResult, emitCook, craftResult, emitCraft, emitFeedPet, emitConsumeFromFoodDish, emitPetBehavior, emitPetActionComplete,
-    emitCollectWater, collectWaterResult, clearCollectWaterResult,
-    petBehaviorSync, petState, clearPetBehaviorSync, decorationReactionRef, clearCookResult, clearCraftResult,
+    lastFossilDigResult, dismissFossilDigResult,
+    shakingTreeAnchorId, shakeTrigger,
+    // ── Quests & dialog ──
+    quests, farmLevels, activeHighlight, currentDialog, questDialogIndex, advanceQuestDialog,
+    questCompletions, dismissQuestCompletions, tryAutoAdvanceDialog,
   } = useGame();
 
-  const { user, refreshUser } = useAuth();
-  const { triggerXpGain } = usePetHero();
+  const { user } = useAuth();
   const darkness = useDarkness();
   const petName = user?.pet?.customName || user?.pet?.name || 'Buddy';
-  const shopRef = useRef<ShopRef>(null);
-  /** Live tile positions for each active bug (updated by BugInstance callbacks). */
-  const bugPositionsRef = useRef<Map<string, { col: number; row: number }>>(new Map());
-  /** Bug positions in state for depth-sorting (bugs respect item layers like pet). */
-  const [bugPositions, setBugPositions] = useState<Record<string, { col: number; row: number }>>({});
+  const drawersRef = useRef<GameDrawersHandle>(null);
   const [buildPaletteLayout, setBuildPaletteLayout] = useState<DropZoneLayout | null>(null);
-  const [cameraSnap, setCameraSnap] = useState<CameraSnapshot>({ translateX: 0, translateY: 0, scale: 1 });
-  const isPaletteDragging = useSharedValue(0);
-  const [paletteDragPreview, setPaletteDragPreview] = useState<{
-    itemType: string; def: import('./types').ItemDefinition; x: number; y: number;
-  } | null>(null);
-  const [paletteDropPreview, setPaletteDropPreview] = useState<{
-    col: number; row: number; tileCols: number; tileRows: number;
-  } | null>(null);
-  const farmInfoRef = useRef<FarmInfoDrawerRef>(null);
-  const bestiaryRef = useRef<BestiaryDrawerRef>(null);
-  const cookingRef = useRef<CookingDrawerRef>(null);
-  const craftingRef = useRef<CraftingDrawerRef>(null);
-  const wellRef = useRef<WellDrawerRef>(null);
-  const fishingShopRef = useRef<FishingShopDrawerRef>(null);
-  const mailBoxRef = useRef<MailBoxDrawerRef>(null);
-  const sellBoxRef = useRef<SellBoxDrawerRef>(null);
-  const foodDishRef = useRef<FoodDishDrawerRef>(null);
-  const equipRef = useRef<EquipDrawerRef>(null);
-  const cropInfoRef = useRef<CropInfoDrawerRef>(null);
-  const [cropInfoTarget, setCropInfoTarget] = useState<import('./types').PlacedItem | null>(null);
-
-  useEffect(() => {
-    if (cropInfoTarget) cropInfoRef.current?.open();
-    else cropInfoRef.current?.close();
-  }, [cropInfoTarget]);
-
-  const snapshotReady = !loading && Object.keys(itemDefs).length > 0;
-  const [sceneryReady, setSceneryReady] = useState(_sceneryLoadedOnce);
-  const worldReady = snapshotReady && (activeScene !== 'farm' || sceneryReady);
-  const [loadOverlayVisible, setLoadOverlayVisible] = useState(true);
-  const loadOverlayRevealing = worldReady;
   const { theme } = useTheme();
-  const handleLoadOverlayComplete = useCallback(() => setLoadOverlayVisible(false), []);
 
-  const prevActiveSceneRef = useRef<Scene | null>(null);
-  const sceneReadyResolveRef = useRef<(() => void) | null>(null);
-
-  // Reset scenery when switching TO farm so we wait for the new BakedSceneryLayer.
-  useEffect(() => {
-    if (activeScene === 'farm' && prevActiveSceneRef.current !== 'farm') {
-      setSceneryReady(false);
-    }
-    prevActiveSceneRef.current = activeScene;
-  }, [activeScene]);
-
-  const handleSceneryReady = useCallback(() => {
-    _sceneryLoadedOnce = true;
-    setSceneryReady(true);
-    sceneReadyResolveRef.current?.();
-    sceneReadyResolveRef.current = null;
-  }, []);
-
-  const waitForSceneAssets = useCallback((targetScene: Scene): Promise<void> => {
-    if (targetScene !== 'farm') {
-      return new Promise((resolve) => {
-        InteractionManager.runAfterInteractions(() => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => resolve());
-          });
-        });
-      });
-    }
-    if (sceneryReady) return Promise.resolve();
-    return new Promise<void>((resolve) => {
-      sceneReadyResolveRef.current = resolve;
-    });
-  }, [sceneryReady]);
-
-  useEffect(() => {
-    registerAction('cooking', ({ clearInteraction: clear }) => { cookingRef.current?.open(); clear(); });
-    registerAction('crafting', ({ clearInteraction: clear }) => { craftingRef.current?.open(); clear(); });
-    registerAction('fishing_shop', ({ clearInteraction: clear }) => { fishingShopRef.current?.open(); clear(); });
-    registerAction('sell_box', ({ clearInteraction: clear }) => { sellBoxRef.current?.open(); clear(); });
-    registerAction('mail_box', ({ clearInteraction: clear }) => { mailBoxRef.current?.open(); clear(); });
-    registerAction('food_dish', ({ action, clearInteraction }) => {
-      const anchorId = action.anchorId;
-      if (anchorId) foodDishRef.current?.open(anchorId);
-      clearInteraction();
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!pendingInteraction || pendingInteraction.type === 'none') return;
-    if (pendingInteraction.type === 'open_modal' && typeof pendingInteraction.payload === 'string' && pendingInteraction.payload.startsWith('well')) {
-      wellRef.current?.open(pendingInteraction.payload);
-      clearInteraction();
-      return;
-    }
-    if (executeAction(pendingInteraction, clearInteraction)) return;
-  }, [pendingInteraction, clearInteraction]);
-
-  /** Keeps bugPositionsRef and bugPositions in sync for depth-sorting and tap detection. */
-  const handleBugPositionChange = useCallback((spawnId: string, col: number, row: number) => {
-    bugPositionsRef.current.set(spawnId, { col, row });
-    setBugPositions((prev) => ({ ...prev, [spawnId]: { col, row } }));
-  }, []);
-
-  // Prune stale entries when activeBugs changes
-  useEffect(() => {
-    const liveIds = new Set(activeBugs.map((b) => b.spawnId));
-    for (const key of bugPositionsRef.current.keys()) {
-      if (!liveIds.has(key)) bugPositionsRef.current.delete(key);
-    }
-    setBugPositions((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      for (const key of Object.keys(next)) {
-        if (!liveIds.has(key)) {
-          delete next[key];
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [activeBugs]);
+  const bugs = useBugPositions(activeBugs);
+  const snapshotReady = !loading && Object.keys(itemDefs).length > 0;
+  const scene = useSceneReadiness(activeScene, snapshotReady);
 
   const isFarm = activeScene === 'farm';
   const isMP = isMultiplayerScene(activeScene);
+
+  // Do not remount BakedSceneryLayer on farm re-entry: bumping a key after the
+  // first onLoad can tear the image down mid-wipe-reveal and flash grass green.
+  // Fresh mounts (leaving MP/house) already re-fire onLoad on their own.
   const [mpSceneName, setMpSceneName] = useState<string | null>(null);
   useEffect(() => {
     if (!isMP) {
@@ -272,21 +149,31 @@ export function WorldRenderer() {
 
   const neutralPoseOverride = useNeutralPoseCycle(!isTransitioning);
   const [showHeart, setShowHeart] = useState(false);
-  const isPettingRef = useRef(false);
 
   /** Pet depth for z-order; updates when crossing grid cells during movement. */
   const [effectivePetRow, setEffectivePetRow] = useState(position.row);
+  /** Live visual tile for tap hit-tests (tracks the sprite, not walk-start pos). */
+  const petVisualPosRef = useRef({ col: position.col, row: position.row });
 
-  /** Sync effectivePetRow when position changes (e.g. walk complete, scene change). */
+  const syncPetVisualPos = useCallback((col: number, row: number) => {
+    petVisualPosRef.current = { col, row };
+    setEffectivePetRow(row);
+  }, []);
+
+  /** Sync when logical position jumps (walk complete, scene change). */
   useEffect(() => {
-    setEffectivePetRow(position.row);
-  }, [position.row, position.col]);
+    syncPetVisualPos(position.col, position.row);
+  }, [position.row, position.col, syncPetVisualPos]);
 
-  /** Derive effective row from petY for z-order during movement. runOnJS only on cell boundary cross. */
+  /** Track animated sprite tile for z-order + petting hit-tests during walks. */
   useAnimatedReaction(
-    () => Math.floor(petY.value / TILE_SIZE),
+    () => ({
+      col: Math.floor(petX.value / TILE_SIZE),
+      row: Math.floor(petY.value / TILE_SIZE),
+    }),
     (curr, prev) => {
-      if (curr !== prev) runOnJS(setEffectivePetRow)(curr);
+      if (prev && curr.col === prev.col && curr.row === prev.row) return;
+      runOnJS(syncPetVisualPos)(curr.col, curr.row);
     },
   );
 
@@ -295,196 +182,23 @@ export function WorldRenderer() {
     ? (buildPaletteLayout ? buildPaletteLayout.y : screenH * 0.75)
     : 0;
 
-  const TAP_THROTTLE_MS = 50;
-  const lastTapRef = useRef<{ col: number; row: number; ts: number }>({ col: -1, row: -1, ts: 0 });
+  const handlePetted = useCallback(() => {
+    triggerJump();
+    setShowHeart(true);
+  }, [triggerJump]);
 
-  const executeTileTap = useCallback(
-    async (col: number, row: number) => {
-      const pet = user?.pet;
-      const onPet =
-        toolMode === 'none' &&
-        pet &&
-        isFarm &&
-        !isPettingRef.current &&
-        Math.abs(col - position.col) <= 1 &&
-        Math.abs(row - position.row) <= 1;
-
-      if (onPet) {
-        isPettingRef.current = true;
-        try {
-          const { xpGained } = await api.petPet();
-          await refreshUser();
-          triggerJump();
-          setShowHeart(true);
-          if (xpGained > 0) triggerXpGain?.(xpGained);
-        } catch {
-          // Ignore — user stays with cached data
-        } finally {
-          isPettingRef.current = false;
-        }
-        return;
-      }
-
-      // Tap near bug → catch (any tool mode)
-      const hitBug = activeBugs.find((b) => {
-        const pos = bugPositionsRef.current.get(b.spawnId) ?? b;
-        return Math.abs(pos.col - col) <= 1 && Math.abs(pos.row - row) <= 1;
-      });
-      if (hitBug) {
-        catchBug(hitBug.spawnId);
-        return;
-      }
-
-      // Tap near balloon → pop (any tool mode)
-      const hitBalloon = activeBalloons.find((b) =>
-        Math.abs(b.col - col) <= 1 && Math.abs(b.row - row) <= 1,
-      );
-      if (hitBalloon) {
-        popBalloon(hitBalloon.spawnId);
-        return;
-      }
-
-      // Tap on fishing tile (farm): require pole, else show dialog. With pole, go to fishing scene.
-      if (isFarm) {
-        const fishingTiles = getFishingTileKeys(activeGrid, itemDefs);
-        if (fishingTiles.has(`${col}:${row}`)) {
-          if (!hasRequiredTool('fishing', equipped, itemDefs)) {
-            showPetDialog(getNoToolMessage('fishing'));
-            return;
-          }
-          switchScene('fishing_1');
-          return;
-        }
-      }
-
-      // Tap on tree (toolMode none): shake to harvest fruit or other drops.
-      if (toolMode === 'none' && isFarm) {
-        const treeItem = findTreeAtTap(activeGrid, col, row, itemDefs);
-        if (treeItem) {
-          const anchorId = treeItem.anchorId ?? treeItem.id;
-          shakeTree(anchorId);
-          return;
-        }
-      }
-
-      // Tap on soil/crop (toolMode none): prioritize water > harvest > info drawer.
-      if (toolMode === 'none') {
-        const action = resolveSoilAction(activeGrid, itemDefs, col, row, 'auto');
-        if (action) {
-          if (action.type === 'water') { waterTile(action.col, action.row); return; }
-          if (action.type === 'harvest') { selectTile(action.col, action.row); return; }
-        }
-        // No water/harvest action → check if tapping a growing crop to show info drawer
-        const tappedItem = getItemAt(activeGrid, col, row);
-        if (tappedItem && tappedItem.growthMs && tappedItem.plantedAt) {
-          setCropInfoTarget(tappedItem);
-          return;
-        }
-      }
-
-      // Tap on fossil hole (farm): dig with shovel. Use findDiggableAtTap to handle
-      // tap-to-grid offset (checks tap + 8 neighbors) so fossils work with dynamic farmCols.
-      const inFarm =
-        col >= 0 && col < activeGrid.cols && row >= 0 && row < activeGrid.rows;
-      if (isFarm) {
-        const fossilItem = findDiggableAtTap(activeGrid, col, row, itemDefs);
-        if (fossilItem) {
-          const anchorId = fossilItem.anchorId ?? fossilItem.id;
-          digFossil(anchorId);
-          return;
-        }
-      }
-
-      // Scene placements (baked buildings): pixel hit-test only for taps OUTSIDE farm grid.
-      // Taps inside the farm are handled by getItemAt (fossils, crops, etc.) — avoid scene
-      // placements (e.g. flooring) intercepting farm taps when dynamic farmCols cause mismatches.
-      if (
-        isFarm &&
-        !inFarm &&
-        scenePlacements?.length &&
-        sceneWorldCols != null &&
-        sceneWorldRows != null
-      ) {
-        const padCols = (sceneWorldCols - activeGrid.cols) / 2;
-        const padRows = (sceneWorldRows - activeGrid.rows) / 2;
-        const wx = (col + padCols) * TILE_SIZE + 0.5 * TILE_SIZE;
-        const wy = (row + padRows) * TILE_SIZE + 0.5 * TILE_SIZE;
-        const placementsByDepth = [...scenePlacements].sort((a, b) => {
-          const defA = itemDefs[a.itemType];
-          const defB = itemDefs[b.itemType];
-          const baseHA = (defA?.rows ?? 1) * TILE_SIZE;
-          const baseHB = (defB?.rows ?? 1) * TILE_SIZE;
-          let depthA = (a.y + baseHA) / TILE_SIZE + (a.depthOffset ?? 0);
-          let depthB = (b.y + baseHB) / TILE_SIZE + (b.depthOffset ?? 0);
-          const catA = defA?.category;
-          const catB = defB?.category;
-          const tableA = defA?.subCategory === 'table';
-          const tableB = defB?.subCategory === 'table';
-          if (catA === 'flooring' || catA === 'tiled_flooring') depthA = -1e6 + depthA;
-          else if (catA === 'soil') depthA = -5e5 + depthA;
-          else if (tableA) depthA = depthA - 1000;
-          if (catB === 'flooring' || catB === 'tiled_flooring') depthB = -1e6 + depthB;
-          else if (catB === 'soil') depthB = -5e5 + depthB;
-          else if (tableB) depthB = depthB - 1000;
-          return depthB - depthA;
-        });
-        for (const p of placementsByDepth) {
-          const def = itemDefs[p.itemType];
-          const baseW = (def?.cols ?? 1) * TILE_SIZE;
-          const baseH = (def?.rows ?? 1) * TILE_SIZE;
-          const w = baseW * (p.scale ?? 1);
-          const h = baseH * (p.scale ?? 1);
-          const left = p.x + (baseW - w) / 2;
-          const top = p.y + (baseH - h);
-          if (wx >= left && wx <= left + w && wy >= top && wy <= top + h) {
-            const placedItem = { id: p.id, itemType: p.itemType, col: 0, row: 0, color: '', tileCols: def?.cols ?? 1, tileRows: def?.rows ?? 1 };
-            const petLevel = user?.pet?.level ?? 1;
-            tryInteractWithPlacedItem(placedItem, itemDefs, quests ?? [], farmLevel, petLevel, {
-              setPendingNpcDialog,
-              queueNpcDialog: (steps, speaker, npcItemType, blocking, questIdToComplete) =>
-                queueNpcDialog(steps, speaker, npcItemType, blocking, questIdToComplete),
-              optimisticallyActivateQuest,
-              emitQuestActivateByNpc,
-              switchScene,
-              setPendingInteraction,
-              clearInteraction,
-              emitQuestModalOpened,
-            });
-            return;
-          }
-        }
-      }
-
-      // Tap outside farm grid: only scene placements were checked above; nothing else to do
-      if (!inFarm) return;
-
-      // If tapped tile has nothing actionable, resolve to nearest actionable neighbor
-      let tc = col, tr = row;
-      if (!isTileActionable(activeGrid, col, row, itemDefs)) {
-        const nearby = findNearbyInteractable(activeGrid, col, row, itemDefs);
-        if (nearby) { tc = nearby.col; tr = nearby.row; }
-      }
-      selectTile(tc, tr);
-    },
-    [user?.pet, toolMode, activeGrid, itemDefs, isFarm, position, selectTile, waterTile, refreshUser, triggerJump, triggerXpGain, activeBugs, catchBug, activeBalloons, popBalloon, equipped, showPetDialog, switchScene, digFossil, shakeTree, scenePlacements, sceneWorldCols, sceneWorldRows, quests, farmLevel, queueNpcDialog, setPendingNpcDialog, optimisticallyActivateQuest, emitQuestActivateByNpc, setPendingInteraction, clearInteraction, emitQuestModalOpened],
+  const handleShowCropInfo = useCallback(
+    (crop: PlacedItem) => drawersRef.current?.showCropInfo(crop),
+    [],
   );
 
-  const handleTileTap = useCallback(
-    (col: number, row: number) => {
-      const now = Date.now();
-      const last = lastTapRef.current;
-      const sameTile = last.col === col && last.row === row;
-      if (sameTile && now - last.ts < TAP_THROTTLE_MS) return;
-      lastTapRef.current = { col, row, ts: now };
-      executeTileTap(col, row);
-    },
-    [executeTileTap],
-  );
-
-  useEffect(() => {
-    setTileTapHandler(handleTileTap);
-    return () => setTileTapHandler(null);
-  }, [handleTileTap]);
+  useTileTap({
+    isFarm,
+    petPositionRef: petVisualPosRef,
+    bugPositionsRef: bugs.ref,
+    onPetted: handlePetted,
+    onShowCropInfo: handleShowCropInfo,
+  });
 
   const { camera, gesture } = useCamera({
     cols: activeGrid.cols,
@@ -495,25 +209,6 @@ export function WorldRenderer() {
     tapDeadZoneY: hudCutoff,
     initialFocusRow: isFarm ? 7 : undefined,
   });
-
-  /** Sync camera to state only during palette drag (avoids lag from updating every frame when panning). */
-  useAnimatedReaction(
-    () => ({
-      tx: camera.translateX.value,
-      ty: camera.translateY.value,
-      scale: camera.scale.value,
-      dragging: isPaletteDragging.value,
-    }),
-    (curr) => {
-      if (curr.dragging) {
-        runOnJS(setCameraSnap)({
-          translateX: curr.tx,
-          translateY: curr.ty,
-          scale: curr.scale,
-        });
-      }
-    },
-  );
 
   const petImageUrl = useMemo(() => {
     const base = user?.pet?.imageUrl ?? null;
@@ -541,7 +236,16 @@ export function WorldRenderer() {
     [worldCols, worldRows],
   );
 
-  const farmOffset = ((worldCols - activeGrid.cols) / 2) * TILE_SIZE;
+  // Per axis: the vertical offset comes from the rows, not the columns. Using
+  // the column difference for both put the farm above where every hit-test
+  // expected it, so taps landed on a tile up and to the left of the target.
+  const farmOffsetX = ((worldCols - activeGrid.cols) / 2) * TILE_SIZE;
+  const farmOffsetY = ((worldRows - activeGrid.rows) / 2) * TILE_SIZE;
+
+  const liveScenePlacements = useMemo(
+    () => (isFarm ? scenePlacements?.filter((p) => p.live) : undefined),
+    [isFarm, scenePlacements],
+  );
 
   // Resolve which anchor IDs are selected or moving
   const selectedAnchorId = useMemo<string | null>(() => {
@@ -560,9 +264,8 @@ export function WorldRenderer() {
     return null;
   }, [selectedAnchorId, activeGrid]);
 
-  const [dragPreview, setDragPreview] = useState<{
-    col: number; row: number; tileCols: number; tileRows: number; itemType?: string; anchorId?: string;
-  } | null>(null);
+  /** Set while an already-placed item is being dragged to a new tile. */
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
 
   const handleDragMoveEnd = useCallback(
     (anchorId: string, col: number, row: number): boolean => {
@@ -606,189 +309,10 @@ export function WorldRenderer() {
     return ids;
   }, [activeGrid, itemDefs]);
 
-  /** Depth-sorted item renderables (no pet — pet is rendered separately). */
-  const sortedItems = useMemo(() => {
-    type Renderable = { depth: number; element: React.ReactElement };
-    const list: Renderable[] = [];
-
-    for (const item of getAllPlacedItems(activeGrid)) {
-      if (item.anchorId) continue;
-      const anchId = item.id;
-      const queue = foodDishQueues?.[anchId];
-      const nextFoodType = queue?.[0];
-      const def = itemDefs[item.itemType];
-      const anchor = resolveAnchor(activeGrid, item) ?? item;
-      const baseDepth = anchor.row + anchor.tileRows - 1;
-      const isSoil = def?.category === 'soil';
-      const isTable = def?.subCategory === 'table';
-      const depth = (def?.category === 'flooring' || def?.category === 'tiled_flooring') ? -1e6 + baseDepth
-        : isSoil ? -5e5 + baseDepth
-          : isTable ? baseDepth - 1000
-            : baseDepth;
-
-      let fenceMask: number | undefined;
-      if (def?.autoConnect) {
-        fenceMask = 0;
-        const n = getItemAt(activeGrid, item.col, item.row - 1);
-        if (n && n.itemType === item.itemType) fenceMask |= 1;
-        const e = getItemAt(activeGrid, item.col + 1, item.row);
-        if (e && e.itemType === item.itemType) fenceMask |= 2;
-        const s = getItemAt(activeGrid, item.col, item.row + 1);
-        if (s && s.itemType === item.itemType) fenceMask |= 4;
-        const w = getItemAt(activeGrid, item.col - 1, item.row);
-        if (w && w.itemType === item.itemType) fenceMask |= 8;
-      }
-
-      const isWorldHighlighted =
-        activeHighlight?.type === 'world_item' &&
-        (activeHighlight.target === item.itemType ||
-          (['sell_box', 'cooking_pot', 'food_dish'].includes(activeHighlight.target) &&
-            def?.interactAction?.payload ===
-              (activeHighlight.target === 'cooking_pot' ? 'cooking' : activeHighlight.target)));
-      const stableKey = item.clientId ?? item.id;
-      const isCrop = !!item.growthMs;
-
-
-      const isTreeShaking = def?.category === 'tree' && anchId === shakingTreeAnchorId;
-      const view = (
-        <PlacedItemView
-          key={stableKey}
-          item={item}
-          itemDefs={itemDefs}
-          isSelected={anchId === selectedAnchorId && !movingItemId}
-          isMoving={anchId === movingItemId}
-          fenceConnectionMask={fenceMask}
-          highlighted={isWorldHighlighted}
-          isShaking={isTreeShaking}
-          shakeTrigger={isTreeShaking ? shakeTrigger : undefined}
-        />
-      );
-
-      // Skip the expensive DraggablePlacedItem gesture handler wrapper for
-      // crops — they can never be dragged anyway.
-      // NOTE: Soil always gets the wrapper so its tree stays stable when
-      // crops are planted or harvested (avoids unmount/remount flicker).
-      const hasCrops = isSoil && soilWithCropsIds.has(item.id);
-      const isDigHole = item.itemType === 'fossil_hole' || def?.subCategory === 'dig_hole';
-      const isDraggable = editMode && !isCrop && !hasCrops && !isDigHole;
-
-      const element = isCrop ? view : (
-        <DraggablePlacedItem
-          key={stableKey}
-          col={item.col}
-          row={item.row}
-          tileCols={item.tileCols}
-          tileRows={item.tileRows}
-          anchorId={anchId}
-          itemType={item.itemType}
-          gridCols={activeGrid.cols}
-          gridRows={activeGrid.rows}
-          onMoveEnd={handleDragMoveEnd}
-          onStore={storeItemByAnchorId}
-          dropZoneLayout={buildPaletteLayout}
-          onDragPreview={setDragPreview}
-          pendingDropTarget={pendingDropTarget}
-          enabled={isDraggable}
-        >
-          <PlacedItemView
-            item={{ ...item, col: 0, row: 0 }}
-            itemDefs={itemDefs}
-            isSelected={anchId === selectedAnchorId && !movingItemId}
-            isMoving={anchId === movingItemId}
-            fenceConnectionMask={fenceMask}
-            highlighted={isWorldHighlighted}
-            isShaking={isTreeShaking}
-            shakeTrigger={isTreeShaking ? shakeTrigger : undefined}
-          />
-        </DraggablePlacedItem>
-      );
-
-      list.push({ depth, element });
-
-      // Quest bubble for NPCs with quests
-      if (def?.category === 'npc' && def?.npcDialog?.length) {
-        const questStatus = getQuestStatusForNpc(
-          item.itemType,
-          quests,
-          user?.pet?.level ?? 1,
-          farmLevel,
-        );
-        if (questStatus) {
-          const centerX = (item.col + item.tileCols / 2) * TILE_SIZE;
-          const topY = item.row * TILE_SIZE;
-          const bubbleEl = (
-            <QuestBubble
-              key={`quest-bubble-${anchId}`}
-              status={questStatus}
-              itemDefs={itemDefs}
-              centerX={centerX}
-              topY={topY}
-            />
-          );
-          list.push({ depth: baseDepth + 1, element: bubbleEl });
-        }
-      }
-
-      if (def?.interactAction?.payload === 'food_dish' && nextFoodType) {
-        const foodDef = itemDefs[nextFoodType];
-        if (foodDef) {
-          const centerCol = item.col + item.tileCols / 2;
-          const centerRow = item.row + item.tileRows / 2;
-          const overlayDepth = baseDepth + 1;
-          const overlaySize = Math.round(TILE_SIZE * 0.75); // ~36px — proportional to tile
-          const overlayX = centerCol * TILE_SIZE - overlaySize / 2;
-          const overlayY = centerRow * TILE_SIZE - overlaySize / 2 - 20;
-          const overlayEl = (
-            <View
-              key={`food-overlay-${anchId}`}
-              style={{
-                position: 'absolute',
-                left: overlayX,
-                top: overlayY,
-                width: overlaySize,
-                height: overlaySize,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              pointerEvents="none"
-            >
-              {foodDef.imageUrl ? (
-                <CachedImage
-                  source={{ uri: foodDef.imageUrl }}
-                  style={{ width: overlaySize, height: overlaySize }}
-                  resizeMode="contain"
-                  recyclingKey={`food-overlay-${anchId}-${nextFoodType}`}
-                />
-              ) : (
-                <Text style={{ fontSize: overlaySize * 0.8 }}>{foodDef.emoji ?? '🍽'}</Text>
-              )}
-            </View>
-          );
-          list.push({ depth: overlayDepth, element: overlayEl });
-        }
-      }
-    }
-
-    list.sort((a, b) => a.depth - b.depth);
-    return list;
-  }, [
-    activeGrid,
-    foodDishQueues,
-    selectedAnchorId,
-    movingItemId,
-    itemDefs,
-    editMode,
-    handleDragMoveEnd,
-    storeItemByAnchorId,
-    buildPaletteLayout,
-    pendingDropTarget,
-    activeHighlight,
-    quests,
-    farmLevel,
-    user?.pet?.level,
-    shakingTreeAnchorId,
-    shakeTrigger,
-  ]);
+  const treeShake = useMemo(
+    () => ({ anchorId: shakingTreeAnchorId ?? null, trigger: shakeTrigger ?? 0 }),
+    [shakingTreeAnchorId, shakeTrigger],
+  );
 
   const handToolDef = equipped?.handTool ? itemDefs[equipped.handTool] : null;
   const chairDef = equipped?.chair ? itemDefs[equipped.chair] : null;
@@ -809,54 +333,14 @@ export function WorldRenderer() {
       onHeartDone={() => setShowHeart(false)}
       equippedHandToolImageUrl={handToolDef?.imageUrl}
       equippedHandToolEmoji={handToolDef?.emoji}
+      equippedHandToolOverlay={handToolDef?.equipOverlay}
       equippedChairImageUrl={chairDef?.imageUrl}
       equippedChairEmoji={chairDef?.emoji}
+      equippedChairOverlay={chairDef?.equipOverlay}
     />
-  ), [petX, petY, facingRight, bounceOffset, behaviorOffset, toolRotationDeg, jumpOffset, petImageUrl, bubbleVisible, bubbleMood, showHeart, handToolDef?.imageUrl, handToolDef?.emoji, chairDef?.imageUrl, chairDef?.emoji]);
+  ), [petX, petY, facingRight, bounceOffset, behaviorOffset, toolRotationDeg, jumpOffset, petImageUrl, bubbleVisible, bubbleMood, showHeart, handToolDef?.imageUrl, handToolDef?.emoji, handToolDef?.equipOverlay, chairDef?.imageUrl, chairDef?.emoji, chairDef?.equipOverlay]);
 
-  /** Depth-sorted renderables: items, pet, bugs. All use row-based depth so creatures go behind items in front. */
-  const sortedRenderables = useMemo(() => {
-    type Renderable = { depth: number; element: React.ReactElement };
-    const list: Renderable[] = [
-      ...sortedItems,
-      { depth: effectivePetRow, element: petElement },
-      ...activeBugs.map((bug) => {
-        const pos = bugPositions[bug.spawnId] ?? { col: bug.col, row: bug.row };
-        const bugDef = itemDefs[bug.itemType];
-        return {
-          depth: pos.row,
-          element: (
-            <BugInstance
-              key={bug.spawnId}
-              bug={bug}
-              cols={activeGrid.cols}
-              rows={activeGrid.rows}
-              imageUrl={bugDef?.imageUrl}
-              onPositionChange={handleBugPositionChange}
-              lightRadius={bugDef?.lightRadius}
-              lightColor={bugDef?.lightColor}
-              lightIntensity={bugDef?.lightIntensity}
-              darkness={darkness}
-              activeGrid={activeGrid}
-              itemDefs={itemDefs}
-            />
-          ),
-        };
-      }),
-    ];
-    list.sort((a, b) => a.depth - b.depth);
-    return list.map((r) => r.element);
-  }, [
-    sortedItems,
-    petElement,
-    effectivePetRow,
-    activeBugs,
-    bugPositions,
-    itemDefs,
-    activeGrid,
-    handleBugPositionChange,
-    darkness,
-  ]);
+  const pendingDropAnchorId = pendingDropTarget?.anchorId ?? null;
 
   const itemLightSources = useMemo(() => {
     const sources: {
@@ -888,8 +372,19 @@ export function WorldRenderer() {
 
   const handleBackToFarm = useCallback(() => switchScene('farm'), [switchScene]);
   const handleSelectItem = useCallback(
-    (t: string | null) => selectInventoryItem(t),
-    [selectInventoryItem],
+    (t: string | null) => {
+      if (
+        t &&
+        (itemDefs[t]?.subCategory === 'crafting_recipe' ||
+          itemDefs[t]?.subCategory === 'cooking_recipe')
+      ) {
+        emitLearnRecipe(t);
+        tryAutoAdvanceDialog('learn', t);
+        return;
+      }
+      selectInventoryItem(t);
+    },
+    [itemDefs, emitLearnRecipe, selectInventoryItem, tryAutoAdvanceDialog],
   );
   const handleBuildPaletteLayout = useCallback((layout: DropZoneLayout | null) => {
     setBuildPaletteLayout(layout);
@@ -900,146 +395,107 @@ export function WorldRenderer() {
     [activeGrid.cols, activeGrid.rows, worldCols, worldRows],
   );
 
+  const palette = usePaletteDrag({ camera, gridDims, grid: activeGrid, hudCutoff });
+
+  const paletteDrag = useMemo(() => ({
+    dragX: palette.ghostX,
+    dragY: palette.ghostY,
+    onDragStart: palette.onDragStart,
+    onDragEnd: palette.onDragEnd,
+    onDragCancel: palette.onDragCancel,
+  }), [palette.ghostX, palette.ghostY, palette.onDragStart, palette.onDragEnd, palette.onDragCancel]);
+
   const activeSeedDef = useMemo(() => {
-    const selDef = selectedItemType ? itemDefs[selectedItemType] : null;
-    if (selDef?.category === 'seed' && editMode) return selDef;
-    if (paletteDragPreview?.def?.category === 'seed') return paletteDragPreview.def;
+    // `inventory` from context is InventorySlot[] (qty > 0 only), not a map.
+    const selectedQty = selectedItemType
+      ? (inventory.find((s) => s.itemType === selectedItemType)?.qty ?? 0)
+      : 0;
+    if (selectedItemType && editMode && selectedQty > 0) {
+      const selected = itemDefs[selectedItemType];
+      if (selected?.category === 'seed') return selected;
+    }
+    if (palette.dragPreview?.def.category === 'seed') return palette.dragPreview.def;
     return null;
-  }, [selectedItemType, itemDefs, editMode, paletteDragPreview]);
+  }, [selectedItemType, itemDefs, editMode, inventory, palette.dragPreview]);
 
   const plantableTiles = useMemo(() => {
     if (!activeSeedDef) return [];
     return getPlantableTiles(activeGrid, itemDefs, activeSeedDef.cols, activeSeedDef.rows);
   }, [activeSeedDef, activeGrid, itemDefs]);
 
-  const invalidTileKeysForOverlay = useMemo(() => {
-    const preview = paletteDropPreview ?? dragPreview;
-    if (!preview) return new Set<string>();
-
-    const combined = new Set<string>();
-    const def = paletteDragPreview?.def ?? (dragPreview?.itemType ? itemDefs[dragPreview.itemType] : null);
-    const isSoil = def?.category === 'soil';
-    const isTree = def?.category === 'tree';
-    const excludeAnchorId = dragPreview?.anchorId;
-
-    if (isSoil) {
-      const soilInvalid = getSoilInvalidTileKeys(
-        activeGrid,
-        itemDefs,
-        preview.col,
-        preview.row,
-        preview.tileCols,
-        preview.tileRows,
-        excludeAnchorId,
-      );
-      soilInvalid.forEach((k) => combined.add(k));
+  /**
+   * The footprint currently being aimed at, and whether dropping there works.
+   *
+   * Moving an existing item is checked here; a palette drag arrives already
+   * checked because its target is resolved on the UI thread.
+   */
+  const dropFootprint = useMemo(() => {
+    if (dragPreview) {
+      const def = itemDefs[dragPreview.itemType];
+      const valid = def
+        ? resolvePlacement(activeGrid, itemDefs, def, dragPreview.col, dragPreview.row, dragPreview.anchorId).ok
+        : true;
+      return { ...dragPreview, valid };
     }
-    if (isTree) {
-      const treeInvalid = getTreeInvalidTileKeys(
-        activeGrid,
-        preview.col,
-        preview.row,
-        preview.tileCols,
-        preview.tileRows,
-        excludeAnchorId,
-      );
-      treeInvalid.forEach((k) => combined.add(k));
-    }
-    return combined;
-  }, [paletteDropPreview, paletteDragPreview?.def, dragPreview, activeGrid, itemDefs]);
+    return palette.dropPreview;
+  }, [dragPreview, palette.dropPreview, activeGrid, itemDefs]);
 
-  const handlePaletteDragStart = useCallback((itemType: string, def: import('./types').ItemDefinition) => {
-    isPaletteDragging.value = 1;
-    setPaletteDragPreview({ itemType, def, x: 0, y: 0 });
-    setPaletteDropPreview(null);
-  }, [isPaletteDragging]);
-  const handlePaletteDragUpdate = useCallback(
-    (x: number, y: number, def: import('./types').ItemDefinition) => {
-      setPaletteDragPreview((prev) => (prev ? { ...prev, x, y } : null));
-      const coord = screenToGrid(x, y, cameraSnap, gridDims);
-      if (coord) {
-        const isTree = def.category === 'tree';
-        const tileCols = isTree ? 2 : def.cols;
-        const tileRows = isTree ? 2 : def.rows;
-        const dropCol = Math.max(0, Math.min(activeGrid.cols - tileCols, coord.col - Math.floor(tileCols / 2)));
-        const dropRow = Math.max(0, Math.min(activeGrid.rows - tileRows, coord.row - Math.floor(tileRows / 2)));
-        setPaletteDropPreview({
-          col: dropCol,
-          row: dropRow,
-          tileCols,
-          tileRows,
-        });
-      } else {
-        setPaletteDropPreview(null);
-      }
-    },
-    [cameraSnap, gridDims, activeGrid.cols, activeGrid.rows],
+  const handleOpenShop = useCallback(() => drawersRef.current?.openShop(), []);
+  const handleOpenFarmInfo = useCallback(() => drawersRef.current?.openFarmInfo(), []);
+  const handleOpenBestiary = useCallback(() => drawersRef.current?.openBestiary(), []);
+  const handleOpenEquip = useCallback(() => drawersRef.current?.openEquip(), []);
+  const handleOpenBackpack = useCallback(() => drawersRef.current?.openBackpack(), []);
+
+  const handleHudAction = useCallback(
+    (target: string) => tryAutoAdvanceDialog('hud_action', target),
+    [tryAutoAdvanceDialog],
   );
-  const [paletteRejecting, setPaletteRejecting] = useState(false);
-  const paletteRejectScale = useSharedValue(1);
-  const paletteRejectOpacity = useSharedValue(1);
-
-  useEffect(() => {
-    if (!paletteRejecting) return;
-    paletteRejectScale.value = withTiming(0, { duration: 180, easing: Easing.in(Easing.quad) });
-    paletteRejectOpacity.value = withTiming(0, { duration: 180, easing: Easing.in(Easing.quad) }, () => {
-      runOnJS(setPaletteDragPreview)(null);
-      runOnJS(setPaletteRejecting)(false);
-      paletteRejectScale.value = 1;
-      paletteRejectOpacity.value = 1;
-    });
-  }, [paletteRejecting]);
-
-  const handlePaletteDragEnd = useCallback(
-    (itemType: string, screenX: number, screenY: number) => {
-      isPaletteDragging.value = 0;
-      const def = itemDefs[itemType];
-      setPaletteDropPreview(null);
-      if (screenY > hudCutoff) {
-        setPaletteDragPreview(null);
-        return;
-      }
-      const coord = screenToGrid(screenX, screenY, cameraSnap, gridDims);
-      if (coord && def) {
-        const isTree = def.category === 'tree';
-        const tileCols = isTree ? 2 : def.cols;
-        const tileRows = isTree ? 2 : def.rows;
-        const dropCol = Math.max(0, Math.min(activeGrid.cols - tileCols, coord.col - Math.floor(tileCols / 2)));
-        const dropRow = Math.max(0, Math.min(activeGrid.rows - tileRows, coord.row - Math.floor(tileRows / 2)));
-        const placed = placeItemAt(itemType, dropCol, dropRow);
-        if (placed) {
-          setPaletteDragPreview(null);
-        } else {
-          setPaletteRejecting(true);
-        }
-      } else {
-        setPaletteDragPreview(null);
-      }
-    },
-    [cameraSnap, gridDims, placeItemAt, isPaletteDragging, hudCutoff, itemDefs, activeGrid.cols, activeGrid.rows],
-  );
-
-  const handleOpenShop = useCallback(() => {
-    setShopOpen(true);
-    shopRef.current?.open();
-  }, [setShopOpen]);
-  const handleOpenFarmInfo = useCallback(() => farmInfoRef.current?.open(), []);
 
   const rootBg = isMP ? '#5A9E5A' : bgColor;
+  const playerName = user?.pet?.customName || user?.pet?.name || farm.name || 'Player';
 
-  /** Per-step speaker override: use step.speaker if set, else dialog-level (currentDialogSpeaker ? npc : pet). */
-  const currentStepSpeaker =
-    (currentQuestDialog?.[questDialogIndex]?.speaker ?? (currentDialogSpeaker ? 'npc' : 'pet')) as 'pet' | 'npc';
-  const questOverlaySpeakerName = currentStepSpeaker === 'npc' && currentDialogSpeaker ? currentDialogSpeaker.name : undefined;
-  const questOverlaySpeakerImageUrl = currentStepSpeaker === 'npc' && currentDialogSpeaker ? currentDialogSpeaker.imageUrl : undefined;
+  const dialogOverlay = (
+    <QuestDialogOverlay
+      dialog={currentDialog}
+      stepIndex={questDialogIndex}
+      petName={petName}
+      petImageUrl={petImageUrl}
+      playerName={playerName}
+      itemDefs={itemDefs}
+      onAdvance={advanceQuestDialog}
+    />
+  );
+
+  // Rewards fire as soon as they're granted — Modal sits over dialogs and drawers.
+  // Dialogs stay queued until the player dismisses the celebration (see reducer).
+  const celebration =
+    questCompletions.length > 0 ? (
+      <QuestCelebration
+        completions={questCompletions}
+        itemDefs={itemDefs}
+        farmLevels={farmLevels}
+        onDone={dismissQuestCompletions}
+      />
+    ) : null;
 
   return (
     <View style={[styles.root, { backgroundColor: rootBg }]}>
+      <PetPoseWarmup pet={user?.pet} />
       {isMP ? (
         <>
           <MultiplayerProvider sceneSlug={activeScene}>
-            <MultiplayerScene sceneSlug={activeScene} />
-            <MPBottomBar onBackToFarm={handleBackToFarm} onOpenEquip={() => equipRef.current?.open()} />
+            <TradeProvider>
+              <MultiplayerScene
+                key={activeScene}
+                sceneSlug={activeScene}
+                onAssetsReady={scene.onMPSceneReady}
+              />
+              <MPBottomBar
+                onBackToFarm={handleBackToFarm}
+                onOpenEquip={handleOpenEquip}
+                onOpenBackpack={handleOpenBackpack}
+              />
+            </TradeProvider>
           </MultiplayerProvider>
           <MPTopBar
             sceneName={mpSceneName ?? activeScene}
@@ -1047,19 +503,8 @@ export function WorldRenderer() {
             gems={gems}
             isAdmin={user?.role === 'admin' || user?.role === 'superadmin'}
           />
-          <QuestDialogOverlay
-            steps={currentQuestDialog}
-            stepIndex={questDialogIndex}
-            blocking={currentDialogBlocking}
-            petName={petName}
-            petImageUrl={petImageUrl}
-            playerName={user?.pet?.customName || user?.pet?.name || farm.name || 'Player'}
-            speakerName={questOverlaySpeakerName}
-            speakerImageUrl={questOverlaySpeakerImageUrl}
-            rewards={currentDialogRewards}
-            itemDefs={itemDefs}
-            onAdvance={advanceQuestDialog}
-          />
+          {dialogOverlay}
+          {celebration}
         </>
       ) : (
         <>
@@ -1071,32 +516,31 @@ export function WorldRenderer() {
                 {/* Baked scenery — single image for all users, falls back to procedural on 404 */}
                 {isFarm && (
                   <BakedSceneryLayer
-                    key="farm-scenery"
                     farmCols={activeGrid.cols}
                     farmRows={activeGrid.rows}
                     worldCols={worldCols}
                     worldRows={worldRows}
                     itemDefs={itemDefs}
-                    onReady={handleSceneryReady}
+                    onReady={scene.onSceneryReady}
                     imageUrl={sceneryUrl}
                     snapshotLoaded={snapshotReady}
                   />
                 )}
 
                 {/* Farm content container — offset by padding so farm items stay in (0,0)-based coords. overflow: visible so buildings can extend and overlay scenery. */}
-                <View style={{ position: 'absolute', left: farmOffset, top: farmOffset, overflow: 'visible' }}>
+                <View style={{ position: 'absolute', left: farmOffsetX, top: farmOffsetY, overflow: 'visible' }}>
                   {editMode && (
                     <GridLines cols={activeGrid.cols} rows={activeGrid.rows} color={gridLineColor} />
                   )}
-                  {(dragPreview || paletteDropPreview) && (
+                  {dropFootprint && (
                     <View
                       style={[
-                        (invalidTileKeysForOverlay.size > 0 ? styles.dropPreviewInvalid : styles.dropPreview),
+                        dropFootprint.valid ? styles.dropPreview : styles.dropPreviewInvalid,
                         {
-                          left: (dragPreview ?? paletteDropPreview)!.col * TILE_SIZE,
-                          top: (dragPreview ?? paletteDropPreview)!.row * TILE_SIZE,
-                          width: (dragPreview ?? paletteDropPreview)!.tileCols * TILE_SIZE,
-                          height: (dragPreview ?? paletteDropPreview)!.tileRows * TILE_SIZE,
+                          left: dropFootprint.col * TILE_SIZE,
+                          top: dropFootprint.row * TILE_SIZE,
+                          width: dropFootprint.tileCols * TILE_SIZE,
+                          height: dropFootprint.tileRows * TILE_SIZE,
                         },
                       ]}
                       pointerEvents="none"
@@ -1117,7 +561,33 @@ export function WorldRenderer() {
                       pointerEvents="none"
                     />
                   ))}
-                  {sortedRenderables}
+                  <WorldItemsLayer
+                    activeGrid={activeGrid}
+                    itemDefs={itemDefs}
+                    foodDishQueues={foodDishQueues}
+                    selectedAnchorId={selectedAnchorId}
+                    movingItemId={movingItemId}
+                    editMode={editMode}
+                    activeHighlight={activeHighlight}
+                    quests={quests}
+                    soilWithCropsIds={soilWithCropsIds}
+                    pendingDropAnchorId={pendingDropAnchorId}
+                    dropZoneLayout={buildPaletteLayout}
+                    cameraScale={camera.scale}
+                    onMoveEnd={handleDragMoveEnd}
+                    onStore={storeItemByAnchorId}
+                    onDragPreview={setDragPreview}
+                    treeShake={treeShake}
+                    petElement={petElement}
+                    petRow={effectivePetRow}
+                    liveScenePlacements={liveScenePlacements}
+                    farmOffsetX={farmOffsetX}
+                    farmOffsetY={farmOffsetY}
+                    activeBugs={activeBugs}
+                    bugPositions={bugs.positions}
+                    onBugPositionChange={bugs.onPositionChange}
+                    darkness={darkness}
+                  />
 
                   {activeBalloons.map((balloon) => {
                     const balloonDef = itemDefs[balloon.itemType];
@@ -1145,13 +615,19 @@ export function WorldRenderer() {
                     />
                   ))}
 
-                  {selectedItemData && editMode && !movingItemId && !selectedItemType && !selectedItemData.growthMs && !(itemDefs[selectedItemData.itemType]?.category === 'soil' && soilWithCropsIds.has(selectedItemData.id)) && (
+                  {selectedItemData && editMode && !movingItemId && !selectedItemType && !selectedItemData.growthMs && !(itemDefs[selectedItemData.itemType]?.category === 'soil' && soilWithCropsIds.has(selectedItemData.id)) && itemDefs[selectedItemData.itemType]?.category !== 'npc' && (
                     <ItemActionBar
                       col={selectedItemData.col}
                       row={selectedItemData.row}
                       tileCols={selectedItemData.tileCols}
                       itemType={selectedItemData.itemType}
-                      immovable={selectedItemData.itemType === 'fossil_hole' || itemDefs[selectedItemData.itemType]?.subCategory === 'dig_hole'}
+                      immovable={
+                        selectedItemData.itemType === 'fossil_hole' ||
+                        itemDefs[selectedItemData.itemType]?.subCategory === 'dig_hole' ||
+                        selectedItemData.itemType === 'stone' ||
+                        selectedItemData.itemType === 'stick' ||
+                        itemDefs[selectedItemData.itemType]?.subCategory === 'ground_pickup'
+                      }
                       onMove={startMoveItem}
                       onStore={storeSelectedItem}
                       onDestroy={destroySelectedItem}
@@ -1166,15 +642,19 @@ export function WorldRenderer() {
 
               {/* Day/night tint — darkens the world based on local time + season */}
               <DayNightOverlay />
+              <WeatherOverlay />
             </View>
           </GestureDetector>
 
-          {paletteDragPreview && (
-            <PaletteDragPreviewView
-              preview={paletteDragPreview}
-              cameraScale={cameraSnap.scale}
-              rejectScale={paletteRejectScale}
-              rejectOpacity={paletteRejectOpacity}
+          {palette.dragPreview && (
+            <PaletteDragPreview
+              preview={palette.dragPreview}
+              camera={camera}
+              x={palette.ghostX}
+              y={palette.ghostY}
+              scale={palette.ghostScale}
+              opacity={palette.ghostOpacity}
+              invalid={palette.dropPreview ? !palette.dropPreview.valid : false}
             />
           )}
 
@@ -1185,12 +665,14 @@ export function WorldRenderer() {
             toolMode={toolMode}
             placeableSlots={placeableSlots}
             displaySlots={displaySlots}
+            inventorySlots={inventory}
             selectedItemType={selectedItemType}
             activeCategory={activeCategory}
             farmLevel={farmLevel}
             gems={gems}
             canUpgrade={canUpgrade}
             itemDefs={itemDefs}
+            backpackSlots={backpackSlots}
             movingItemId={movingItemId}
             activeHighlight={activeHighlight}
             harvestEffects={harvestEffects}
@@ -1202,54 +684,16 @@ export function WorldRenderer() {
             onSetCategory={setCategory}
             onCancelMove={cancelMove}
             onSetToolMode={setToolMode}
-            onOpenBestiary={() => bestiaryRef.current?.open()}
-            onOpenEquip={() => equipRef.current?.open()}
+            onOpenBestiary={handleOpenBestiary}
+            onOpenEquip={handleOpenEquip}
+            onHudAction={handleHudAction}
             onBuildPaletteLayout={handleBuildPaletteLayout}
-            onPaletteDragStart={handlePaletteDragStart}
-            onPaletteDragUpdate={handlePaletteDragUpdate}
-            onPaletteDragEnd={handlePaletteDragEnd}
+            paletteDrag={paletteDrag}
             onRefreshGame={refreshGame}
           />
 
-          <QuestDialogOverlay
-            steps={currentQuestDialog}
-            stepIndex={questDialogIndex}
-            blocking={currentDialogBlocking}
-            petName={petName}
-            petImageUrl={petImageUrl}
-            playerName={user?.pet?.customName || user?.pet?.name || farm.name || 'Player'}
-            speakerName={questOverlaySpeakerName}
-            speakerImageUrl={questOverlaySpeakerImageUrl}
-            rewards={currentDialogRewards}
-            itemDefs={itemDefs}
-            onAdvance={advanceQuestDialog}
-          />
-
-          <Shop
-            ref={shopRef}
-            gems={gems}
-            itemDefs={itemDefs}
-            inventory={inventory}
-            onPurchase={purchaseItem}
-            activeHighlight={activeHighlight}
-            onOpenChange={setShopOpen}
-            onCategorySelect={onShopCategorySelect}
-          />
-
-          <FarmInfoDrawer
-            ref={farmInfoRef}
-            farm={farm}
-            farmLevel={farmLevel}
-            farmLevels={farmLevels}
-            quests={quests}
-            canUpgrade={canUpgrade}
-            itemDefs={itemDefs}
-            equipped={equipped}
-            onRename={setFarmName}
-            onCompleteQuest={completeQuest}
-          />
-
-          <BestiaryDrawer ref={bestiaryRef} itemDefs={itemDefs} />
+          {dialogOverlay}
+          {celebration}
 
           {/* Bug catch result modal */}
           {lastCatchResult && (
@@ -1276,438 +720,37 @@ export function WorldRenderer() {
             />
           )}
 
-          {/* Loading overlay — theme-aware, circle reveal when ready */}
-          {loadOverlayVisible && (
+          {/* Loading overlay — pet tip screen, then circle reveal when ready */}
+          {scene.loadOverlayVisible && (
             <View style={styles.loadOverlay} pointerEvents="auto">
-              {loadOverlayRevealing ? (
+              {scene.worldReady ? (
                 <CircleRevealOverlay
                   variant="reveal"
                   backgroundColor={theme.colors.background}
-                  onComplete={handleLoadOverlayComplete}
+                  onComplete={scene.onLoadOverlayComplete}
                 />
               ) : (
-                <View style={[styles.loadOverlayBg, { backgroundColor: theme.colors.background }]}>
-                  <View style={styles.loadContent}>
-                    <Text style={styles.loadEmoji}>🌿</Text>
-                    <Text style={[styles.loadTitle, { color: theme.colors.text }]}>Growing your world…</Text>
-                    <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 12 }} />
-                  </View>
-                </View>
+                <SceneLoadingScreen pet={user?.pet} />
               )}
             </View>
           )}
         </>
       )}
 
-      <Shop
-        ref={shopRef}
-        gems={gems}
-        itemDefs={itemDefs}
-        inventory={inventory}
-        onPurchase={purchaseItem}
-        activeHighlight={activeHighlight}
-        onOpenChange={setShopOpen}
-        onCategorySelect={onShopCategorySelect}
-      />
-
-      <CookingDrawer
-        ref={cookingRef}
-        itemDefs={itemDefs}
-        inventory={inventory}
-        onCook={emitCook}
-        cookResult={cookResult}
-        onResultDismiss={clearCookResult}
-        activeHighlight={activeHighlight}
-        onOpenChange={setCookingOpen}
-        tryAutoAdvanceDialog={tryAutoAdvanceDialog}
-      />
-
-      <MailBoxDrawer
-        ref={mailBoxRef}
-        itemDefs={itemDefs}
-        inventory={inventory}
-        onRefreshGame={refreshGame}
-      />
-
-      <SellBoxDrawer
-        ref={sellBoxRef}
-        itemDefs={itemDefs}
-        inventory={inventory}
-        onSellBatch={sellItemsBatch}
-        onSellError={showPetDialog}
-        activeHighlight={activeHighlight}
-        onOpenChange={setSellBoxOpen}
-        tryAutoAdvanceDialog={tryAutoAdvanceDialog}
-      />
-
-      <FoodDishDrawer
-        ref={foodDishRef}
-        itemDefs={itemDefs}
-        inventory={inventory}
-        foodDishQueues={foodDishQueues}
-        onAddToDish={addToFoodDish}
-        onError={showPetDialog}
-        activeHighlight={activeHighlight}
-        onOpenChange={setFoodDishOpen}
-        tryAutoAdvanceDialog={tryAutoAdvanceDialog}
-      />
-
-      <CraftingDrawer
-        ref={craftingRef}
-        itemDefs={itemDefs}
-        inventory={inventory}
-        onCraft={emitCraft}
-        craftResult={craftResult}
-        onResultDismiss={clearCraftResult}
-      />
-
-      <WellDrawer
-        ref={wellRef}
-        onCollect={emitCollectWater}
-        result={collectWaterResult}
-        onResultDismiss={clearCollectWaterResult}
-      />
-
-      <FishingShopDrawer
-        ref={fishingShopRef}
-        gems={gems}
-        itemDefs={itemDefs}
-        inventory={inventory}
-        onPurchase={purchaseItem}
-      />
-
-      <EquipDrawer
-        ref={equipRef}
-        equipped={equipped}
-        inventory={inventory}
-        itemDefs={itemDefs}
-        onEquip={equipItem}
-        activeHighlight={activeHighlight}
-        onOpenChange={setEquipOpen}
-        tryAutoAdvanceDialog={tryAutoAdvanceDialog}
-      />
-
-      <CropInfoDrawer
-        ref={cropInfoRef}
-        crop={cropInfoTarget}
-        itemDefs={itemDefs}
-        onHarvest={(col, row) => { selectTile(col, row); }}
-        onDismiss={() => setCropInfoTarget(null)}
-      />
-
-      {pendingInteraction && pendingInteraction.type === 'open_modal' && pendingInteraction.payload && (
-        <InteractionModal
-          payload={pendingInteraction.payload}
-          onClose={clearInteraction}
-        />
-      )}
+      <GameDrawers ref={drawersRef} />
 
       <SceneTransition
         isTransitioning={isTransitioning}
         targetScene={targetScene ?? activeScene}
         onConcealComplete={applySceneChange}
         onComplete={completeTransition}
-        waitForSceneAssets={waitForSceneAssets}
+        waitForSceneAssets={scene.waitForSceneAssets}
       />
     </View>
   );
 }
 
 // ─── Palette Drag Preview (with reject animation) ───────────────────────────
-
-function PaletteDragPreviewView({
-  preview,
-  cameraScale,
-  rejectScale,
-  rejectOpacity,
-}: {
-  preview: { itemType: string; def: import('./types').ItemDefinition; x: number; y: number };
-  cameraScale: number;
-  rejectScale: SharedValue<number>;
-  rejectOpacity: SharedValue<number>;
-}) {
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: rejectScale.value }],
-    opacity: rejectOpacity.value,
-  }));
-  const size = preview.def.cols * TILE_SIZE * cameraScale;
-  const height = preview.def.rows * TILE_SIZE * cameraScale;
-  return (
-    <Animated.View
-      style={[
-        styles.paletteDragPreview,
-        {
-          width: size,
-          height,
-          left: preview.x - size / 2,
-          top: preview.y - height / 2,
-        },
-        animatedStyle,
-      ]}
-      pointerEvents="none"
-    >
-      {preview.def.imageUrl ? (
-        <CachedImage
-          source={{ uri: preview.def.imageUrl }}
-          style={{ width: '100%', height: '100%' }}
-          resizeMode="contain"
-        />
-      ) : (
-        <Text style={[styles.paletteDragPreviewEmoji, { fontSize: 28 * cameraScale }]}>
-          {preview.def.emoji}
-        </Text>
-      )}
-    </Animated.View>
-  );
-}
-
-// ─── Interaction Modal ──────────────────────────────────────────────────────
-
-function InteractionModal({ payload, onClose }: { payload: string; onClose: () => void }) {
-  const { theme } = useTheme();
-  const title = MODAL_TITLES[payload] ?? payload;
-  return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={modalStyles.backdrop} onPress={onClose}>
-        <View style={modalStyles.card}>
-          <Text style={modalStyles.title}>{title}</Text>
-          <Text style={modalStyles.body}>Coming soon!</Text>
-          <Pressable style={[modalStyles.closeBtn, { backgroundColor: theme.colors.primary }]} onPress={onClose}>
-            <Text style={modalStyles.closeBtnText}>Close</Text>
-          </Pressable>
-        </View>
-      </Pressable>
-    </Modal>
-  );
-}
-
-const MODAL_TITLES: Record<string, string> = {
-  cooking: 'Cooking Pot',
-  house: 'House',
-};
-
-// ─── Multiplayer Top Bar ────────────────────────────────────────────────────
-
-function MPTopBar({
-  sceneName,
-  farmLevel,
-  gems,
-  isAdmin,
-}: {
-  sceneName: string;
-  farmLevel: number;
-  gems: number;
-  isAdmin?: boolean;
-}) {
-  const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const colors = theme.colors;
-  const [stressTestModalVisible, setStressTestModalVisible] = useState(false);
-
-  return (
-    <View style={[mpTopStyles.root, { top: insets.top + 8 }]} pointerEvents="box-none">
-      <View style={mpTopStyles.topRow}>
-        <View style={[mpTopStyles.pill, { backgroundColor: colors.surface }]}>
-          <Text style={[mpTopStyles.pillText, { color: colors.text }]}>{sceneName}</Text>
-          <View style={[mpTopStyles.sep, { backgroundColor: colors.border }]} />
-          <GemIcon size={14} />
-          <Text style={[mpTopStyles.gemCount, { color: colors.gemColor ?? colors.accent }]}>{gems.toLocaleString()}</Text>
-          <View style={[mpTopStyles.lvlBadge, { backgroundColor: colors.primary }]}>
-            <Text style={[mpTopStyles.lvlText, { color: colors.onPrimary ?? '#fff' }]}>Lv.{farmLevel}</Text>
-          </View>
-        </View>
-      </View>
-      {isAdmin && (
-        <Pressable
-          style={[mpTopStyles.stressTestBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={() => setStressTestModalVisible(true)}
-        >
-          <Text style={[mpTopStyles.stressTestBtnText, { color: colors.text }]}>Stress Test</Text>
-        </Pressable>
-      )}
-      <StressTestModal
-        visible={stressTestModalVisible}
-        onClose={() => setStressTestModalVisible(false)}
-      />
-    </View>
-  );
-}
-
-function StressTestModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { theme } = useTheme();
-  const colors = theme.colors;
-  const [count, setCount] = useState(10);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<string | null>(null);
-
-  const handleSpawn = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setLastResult(null);
-    try {
-      const res = await api.spawnStressTestBots(count);
-      setLastResult(`Spawned ${res.spawned} bots`);
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to spawn bots');
-    } finally {
-      setLoading(false);
-    }
-  }, [count]);
-
-  const handleRemove = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setLastResult(null);
-    try {
-      const res = await api.removeStressTestBots();
-      setLastResult(`Removed ${res.removed} bots`);
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to remove bots');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  if (!visible) return null;
-
-  return (
-    <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={stressTestModalStyles.overlay} onPress={onClose}>
-        <Pressable style={[stressTestModalStyles.content, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
-          <Text style={[stressTestModalStyles.title, { color: colors.text }]}>Multiplayer Stress Test</Text>
-          <Text style={[stressTestModalStyles.desc, { color: colors.textMuted }]}>
-            Spawn bot players that wander and fish. You see them via WebSocket — the server emits their updates to your connection.
-          </Text>
-          <View style={stressTestModalStyles.row}>
-            <Text style={[stressTestModalStyles.label, { color: colors.text }]}>Count:</Text>
-            <View style={stressTestModalStyles.countRow}>
-              {[5, 10, 15, 20, 30].map((n) => (
-                <Pressable
-                  key={n}
-                  style={[
-                    stressTestModalStyles.countBtn,
-                    { backgroundColor: count === n ? colors.primary : colors.border + '40', borderColor: colors.border },
-                  ]}
-                  onPress={() => setCount(n)}
-                >
-                  <Text style={[stressTestModalStyles.countBtnText, { color: count === n ? colors.onPrimary ?? '#fff' : colors.text }]}>{n}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-          {error && <Text style={[stressTestModalStyles.error, { color: colors.error ?? '#f44336' }]}>{error}</Text>}
-          {lastResult && <Text style={[stressTestModalStyles.result, { color: colors.primary }]}>{lastResult}</Text>}
-          <View style={stressTestModalStyles.actions}>
-            <Pressable
-              style={[stressTestModalStyles.btn, stressTestModalStyles.btnPrimary, { backgroundColor: colors.primary }]}
-              onPress={handleSpawn}
-              disabled={loading}
-            >
-              <Text style={[stressTestModalStyles.btnText, { color: colors.onPrimary ?? '#fff' }]}>
-                {loading ? '...' : 'Spawn Bots'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[stressTestModalStyles.btn, { backgroundColor: colors.border + '80', borderColor: colors.border }]}
-              onPress={handleRemove}
-              disabled={loading}
-            >
-              <Text style={[stressTestModalStyles.btnText, { color: colors.text }]}>Remove Bots</Text>
-            </Pressable>
-          </View>
-          <Pressable style={[stressTestModalStyles.closeBtn, { borderColor: colors.border }]} onPress={onClose}>
-            <Text style={[stressTestModalStyles.closeBtnText, { color: colors.text }]}>Close</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-const stressTestModalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  content: {
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 340,
-  },
-  title: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  desc: { fontSize: 13, marginBottom: 16, lineHeight: 20 },
-  row: { marginBottom: 12 },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  countRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  countBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  countBtnText: { fontSize: 14, fontWeight: '600' },
-  error: { fontSize: 13, marginBottom: 8 },
-  result: { fontSize: 13, marginBottom: 8, fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  btn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
-  btnPrimary: {},
-  btnText: { fontSize: 15, fontWeight: '600' },
-  closeBtn: {
-    marginTop: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  closeBtnText: { fontSize: 14, fontWeight: '600' },
-});
-
-const mpTopStyles = StyleSheet.create({
-  root: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    zIndex: 10,
-  },
-  topRow: { flexDirection: 'row', alignItems: 'center' },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  pillText: { fontSize: 13, fontWeight: '700' },
-  sep: { width: 1, height: 14, marginHorizontal: 2 },
-  gemEmoji: { fontSize: 14 },
-  gemCount: { fontSize: 13, fontWeight: '700' },
-  lvlBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  lvlText: { fontSize: 10, fontWeight: '800' },
-  stressTestBtn: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  stressTestBtnText: { fontSize: 12, fontWeight: '600' },
-});
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
@@ -1739,273 +782,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     zIndex: 50,
   },
-  paletteDragPreview: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 500,
-    backgroundColor: 'transparent',
-  },
-  paletteDragPreviewEmoji: { fontWeight: 'bold' },
   loadOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 10000,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loadOverlayBg: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadContent: {
-    alignItems: 'center',
-  },
-  loadEmoji: {
-    fontSize: 56,
-    marginBottom: 12,
-  },
-  loadTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-});
-
-// ─── Bug Catch Modal ────────────────────────────────────────────────────────
-
-const RARITY_TIERS: { label: string; stars: number; color: string }[] = [
-  { label: 'Tiny', stars: 1, color: '#90CAF9' },
-  { label: 'Small', stars: 2, color: '#67E8F9' },
-  { label: 'Average', stars: 3, color: '#A5D6A7' },
-  { label: 'Large', stars: 4, color: '#FFD54F' },
-  { label: 'Huge', stars: 5, color: '#FF8A65' },
-];
-
-function getRarity(sizeLabel: string) {
-  return RARITY_TIERS.find((t) => t.label === sizeLabel) ?? RARITY_TIERS[2];
-}
-
-function StarRow({ filled, total, color, dimColor }: { filled: number; total: number; color: string; dimColor: string }) {
-  const stars = [];
-  for (let i = 0; i < total; i++) {
-    stars.push(
-      <Text key={i} style={{ fontSize: 16, color: i < filled ? color : dimColor, marginHorizontal: 0.5 }}>★</Text>,
-    );
-  }
-  return <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>{stars}</View>;
-}
-
-function BugCatchModal({
-  result,
-  imageUrl,
-  onDismiss,
-}: {
-  result: BugCatchResult;
-  imageUrl?: string | null;
-  onDismiss: () => void;
-}) {
-  const { themeMode } = useTheme();
-  const dark = themeMode === 'dark';
-  const rarity = getRarity(result.sizeLabel);
-  return (
-    <ItemRewardModal
-      title="Caught!"
-      label={result.label}
-      imageUrl={imageUrl}
-      emoji="🐛"
-      accentColor={rarity.color}
-      extraContent={
-        <>
-          <StarRow filled={rarity.stars} total={5} color={rarity.color} dimColor={dark ? '#48484A' : '#E0E0E0'} />
-          <View style={[cmStyles.sizePill, { backgroundColor: rarity.color }]}>
-            <Text style={cmStyles.sizePillText}>{result.sizeLabel} · {result.size.toFixed(2)}x</Text>
-          </View>
-        </>
-      }
-      onDismiss={onDismiss}
-    />
-  );
-}
-
-// ─── Balloon Pop Modal ───────────────────────────────────────────────────────
-
-function BalloonPopModal({
-  result,
-  imageUrl,
-  onDismiss,
-}: {
-  result: BalloonPopResult;
-  imageUrl?: string | null;
-  onDismiss: () => void;
-}) {
-  const isGemsOnly = result.itemType === 'gems';
-  return (
-    <ItemRewardModal
-      title="Popped!"
-      label={isGemsOnly ? `+${result.gemsAwarded ?? 0} Gems` : `You got ${result.label}!`}
-      imageUrl={isGemsOnly ? undefined : imageUrl}
-      emoji="🎈"
-      qty={isGemsOnly ? undefined : result.qty}
-      gemsAwarded={result.gemsAwarded}
-      accentColor="#A855F7"
-      onDismiss={onDismiss}
-    />
-  );
-}
-
-// ─── Fossil Dig Modal ───────────────────────────────────────────────────────
-
-function FossilDigModal({
-  result,
-  imageUrl,
-  onDismiss,
-}: {
-  result: FossilDigResult;
-  imageUrl?: string | null;
-  onDismiss: () => void;
-}) {
-  return (
-    <ItemRewardModal
-      title="Dug up!"
-      label={`You got ${result.label}!`}
-      imageUrl={imageUrl}
-      emoji="🦴"
-      qty={result.qty}
-      accentColor="#D97706"
-      onDismiss={onDismiss}
-    />
-  );
-}
-
-const cmStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    borderRadius: 22,
-    padding: 18,
-    width: '88%',
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 14,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  imageWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bugImage: {
-    width: 56,
-    height: 56,
-  },
-  infoCol: {
-    flex: 1,
-    gap: 2,
-  },
-  caughtLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
-  bugName: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  sizePill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginTop: 4,
-  },
-  sizePillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: 0.3,
-  },
-  gemBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-  },
-  gemAmount: {
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  gemLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  dismissBtn: {
-    marginTop: 14,
-    alignSelf: 'stretch',
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  dismissBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 0.3,
-  },
-});
-
-const modalStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 28,
-    width: '80%',
-    alignItems: 'center',
-    gap: 12,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  body: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-  },
-  closeBtn: {
-    marginTop: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  closeBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
   },
 });

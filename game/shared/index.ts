@@ -10,4 +10,5 @@ export {
   type DrawerHighlightType,
 } from './drawerHighlightConfig';
 export { HighlightableItem } from './HighlightableItem';
+export { QuestHighlightGlow } from './QuestHighlightGlow';
 export { useDrawerHighlight } from './useDrawerHighlight';

@@ -24,8 +24,7 @@ import {
   type ColorValue,
 } from 'react-native';
 import { CachedImage } from '@/components/ui/CachedImage';
-import { GemIcon } from '@/components/ui/GemIcon';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { CurrencyIcon } from './CurrencyIcon';
 import { Ionicons } from '@expo/vector-icons';
 import type { ItemCategory, ItemDefinition, InventorySlot } from './types';
 import type { QuestHighlight } from './types';
@@ -33,6 +32,8 @@ import { ITEM_CATEGORIES } from './types';
 import { SUB_CATEGORY_LABELS } from '@/components/admin-item-form/constants';
 import { AppDrawer, type AppDrawerRef } from '@/components/ui/AppDrawer';
 import { SellItemSelector } from './SellItemSelector';
+import { pushItemGains } from './itemGainStore';
+import { ItemGainToastHost } from './ItemGainToastHost';
 import { useTheme } from '@/store/ThemeProvider';
 import { api, type ShopBanner } from '@/lib/api';
 import { spacing, radius } from '@/constants/theme';
@@ -64,6 +65,12 @@ export interface ShopDrawerRef {
 interface ShopDrawerProps {
   config: ShopDrawerConfig;
   gems: number;
+  /** Player farm level — items requiring a higher farm level are hidden. */
+  farmLevel: number;
+  /** Player pet level (average of skills) — items requiring a higher pet level are hidden. */
+  petLevel: number;
+  /** Farming skill level — seed shop unlocks gate on this. */
+  farmingSkillLevel?: number;
   itemDefs: Record<string, ItemDefinition>;
   inventory?: InventorySlot[];
   onPurchase: (itemType: string) => void;
@@ -99,6 +106,22 @@ function isAvailable(def: ItemDefinition): boolean {
   return new Date(def.availableUntil).getTime() > Date.now();
 }
 
+/** Level gates (farm / pet / farming skill). Cost is intentionally not part of this — unaffordable items still show. */
+function meetsLevelReqs(
+  def: ItemDefinition,
+  farmLevel: number,
+  petLevel: number,
+  farmingSkillLevel: number,
+): boolean {
+  const needFarm = def.farmLevel ?? 0;
+  const needPet = def.petLevel ?? 0;
+  const needFarming = def.farmingSkillLevel ?? 0;
+  if (needFarm > 0 && farmLevel < needFarm) return false;
+  if (needPet > 0 && petLevel < needPet) return false;
+  if (needFarming > 0 && farmingSkillLevel < needFarming) return false;
+  return true;
+}
+
 /** All items are sellable; default sell price is 0. */
 function getSellPrice(def: ItemDefinition): number {
   return typeof def.sellPrice === 'number' ? def.sellPrice : 0;
@@ -106,22 +129,49 @@ function getSellPrice(def: ItemDefinition): number {
 
 // ─── ShopCard (compact 3-col) ────────────────────────────────────────────────
 
+function shopCurrencyOf(def: ItemDefinition): string | null {
+  const raw = def.shopCurrency?.trim();
+  return raw && raw !== 'gems' ? raw : null;
+}
+
+/** Banner-only if shopSection is set and is not this shop's own section (e.g. fishing_shop). */
+function isBannerExclusive(def: ItemDefinition, nativeSection?: string): boolean {
+  const section = def.shopSection?.trim();
+  if (!section) return false;
+  if (nativeSection && section === nativeSection) return false;
+  return true;
+}
+
+function titleCaseKey(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function isRecipeScroll(def: ItemDefinition): boolean {
+  return def.subCategory === 'crafting_recipe' || def.subCategory === 'cooking_recipe';
+}
+
 function ShopCard({
   def,
   gems,
+  currencyQty,
+  currencyDef,
+  ownedQty,
   onBuy,
-  justPurchased,
   colors,
   highlighted,
 }: {
   def: ItemDefinition;
   gems: number;
+  currencyQty: number;
+  currencyDef?: ItemDefinition;
+  ownedQty: number;
   onBuy: () => void;
-  justPurchased: boolean;
   colors: ColorPalette;
   highlighted?: boolean;
 }) {
-  const canAfford = gems >= (def.gemPrice ?? 0);
+  const altCurrency = shopCurrencyOf(def);
+  const price = def.gemPrice ?? 0;
+  const canAfford = altCurrency ? currencyQty >= price : gems >= price;
   const available = isAvailable(def);
   const disabled = !canAfford || !available;
   const hasTimer = !!def.availableUntil && available;
@@ -153,16 +203,15 @@ function ShopCard({
         {def.label}
       </Text>
       <View style={s.cardPrice}>
-        <GemIcon size={11} />
+        <CurrencyIcon def={altCurrency ? currencyDef : null} size={11} />
         <Text style={[s.priceNum, { color: disabled ? colors.textMuted : (colors.gemColor ?? colors.accent) }]}>
           {def.gemPrice}
         </Text>
       </View>
-      {justPurchased && (
-        <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.delay(400).duration(250)} style={s.purchaseOverlay}>
-          <Ionicons name="checkmark-circle" size={24} color="#fff" />
-          <Text style={s.purchaseText}>Bought!</Text>
-        </Animated.View>
+      {ownedQty > 0 && (
+        <View style={[s.ownedBadge, { backgroundColor: colors.primary }]} pointerEvents="none">
+          <Text style={s.ownedBadgeText}>×{ownedQty} owned</Text>
+        </View>
       )}
     </Pressable>
   );
@@ -208,7 +257,22 @@ function BannerCard({
 // ─── ShopDrawer ────────────────────────────────────────────────────────────────
 
 export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function ShopDrawer(
-  { config, gems, itemDefs, inventory = [], onPurchase, onSell, onSellBatch, onClose, activeHighlight, onOpenChange, onCategorySelect },
+  {
+    config,
+    gems,
+    farmLevel,
+    petLevel,
+    farmingSkillLevel = 0,
+    itemDefs,
+    inventory = [],
+    onPurchase,
+    onSell,
+    onSellBatch,
+    onClose,
+    activeHighlight,
+    onOpenChange,
+    onCategorySelect,
+  },
   ref,
 ) {
   const { theme } = useTheme();
@@ -218,8 +282,9 @@ export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function Sh
   const [shopConfig, setShopConfig] = useState<{ banners: ShopBanner[] } | null>(null);
   const [activeSection, setActiveSection] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [lastPurchased, setLastPurchased] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'buy' | 'sell'>('buy');
+  /** Optimistic owned counts so the chip ticks up instantly while spam-buying. */
+  const [ownedOverride, setOwnedOverride] = useState<Record<string, number>>({});
 
   const { title, sectionKey, includeSubCategories, excludeSection, sellCategories = [], useSubCategoryChips = false, excludeCategories = [] } = config;
   const hasSell = !!(onSell || onSellBatch);
@@ -229,20 +294,36 @@ export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function Sh
     close: () => drawerRef.current?.close(),
   }));
 
+  const loadBanners = useCallback(() => {
+    api
+      .getShopConfig(sectionKey)
+      .then((result) => setShopConfig({ banners: result.banners ?? [] }))
+      .catch(() => setShopConfig({ banners: [] }));
+  }, [sectionKey]);
+
   const handleDrawerChange = useCallback(
     (index: number) => {
-      onOpenChange?.(index >= 0);
+      const open = index >= 0;
+      onOpenChange?.(open);
+      if (open) loadBanners();
     },
-    [onOpenChange],
+    [onOpenChange, loadBanners],
   );
 
   useEffect(() => {
-    api.getShopConfig(sectionKey).then(setShopConfig).catch(() => setShopConfig({ banners: [] }));
-  }, [sectionKey]);
+    loadBanners();
+  }, [loadBanners]);
 
-  // Buy list: filter by sectionKey, includeSubCategories, excludeSection, excludeCategories
+  // Buy list: section filters + hide items the player hasn't unlocked by level.
+  // Unaffordable items still appear (greyed out); level-locked ones do not.
   const buyableItems = useMemo(() => {
-    let base = Object.values(itemDefs).filter((d) => d.buyable && (d.gemPrice ?? 0) > 0);
+    let base = Object.values(itemDefs).filter(
+      (d) =>
+        d.buyable &&
+        (d.category !== 'material' || isRecipeScroll(d)) &&
+        (d.gemPrice ?? 0) > 0 &&
+        meetsLevelReqs(d, farmLevel, petLevel, farmingSkillLevel),
+    );
     if (excludeCategories.length) base = base.filter((d) => !excludeCategories.includes(d.category));
     if (sectionKey) {
       const matchSection = (d: ItemDefinition) =>
@@ -252,13 +333,37 @@ export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function Sh
     }
     if (excludeSection) return base.filter((d) => !d.shopSection || d.shopSection !== excludeSection);
     return base;
-  }, [itemDefs, sectionKey, includeSubCategories, excludeSection, excludeCategories]);
+  }, [itemDefs, sectionKey, includeSubCategories, excludeSection, excludeCategories, farmLevel, petLevel, farmingSkillLevel]);
 
-  const banners = shopConfig?.banners ?? [];
+  const banners = useMemo(() => {
+    const byKey = new Map<string, ShopBanner>();
+    for (const b of shopConfig?.banners ?? []) {
+      if (b?.key) byKey.set(b.key, b);
+    }
+    // If the config request failed, still show a chip for banner-only stock.
+    for (const d of buyableItems) {
+      if (!isBannerExclusive(d, sectionKey)) continue;
+      const key = d.shopSection!.trim();
+      if (byKey.has(key)) continue;
+      byKey.set(key, {
+        id: key,
+        key,
+        label: titleCaseKey(key),
+        displayImage: false,
+        sortOrder: 999,
+      });
+    }
+    return Array.from(byKey.values()).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }, [shopConfig, buyableItems, sectionKey]);
+
+  const catalogItems = useMemo(
+    () => buyableItems.filter((d) => !isBannerExclusive(d, sectionKey)),
+    [buyableItems, sectionKey],
+  );
 
   const categoryChips = useMemo((): SectionDef[] => {
     if (useSubCategoryChips) {
-      const subCats = new Set(buyableItems.map((d) => d.subCategory).filter(Boolean)) as Set<string>;
+      const subCats = new Set(catalogItems.map((d) => d.subCategory).filter(Boolean)) as Set<string>;
       return [
         { key: 'all', label: 'All' },
         ...Array.from(subCats)
@@ -266,23 +371,25 @@ export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function Sh
           .map((k) => ({ key: k, label: SUB_CATEGORY_LABELS[k] ?? k })),
       ];
     }
-    const cats = new Set(buyableItems.map((d) => d.category));
+    const cats = new Set(catalogItems.map((d) => d.category));
     return [
       { key: 'all', label: 'All' },
       ...ITEM_CATEGORIES.filter((c) => c.key !== 'all' && cats.has(c.key)),
     ];
-  }, [buyableItems, useSubCategoryChips]);
+  }, [catalogItems, useSubCategoryChips]);
 
   const filtered = useMemo(() => {
     const available = buyableItems.filter(isAvailable);
     const q = searchQuery.trim().toLowerCase();
-    if (q) return available.filter((d) => d.label.toLowerCase().includes(q));
-    if (activeSection === 'all') return available;
     const isBanner = banners.some((b) => b.key === activeSection);
-    if (isBanner) return available.filter((d) => d.shopSection === activeSection);
-    if (useSubCategoryChips) return available.filter((d) => d.subCategory === activeSection);
-    return available.filter((d) => d.category === activeSection);
-  }, [buyableItems, searchQuery, activeSection, banners, useSubCategoryChips]);
+    const pool = isBanner
+      ? available.filter((d) => d.shopSection === activeSection)
+      : available.filter((d) => !isBannerExclusive(d, sectionKey));
+    if (q) return pool.filter((d) => d.label.toLowerCase().includes(q));
+    if (activeSection === 'all' || isBanner) return pool;
+    if (useSubCategoryChips) return pool.filter((d) => d.subCategory === activeSection);
+    return pool.filter((d) => d.category === activeSection);
+  }, [buyableItems, searchQuery, activeSection, banners, sectionKey, useSubCategoryChips]);
 
   // Sell list: all inventory items (all items are sellable), excluding excludeCategories
   const sellableSlots = useMemo(() => {
@@ -294,13 +401,40 @@ export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function Sh
     });
   }, [inventory, itemDefs, excludeCategories]);
 
+  const inventoryOwned = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const slot of inventory) {
+      if (slot.qty > 0) map.set(slot.itemType, (map.get(slot.itemType) ?? 0) + slot.qty);
+    }
+    return map;
+  }, [inventory]);
+
+  const getOwnedQty = useCallback(
+    (itemType: string) =>
+      Math.max(inventoryOwned.get(itemType) ?? 0, ownedOverride[itemType] ?? 0),
+    [inventoryOwned, ownedOverride],
+  );
+
   const handlePurchase = useCallback(
     (itemType: string) => {
-      setLastPurchased(itemType);
       onPurchase(itemType);
-      setTimeout(() => setLastPurchased(null), 1000);
+      setOwnedOverride((prev) => {
+        const current = Math.max(inventoryOwned.get(itemType) ?? 0, prev[itemType] ?? 0);
+        return { ...prev, [itemType]: current + 1 };
+      });
+      const def = itemDefs[itemType];
+      pushItemGains(
+        [{
+          itemType,
+          qty: 1,
+          label: def?.label || itemType,
+          imageUrl: def?.imageUrl,
+          emoji: def?.emoji,
+        }],
+        'bought',
+      );
     },
-    [onPurchase],
+    [onPurchase, itemDefs, inventoryOwned],
   );
 
   const isItemHighlighted = useCallback(
@@ -346,6 +480,7 @@ export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function Sh
       showCloseButton
       scrollable
       headerRight={headerRight}
+      overlay={<ItemGainToastHost toneFilter="bought" />}
       onClose={onClose}
       onChange={handleDrawerChange}
     >
@@ -371,17 +506,25 @@ export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function Sh
       </View>
 
       {banners.length > 0 && !searchQuery && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.bannerScroll} style={s.bannerScrollOuter}>
-          {banners.map((b) => (
-            <BannerCard
-              key={b.key}
-              banner={b}
-              active={activeSection === b.key}
-              onPress={() => setActiveSection((prev) => (prev === b.key ? 'all' : b.key))}
-              colors={colors}
-            />
-          ))}
-        </ScrollView>
+        <View style={s.bannerStrip}>
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.bannerScroll}
+            style={s.bannerScrollOuter}
+          >
+            {banners.map((b) => (
+              <BannerCard
+                key={b.key}
+                banner={b}
+                active={activeSection === b.key}
+                onPress={() => setActiveSection((prev) => (prev === b.key ? 'all' : b.key))}
+                colors={colors}
+              />
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       {!searchQuery && (
@@ -419,8 +562,10 @@ export const ShopDrawer = forwardRef<ShopDrawerRef, ShopDrawerProps>(function Sh
             key={def.itemType}
             def={def}
             gems={gems}
+            currencyQty={shopCurrencyOf(def) ? (inventoryOwned.get(shopCurrencyOf(def)!) ?? 0) : 0}
+            currencyDef={shopCurrencyOf(def) ? itemDefs[shopCurrencyOf(def)!] : undefined}
+            ownedQty={getOwnedQty(def.itemType)}
             onBuy={() => handlePurchase(def.itemType)}
-            justPurchased={lastPurchased === def.itemType}
             colors={colors}
             highlighted={isItemHighlighted(def.itemType)}
           />
@@ -464,7 +609,8 @@ const s = StyleSheet.create({
     marginBottom: spacing.md,
   },
   searchInput: { flex: 1, fontSize: 14, fontWeight: '500', paddingVertical: 0 },
-  bannerScrollOuter: { flexGrow: 0, marginBottom: spacing.md },
+  bannerStrip: { height: 90, marginBottom: spacing.md },
+  bannerScrollOuter: { flexGrow: 0, height: 90 },
   bannerScroll: { gap: 10, paddingHorizontal: 2 },
   banner: {
     width: 200,
@@ -500,6 +646,19 @@ const s = StyleSheet.create({
   cardImg: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6, overflow: 'hidden' },
   cardImgInner: { width: 32, height: 32 },
   cardEmoji: { fontSize: 22 },
+  ownedBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignItems: 'center',
+    maxWidth: '90%',
+    zIndex: 10,
+    elevation: 10,
+  },
+  ownedBadgeText: { fontSize: 8, fontWeight: '800', color: '#fff' },
   timerBadge: {
     position: 'absolute',
     bottom: 2,
@@ -517,15 +676,6 @@ const s = StyleSheet.create({
   cardPrice: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   priceGem: { fontSize: 11 },
   priceNum: { fontSize: 12, fontWeight: '800' },
-  purchaseOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(110, 231, 183, 0.9)',
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  purchaseText: { fontSize: 11, fontWeight: '800', color: '#fff' },
   emptyWrap: { width: '100%', alignItems: 'center', paddingVertical: 40, gap: 10 },
   emptyText: { fontSize: 14, textAlign: 'center' },
   headerRightRow: { flexDirection: 'row', gap: 6, marginRight: 8 },

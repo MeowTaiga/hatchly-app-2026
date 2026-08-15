@@ -7,10 +7,13 @@
 export const HAND_TOOL_SUB_CATEGORIES = [
   'fishing_poles',
   'fishing_pole',
+  'net',
   'bug_net',
   'bug_nets',
   'pickaxe',
   'pickaxes',
+  'axe',
+  'axes',
   'shovel',
   'shovels',
 ] as const;
@@ -18,8 +21,9 @@ export const HAND_TOOL_SUB_CATEGORIES = [
 export type HandToolSubCategory = (typeof HAND_TOOL_SUB_CATEGORIES)[number];
 
 export const FISHING_POLE_SUB_CATEGORIES = ['fishing_poles', 'fishing_pole'] as const;
-export const BUG_NET_SUB_CATEGORIES = ['bug_net', 'bug_nets'] as const;
+export const BUG_NET_SUB_CATEGORIES = ['net', 'bug_net', 'bug_nets'] as const;
 export const PICKAXE_SUB_CATEGORIES = ['pickaxe', 'pickaxes'] as const;
+export const AXE_SUB_CATEGORIES = ['axe', 'axes'] as const;
 export const SHOVEL_SUB_CATEGORIES = ['shovel', 'shovels'] as const;
 
 export type EquipSlotKey = 'handTool' | 'bobber' | 'bait' | 'chair';
@@ -53,6 +57,11 @@ export function isPickaxeSubCategory(subCategory: string | undefined): boolean {
   return (PICKAXE_SUB_CATEGORIES as readonly string[]).includes(subCategory);
 }
 
+export function isAxeSubCategory(subCategory: string | undefined): boolean {
+  if (!subCategory) return false;
+  return (AXE_SUB_CATEGORIES as readonly string[]).includes(subCategory);
+}
+
 export function isShovelSubCategory(subCategory: string | undefined): boolean {
   if (!subCategory) return false;
   return (SHOVEL_SUB_CATEGORIES as readonly string[]).includes(subCategory);
@@ -79,6 +88,11 @@ export function isBugNet(itemType: string | undefined, itemDefs: Record<string, 
 export function isPickaxe(itemType: string | undefined, itemDefs: Record<string, { subCategory?: string }>): boolean {
   if (!itemType) return false;
   return isPickaxeSubCategory(itemDefs[itemType]?.subCategory);
+}
+
+export function isAxe(itemType: string | undefined, itemDefs: Record<string, { subCategory?: string }>): boolean {
+  if (!itemType) return false;
+  return isAxeSubCategory(itemDefs[itemType]?.subCategory);
 }
 
 export function isShovel(itemType: string | undefined, itemDefs: Record<string, { subCategory?: string }>): boolean {

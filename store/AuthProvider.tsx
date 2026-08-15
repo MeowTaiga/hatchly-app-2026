@@ -1,6 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useReducer } from 'react';
+import React, { createContext, useCallback, useContext, useLayoutEffect, useReducer, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { setApiTokenGetter, api, type ApiUser } from '@/lib/api';
+import { setApiTokenGetter, api, type ApiSkills, type ApiUser } from '@/lib/api';
+import { hasSkillsPayload, resolveCompanionLevel } from '@/constants/skills';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,8 @@ interface AuthActions {
   refreshUser: () => Promise<void>;
   /** Merges updated user from API response (e.g. after PATCH) for instant UI. */
   mergeUserFromApi: (user: ApiUser) => Promise<void>;
+  /** Apply skill progress from a game:state_update without a full /me refetch. */
+  applySkillProgress: (skills: ApiSkills, totalLevel: number) => Promise<void>;
 }
 
 type AuthContextValue = AuthState & AuthActions;
@@ -84,24 +87,82 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 // ─── Provider ───────────────────────────────────────────────────────────────
 
+function normalizeUserSkills(user: ApiUser, fallback?: ApiUser | null): ApiUser {
+  // Prefer the server skills payload even when every skill is 0.
+  // Only fall back to cached skills when /me omitted skills entirely.
+  const serverSkills = hasSkillsPayload(user.skills)
+    ? user.skills
+    : hasSkillsPayload(user.pet?.skills)
+      ? user.pet?.skills
+      : undefined;
+
+  const skills =
+    serverSkills ??
+    (hasSkillsPayload(fallback?.skills)
+      ? fallback?.skills
+      : hasSkillsPayload(fallback?.pet?.skills)
+        ? fallback?.pet?.skills
+        : undefined);
+
+  const fromServer = !!serverSkills;
+  const totalLevel = resolveCompanionLevel({
+    totalLevel: fromServer ? user.totalLevel : (user.totalLevel ?? fallback?.totalLevel),
+    petTotalLevel: fromServer
+      ? user.pet?.totalLevel
+      : (user.pet?.totalLevel ?? fallback?.pet?.totalLevel),
+    petLevel: fromServer ? user.pet?.level : (user.pet?.level ?? fallback?.pet?.level),
+    skills,
+  });
+
+  return {
+    ...user,
+    skills,
+    totalLevel,
+    pet: user.pet
+      ? {
+          ...user.pet,
+          skills: hasSkillsPayload(user.pet.skills) ? user.pet.skills : skills,
+          level: fromServer
+            ? resolveCompanionLevel({
+                totalLevel: user.pet.level,
+                petTotalLevel: user.pet.totalLevel,
+                skills: hasSkillsPayload(user.pet.skills) ? user.pet.skills : skills,
+              })
+            : resolveCompanionLevel({
+                totalLevel: user.pet.level,
+                petTotalLevel: user.pet.totalLevel,
+                petLevel: totalLevel,
+                skills: hasSkillsPayload(user.pet.skills) ? user.pet.skills : skills,
+              }),
+          totalLevel: fromServer
+            ? (user.pet.totalLevel ?? totalLevel)
+            : (user.pet.totalLevel ?? totalLevel),
+        }
+      : user.pet,
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
+  const userRef = useRef<ApiUser | null>(null);
+  userRef.current = state.user;
 
-  // Keep the API client in sync with the current token
-  useEffect(() => {
+  // Layout so the token is on the client before child effects fetch.
+  useLayoutEffect(() => {
     setApiTokenGetter(() => state.token);
   }, [state.token]);
 
   const setAuth = useCallback(async (token: string, user: ApiUser, isNewUser: boolean) => {
+    const normalized = normalizeUserSkills(user);
     await SecureStore.setItemAsync(TOKEN_KEY, token);
-    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(normalized));
 
     // Trust the backend's onboardingComplete flag for existing users
-    const hasCompleted = !isNewUser && user.onboardingComplete === true;
+    const hasCompleted = !isNewUser && normalized.onboardingComplete === true;
     if (hasCompleted) {
       await SecureStore.setItemAsync(ONBOARDING_KEY, 'true');
     }
-    dispatch({ type: 'SET_AUTH', token, user, hasCompletedOnboarding: hasCompleted });
+    dispatch({ type: 'SET_AUTH', token, user: normalized, hasCompletedOnboarding: hasCompleted });
   }, []);
 
   const completeOnboarding = useCallback(async () => {
@@ -109,7 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Fetch fresh user data so pet, subscription, etc. are up to date
     try {
-      const freshUser = await api.getMe();
+      const freshUser = normalizeUserSkills(await api.getMe(), userRef.current);
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(freshUser));
       dispatch({ type: 'SET_AUTH', token: state.token!, user: freshUser, hasCompletedOnboarding: true });
     } catch {
@@ -127,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = useCallback(async () => {
     if (!state.token) return;
     try {
-      const freshUser = await api.getMe();
+      const freshUser = normalizeUserSkills(await api.getMe(), userRef.current);
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(freshUser));
       dispatch({ type: 'REFRESH_USER', user: freshUser });
     } catch {
@@ -136,9 +197,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [state.token]);
 
   const mergeUserFromApi = useCallback(async (user: ApiUser) => {
-    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
-    dispatch({ type: 'REFRESH_USER', user });
+    const normalized = normalizeUserSkills(user, userRef.current);
+    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(normalized));
+    dispatch({ type: 'REFRESH_USER', user: normalized });
   }, []);
+
+  const applySkillProgress = useCallback(
+    async (skills: ApiSkills, totalLevel: number) => {
+      const prev = userRef.current;
+      if (!prev) return;
+      const resolvedLevel = resolveCompanionLevel({
+        totalLevel,
+        petLevel: prev.pet?.level,
+        skills,
+      });
+      const next: ApiUser = {
+        ...prev,
+        skills,
+        totalLevel: resolvedLevel,
+        pet: prev.pet
+          ? {
+              ...prev.pet,
+              level: resolvedLevel,
+              skills,
+              totalLevel: resolvedLevel,
+              xp: 0,
+              xpToNextLevel: 1,
+            }
+          : prev.pet,
+      };
+      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(next));
+      dispatch({ type: 'REFRESH_USER', user: next });
+    },
+    [],
+  );
 
   const hydrate = useCallback(async () => {
     try {
@@ -149,11 +241,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (token && user) {
         setApiTokenGetter(() => token);
+        const cached = user as ApiUser;
         try {
-          user = await api.getMe();
+          user = normalizeUserSkills(
+            await Promise.race([
+              api.getMe(),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('getMe timeout')), 8000),
+              ),
+            ]),
+            cached,
+          );
           await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
         } catch {
-          // Offline / token expired — fall back to cached user
+          // Offline / token expired / unreachable API — fall back to cached user
+          user = normalizeUserSkills(cached);
         }
       }
 
@@ -180,7 +282,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, setAuth, completeOnboarding, logout, hydrate, refreshUser, mergeUserFromApi }}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        setAuth,
+        completeOnboarding,
+        logout,
+        hydrate,
+        refreshUser,
+        mergeUserFromApi,
+        applySkillProgress,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

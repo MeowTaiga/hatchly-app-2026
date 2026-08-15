@@ -836,6 +836,7 @@ function PlanCard({
   onPress: () => void;
 }) {
   const { theme } = useTheme();
+  const styles = useMemo(() => createSubscriptionStyles(theme), [theme]);
   return (
     <Pressable onPress={onPress} style={[styles.planCard, selected && styles.planCardSelected]}>
       <LinearGradient

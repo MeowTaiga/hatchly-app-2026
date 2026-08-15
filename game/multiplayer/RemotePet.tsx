@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { CachedImage } from '@/components/ui/CachedImage';
 import { useTheme } from '@/store/ThemeProvider';
@@ -13,7 +13,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { TILE_SIZE } from '../constants';
 import { useWalkAnimation } from './useWalkAnimation';
-import { equipmentStyles } from '../creature/pet/equipmentStyles';
+import {
+  buildEquipEmojiStyle,
+  buildEquipImageStyle,
+  buildEquipWrapStyle,
+  resolveEquipOverlay,
+  type EquipOverlayConfig,
+} from '../creature/pet/equipmentStyles';
 import type { RemotePlayer } from './types';
 
 const PET_SIZE = TILE_SIZE * 2;
@@ -22,7 +28,7 @@ const NAMETAG_WIDTH = 120;
 const BUBBLE_DISMISS_MS = 5000;
 
 import type { FishResultBubble } from './MultiplayerProvider';
-import { RARITY_BUBBLE_COLORS, formatFishSize, FishStarRow } from './fishBubbleUtils';
+import { bubblePalette, catchBubbleSubtitle, FishStarRow } from './fishBubbleUtils';
 
 const POLE_WADDLE_DEG = 2;
 const POLE_REEL_DEG = 8;
@@ -33,7 +39,7 @@ interface RemotePetProps {
   fishResult?: FishResultBubble | null;
   fishFailed?: boolean;
   isReeling?: boolean;
-  itemDefs?: Record<string, { imageUrl?: string; emoji?: string }>;
+  itemDefs?: Record<string, { imageUrl?: string; emoji?: string; equipOverlay?: EquipOverlayConfig }>;
 }
 
 export const RemotePet = React.memo(function RemotePet({ player, chatText, fishResult, fishFailed, isReeling = false, itemDefs }: RemotePetProps) {
@@ -51,8 +57,32 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
 
   const displayImageUrl =
     (player.activePose && player.petPose?.[player.activePose]) || player.petImageUrl;
-  const handToolDef = player.equippedHandTool && itemDefs?.[player.equippedHandTool];
-  const chairDef = player.equippedChair && itemDefs?.[player.equippedChair];
+  const handToolDef = player.equippedHandTool
+    ? itemDefs?.[player.equippedHandTool]
+    : undefined;
+  const chairDef = player.equippedChair
+    ? itemDefs?.[player.equippedChair]
+    : undefined;
+
+  const handResolved = useMemo(
+    () => resolveEquipOverlay('handTool', handToolDef?.equipOverlay),
+    [handToolDef?.equipOverlay],
+  );
+  const chairResolved = useMemo(
+    () => resolveEquipOverlay('chair', chairDef?.equipOverlay),
+    [chairDef?.equipOverlay],
+  );
+  const handWrapStyle = useMemo(() => buildEquipWrapStyle('handTool', handResolved), [handResolved]);
+  const handImageStyle = useMemo(() => buildEquipImageStyle('handTool', handResolved), [handResolved]);
+  const handEmojiStyle = useMemo(() => buildEquipEmojiStyle('handTool', handResolved), [handResolved]);
+  const chairWrapStyle = useMemo(() => buildEquipWrapStyle('chair', chairResolved), [chairResolved]);
+  const chairImageStyle = useMemo(() => buildEquipImageStyle('chair', chairResolved), [chairResolved]);
+  const chairEmojiStyle = useMemo(() => buildEquipEmojiStyle('chair', chairResolved), [chairResolved]);
+  const chairRotStyle = useMemo(
+    () => ({ transform: [{ rotate: `${chairResolved.rotationDeg}deg` }] }),
+    [chairResolved.rotationDeg],
+  );
+  const handBaseRotation = handResolved.rotationDeg;
 
   useEffect(() => {
     if (!chatText) return;
@@ -100,6 +130,8 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
   }, [isReeling]);
 
   const positionStyle = useAnimatedStyle(() => ({
+    // Feet Y as zIndex so live scene props can occlude remote pets.
+    zIndex: Math.round(animY.value),
     transform: [
       { translateX: animX.value - HALF_PET },
       { translateY: animY.value - PET_SIZE - bounceOffset.value },
@@ -114,10 +146,7 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
   const poleAnimatedStyle = useAnimatedStyle(() => {
     const rot = isReelingSv.value ? reelRotation.value * POLE_REEL_DEG : bounceOffset.value * POLE_WADDLE_DEG;
     return {
-      transform: [
-        { scaleX: -1 },
-        { rotate: `${-50 + rot}deg` },
-      ],
+      transform: [{ rotate: `${handBaseRotation + rot}deg` }],
     };
   });
 
@@ -125,20 +154,20 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
     <Animated.View style={[styles.container, positionStyle]}>
       {/* Equipment rendered behind pet */}
       {chairDef && (chairDef.imageUrl || chairDef.emoji) && (
-        <View style={equipmentStyles.chairWrap} pointerEvents="none">
+        <View style={[chairWrapStyle, chairRotStyle]} pointerEvents="none">
           {chairDef.imageUrl ? (
-            <CachedImage source={{ uri: chairDef.imageUrl }} style={equipmentStyles.chairImage} resizeMode="contain" />
+            <CachedImage source={{ uri: chairDef.imageUrl }} style={chairImageStyle} resizeMode="contain" />
           ) : (
-            <Text style={equipmentStyles.chairEmoji}>{chairDef.emoji ?? '🪑'}</Text>
+            <Text style={chairEmojiStyle}>{chairDef.emoji ?? '🪑'}</Text>
           )}
         </View>
       )}
       {handToolDef && (handToolDef.imageUrl || handToolDef.emoji) && (
-        <Animated.View style={[equipmentStyles.poleWrap, poleAnimatedStyle]}>
+        <Animated.View style={[handWrapStyle, poleAnimatedStyle]}>
           {handToolDef.imageUrl ? (
-            <CachedImage source={{ uri: handToolDef.imageUrl }} style={equipmentStyles.poleImage} resizeMode="contain" />
+            <CachedImage source={{ uri: handToolDef.imageUrl }} style={handImageStyle} resizeMode="contain" />
           ) : (
-            <Text style={equipmentStyles.poleEmoji}>{handToolDef.emoji ?? '🔧'}</Text>
+            <Text style={handEmojiStyle}>{handToolDef.emoji ?? '🔧'}</Text>
           )}
         </Animated.View>
       )}
@@ -169,7 +198,8 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
         </Animated.View>
       )}
       {visibleFishResult && (() => {
-        const c = RARITY_BUBBLE_COLORS[visibleFishResult.rarity ?? 'common'];
+        const c = bubblePalette(visibleFishResult.rarity);
+        const isOre = visibleFishResult.kind === 'ore';
         return (
           <Animated.View style={[styles.bubbleAbsolute, styles.fishBalloonHigher, unflipStyle]}>
             <View style={[styles.fishBalloon, { backgroundColor: c.bg }]}>
@@ -181,19 +211,21 @@ export const RemotePet = React.memo(function RemotePet({ player, chatText, fishR
                     resizeMode="contain"
                   />
                 ) : (
-                  <Text style={styles.fishBalloonEmoji}>🐟</Text>
+                  <Text style={styles.fishBalloonEmoji}>{isOre ? '🪨' : '🐟'}</Text>
                 )}
               </View>
               <Text style={[styles.fishBalloonLabel, { color: c.text }]} numberOfLines={1}>
                 {visibleFishResult.label}
               </Text>
-              <FishStarRow
-                sizeLabel={visibleFishResult.sizeLabel}
-                filledColor={c.text}
-                dimColor="rgba(255,255,255,0.4)"
-              />
+              {!isOre && (
+                <FishStarRow
+                  sizeLabel={visibleFishResult.sizeLabel}
+                  filledColor={c.text}
+                  dimColor="rgba(255,255,255,0.4)"
+                />
+              )}
               <Text style={[styles.fishBalloonSize, { color: c.textMuted }]}>
-                {formatFishSize(visibleFishResult.size, visibleFishResult.sizeLabel)}
+                {catchBubbleSubtitle(visibleFishResult)}
               </Text>
               <View style={[styles.chatTail, { backgroundColor: c.bg }]} />
             </View>
@@ -221,7 +253,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'visible',
-    zIndex: 10,
   },
   petImage: {
     width: PET_SIZE,

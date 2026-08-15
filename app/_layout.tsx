@@ -9,10 +9,20 @@ import { ThemeProvider, useTheme } from '@/store/ThemeProvider';
 import { AuthProvider, useAuth } from '@/store/AuthProvider';
 import { OnboardingProvider, useOnboarding } from '@/store/OnboardingProvider';
 import { ToastProvider } from '@/store/ToastProvider';
+import { ItemGainProvider } from '@/game/ItemGainProvider';
 import { SocketProvider } from '@/lib/socket';
+import { peekItemPreview } from '@/lib/itemPreviewCache';
 
 SplashScreen.preventAutoHideAsync();
 
+function resolveItemGainPreview(itemType: string) {
+  const key = itemType.startsWith('unlock:')
+    ? itemType.slice('unlock:'.length)
+    : itemType.startsWith('shop:')
+      ? itemType.slice('shop:'.length)
+      : itemType;
+  return peekItemPreview(key) || peekItemPreview(itemType);
+}
 /**
  * Inner layout — reads auth context and manages splash screen / socket.
  * Separated so it can sit inside the providers.
@@ -63,9 +73,11 @@ export default function RootLayout() {
         <ThemeProvider>
           <BottomSheetModalProvider>
             <ToastProvider>
-              <OnboardingProvider>
-                <InnerLayout />
-              </OnboardingProvider>
+              <ItemGainProvider resolveItem={resolveItemGainPreview}>
+                <OnboardingProvider>
+                  <InnerLayout />
+                </OnboardingProvider>
+              </ItemGainProvider>
             </ToastProvider>
           </BottomSheetModalProvider>
         </ThemeProvider>

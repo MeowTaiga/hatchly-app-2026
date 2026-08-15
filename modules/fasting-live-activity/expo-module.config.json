@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "ios"],
+  "apple": {
+    "modules": ["FastingLiveActivityModule"]
+  },
+  "ios": {
+    "modules": ["FastingLiveActivityModule"]
+  }
+}

@@ -1,167 +1,94 @@
 /**
- * Reusable logic for interacting with placed items (buildings, NPCs, etc.).
- * Used by both farm (grid-based) and multiplayer (placement-based) scenes.
- *
- * When a user taps a placed item with interactAction or NPC dialog,
- * this module handles: open_scene, open_modal, NPC quest dialogs.
+ * What happens when the player taps a placed item — an NPC, a building, or
+ * anything with an interact action. Shared by the farm and multiplayer scenes.
  */
 
-import type {
-  PlacedItem,
-  ItemDefinition,
-  InteractAction,
-  DialogStep,
-  DialogSpeaker,
-  QuestProgress,
-} from './types';
-import { meetsActivationRequirements } from './multiplayer/QuestBubble';
+import type { InteractAction, ItemDefinition, PlacedItem } from './types';
 import { executeAction } from './actionRegistry';
+import {
+  evaluateInteractGate,
+  type InteractGateContext,
+} from './interactGate';
 
 export interface InteractCallbacks {
-  setPendingNpcDialog: (info: {
-    steps: DialogStep[];
-    speaker?: DialogSpeaker;
-    npcItemType: string;
-  } | null) => void;
-  queueNpcDialog: (
-    steps: DialogStep[],
-    speaker?: DialogSpeaker,
-    npcItemType?: string,
-    blocking?: boolean,
-    questIdToComplete?: string,
-  ) => void;
-  optimisticallyActivateQuest?: (questId: string) => void;
-  emitQuestActivateByNpc: (npcItemType: string) => void;
+  /** Reports the conversation. The server replies with whatever the NPC says. */
+  talkToNpc: (npcItemType: string) => void;
   switchScene: (scene: string) => void;
-  /** Either dispatch (for GameProvider) or setPendingInteraction (for MultiplayerScene). */
-  dispatch?: (action: { type: string; [k: string]: unknown }) => void;
+  /** Either dispatch (GameProvider) or setPendingInteraction (MultiplayerScene). */
+  dispatch?: (action: { type: 'SET_INTERACTION'; action: InteractAction | null }) => void;
   setPendingInteraction?: (action: InteractAction | null) => void;
   clearInteraction: () => void;
   emitQuestModalOpened: (payload: string) => void;
+  /** Farm/pet/inventory state for interactAction gates. */
+  gateContext?: InteractGateContext;
+  /** Shown when a gated action is blocked (e.g. pet dialog). */
+  showPetDialog?: (text: string) => void;
+  /** Quest dialog: world_item / open_modal highlights advance when the player taps. */
+  onInteract?: (itemType: string, modalPayload?: string) => void;
 }
 
 /**
- * Attempt to interact with a placed item (NPC dialog or interactAction).
- * Returns true if the interaction was handled, false otherwise.
+ * Handles a tap on a placed item. Returns true when the tap was consumed.
+ *
+ * Tapping an NPC does exactly one thing: tell the server. The server opens any
+ * quest waiting on that NPC, records the talk, and sends back the dialog to
+ * show. Previously the client tried to work out which of five possible dialogs
+ * to display, guessed whether the server would also send one, and skipped the
+ * message entirely when it found nothing — which is why NPCs only answered
+ * sometimes.
  */
 export function tryInteractWithPlacedItem(
   existing: PlacedItem,
   itemDefs: Record<string, ItemDefinition>,
-  quests: QuestProgress[] | undefined,
-  farmLevel: number,
-  petLevel: number,
   callbacks: InteractCallbacks,
 ): boolean {
   const def = itemDefs[existing.itemType];
   if (!def) return false;
 
-  // NPC: handle quest dialogs
   if (def.category === 'npc') {
-    const completableQuestWithEndDialog = quests?.find(
-      (q) =>
-        q.status === 'active' &&
-        q.canComplete &&
-        q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === existing.itemType) &&
-        q.endDialog?.length,
-    );
-    const activeQuestWithDialog = quests?.find(
-      (q) =>
-        q.status === 'active' &&
-        q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === existing.itemType) &&
-        q.startDialog?.length &&
-        !(q.canComplete && q.endDialog?.length),
-    );
-    const lockedQuestAvailable = quests?.find(
-      (q) =>
-        q.status === 'locked' &&
-        q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === existing.itemType) &&
-        q.startDialog?.length &&
-        meetsActivationRequirements(q, petLevel, farmLevel, quests ?? []),
-    );
-    const completedQuestWithEndDialog = quests?.find(
-      (q) =>
-        q.status === 'completed' &&
-        q.triggers?.some((t) => t.type === 'talk_to_npc' && t.npcItemType === existing.itemType) &&
-        q.endDialog?.length,
-    );
-    const steps =
-      completableQuestWithEndDialog?.endDialog ??
-      activeQuestWithDialog?.startDialog ??
-      lockedQuestAvailable?.startDialog ??
-      completedQuestWithEndDialog?.endDialog ??
-      def.npcDialog ??
-      [];
-    const useNpcSpeaker = completableQuestWithEndDialog
-      ? completableQuestWithEndDialog.endDialogSpeaker !== 'pet'
-      : activeQuestWithDialog
-        ? activeQuestWithDialog.startDialogSpeaker !== 'pet'
-        : lockedQuestAvailable
-          ? lockedQuestAvailable.startDialogSpeaker !== 'pet'
-          : completedQuestWithEndDialog
-            ? completedQuestWithEndDialog.endDialogSpeaker !== 'pet'
-            : true;
-
-    if (steps.length) {
-      const dialogInfo = {
-        steps,
-        speaker: useNpcSpeaker ? { name: def.label, imageUrl: def.imageUrl ?? null } : undefined,
-        npcItemType: existing.itemType,
-      };
-      callbacks.setPendingNpcDialog(dialogInfo);
-      if (lockedQuestAvailable) {
-        callbacks.queueNpcDialog(dialogInfo.steps, dialogInfo.speaker, dialogInfo.npcItemType);
-        callbacks.optimisticallyActivateQuest?.(lockedQuestAvailable.questId);
-      }
-      if (completableQuestWithEndDialog) {
-        callbacks.queueNpcDialog(
-          dialogInfo.steps,
-          dialogInfo.speaker,
-          dialogInfo.npcItemType,
-          undefined,
-          completableQuestWithEndDialog.questId,
-        );
-      }
-      if (!completableQuestWithEndDialog && !completedQuestWithEndDialog) {
-        callbacks.emitQuestActivateByNpc(existing.itemType);
-      }
-    }
+    callbacks.talkToNpc(existing.itemType);
     return true;
   }
 
-  // interactAction: open_scene, open_modal, etc.
   const act = def.interactAction;
-  if (act && act.type !== 'none') {
-    if (act.type === 'open_scene' && act.payload) {
-      if (act.payload === 'house') {
-        callbacks.emitQuestModalOpened('house');
-        const houseAction: InteractAction = { type: 'open_modal', payload: 'house' };
-        if (callbacks.setPendingInteraction) {
-          callbacks.setPendingInteraction(houseAction);
-        } else if (callbacks.dispatch) {
-          callbacks.dispatch({ type: 'SET_INTERACTION', action: houseAction });
-        }
-      } else {
-        callbacks.switchScene(act.payload);
-      }
+  if (!act || act.type === 'none') return false;
+
+  if (callbacks.gateContext) {
+    const gate = evaluateInteractGate(act, callbacks.gateContext);
+    if (!gate.ok) {
+      callbacks.showPetDialog?.(gate.message ?? "I can't use that yet…");
+      return true;
+    }
+  }
+
+  const setInteraction = (action: InteractAction) => {
+    if (callbacks.setPendingInteraction) callbacks.setPendingInteraction(action);
+    else callbacks.dispatch?.({ type: 'SET_INTERACTION', action });
+  };
+
+  if (act.type === 'open_scene' && act.payload) {
+    // The house is a modal rather than a real scene.
+    if (act.payload === 'house') {
+      callbacks.emitQuestModalOpened('house');
+      setInteraction({ type: 'open_modal', payload: 'house' });
+      callbacks.onInteract?.(existing.itemType, 'house');
     } else {
-      const anchId = existing.anchorId ?? existing.id;
-      if (act.type === 'open_modal' && act.payload) {
-        callbacks.emitQuestModalOpened(act.payload);
-      }
-      const action: InteractAction = {
-        ...act,
-        anchorId: act.payload === 'food_dish' ? anchId : undefined,
-      };
-      if (!executeAction(action, callbacks.clearInteraction)) {
-        if (callbacks.setPendingInteraction) {
-          callbacks.setPendingInteraction(action);
-        } else if (callbacks.dispatch) {
-          callbacks.dispatch({ type: 'SET_INTERACTION', action });
-        }
-      }
+      callbacks.switchScene(act.payload);
+      callbacks.onInteract?.(existing.itemType, act.payload);
     }
     return true;
   }
 
-  return false;
+  if (act.type === 'open_modal' && act.payload) {
+    callbacks.emitQuestModalOpened(act.payload);
+  }
+
+  const action: InteractAction = {
+    ...act,
+    anchorId: act.payload === 'food_dish' ? (existing.anchorId ?? existing.id) : undefined,
+  };
+  if (!executeAction(action, callbacks.clearInteraction)) setInteraction(action);
+  callbacks.onInteract?.(existing.itemType, act.payload);
+
+  return true;
 }

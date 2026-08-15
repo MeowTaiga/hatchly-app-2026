@@ -239,15 +239,11 @@ export function useSeedWizard() {
 
   const allItemsSaved = state.seed.saved && state.ingredient.saved && state.food.saved;
 
-  const seedSlug = state.seed.slug;
   const ingredientSlug = state.ingredient.slug || nameToSlug(deriveIngredientName(state.seed.label));
 
   const harvestYield = useMemo(
-    () => [
-      { itemType: seedSlug, qty: 2 },
-      { itemType: ingredientSlug, qty: 1 },
-    ],
-    [seedSlug, ingredientSlug],
+    () => [{ itemType: ingredientSlug, qty: 1 }],
+    [ingredientSlug],
   );
 
   // ── Save helpers ────────────────────────────────────────────────────────
@@ -398,6 +394,15 @@ export function useSeedWizard() {
     return ok;
   }, [state.step, SAVE_FNS]);
 
+  // ── Image gen ───────────────────────────────────────────────────────────
+
+  const resolveSlug = useCallback((which: 'seed' | 'ingredient' | 'food') => {
+    const stepData = state[which] as ItemStepData;
+    return which === 'ingredient'
+      ? (stepData.slug || nameToSlug(deriveIngredientName(state.seed.label)))
+      : stepData.slug;
+  }, [state]);
+
   const saveAndContinue = useCallback(async () => {
     const ok = await saveCurrentStep();
     if (ok) {
@@ -436,15 +441,6 @@ export function useSeedWizard() {
     if (state.step > 0) dispatch({ type: 'SET_STEP', step: state.step - 1 });
     else router.back();
   }, [state.step, router]);
-
-  // ── Image gen ───────────────────────────────────────────────────────────
-
-  const resolveSlug = useCallback((which: 'seed' | 'ingredient' | 'food') => {
-    const stepData = state[which] as ItemStepData;
-    return which === 'ingredient'
-      ? (stepData.slug || nameToSlug(deriveIngredientName(state.seed.label)))
-      : stepData.slug;
-  }, [state]);
 
   const generateImage = useCallback(async (which: 'seed' | 'ingredient' | 'food') => {
     const slug = resolveSlug(which);

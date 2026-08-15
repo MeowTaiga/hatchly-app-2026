@@ -1,0 +1,335 @@
+Small clutter & story props — all craftable.
+
+Difficulty is 1–5 (crafting minigame). Recipes use 1–4 ingredients.
+Uses the same materials as items.txt (Plank, Iron, Cloth, Glass, Rope, Crystal, Wood, Stick, Stone, Scrap).
+
+# Plush & Toys
+| Item               | Recipe                     | Difficulty |
+| ------------------ | -------------------------- | ---------- |
+| Giant Ghost Plush  | 10 Cloth, 2 Crystal        | 3          |
+| Tiny Ghost Plush   | 3 Cloth, 1 Crystal         | 1          |
+| Calico Cat Plush   | 4 Cloth                    | 1          |
+| Bunny Plush        | 4 Cloth                    | 1          |
+| Fox Plush          | 4 Cloth                    | 1          |
+| Penguin Plush      | 4 Cloth                    | 1          |
+| Dinosaur Plush     | 5 Cloth                    | 2          |
+| Whale Plush        | 5 Cloth                    | 2          |
+| Sleepy Bear Plush  | 5 Cloth                    | 1          |
+| Axolotl Plush      | 4 Cloth, 1 Glass           | 2          |
+| Stacked Plushies   | 8 Cloth                    | 2          |
+| Plush Hammock      | 6 Cloth, 2 Rope, 2 Stick   | 2          |
+| Toy Train Set      | 4 Plank, 2 Iron            | 2          |
+| Toy Castle         | 6 Plank, 2 Cloth           | 2          |
+| Toy Kitchen        | 6 Plank, 2 Iron, 1 Glass   | 3          |
+| Toy Robot          | 4 Iron, 2 Scrap, 1 Glass   | 2          |
+| Toy Rocket         | 3 Iron, 2 Scrap, 1 Glass   | 2          |
+| Toy Boat           | 4 Plank, 1 Cloth           | 1          |
+| Dollhouse          | 8 Plank, 4 Cloth, 2 Glass  | 4          |
+| Marble Track       | 6 Plank, 2 Glass           | 2          |
+
+# Desk & Office
+| Item                 | Recipe                    | Difficulty |
+| -------------------- | ------------------------- | ---------- |
+| Open Notebook        | 2 Cloth, 1 Plank          | 1          |
+| Closed Journal       | 2 Cloth, 1 Plank          | 1          |
+| Pencil Cup           | 2 Plank                   | 1          |
+| Fountain Pen         | 1 Iron, 1 Glass           | 1          |
+| Paint Brush Cup      | 2 Plank, 1 Cloth          | 1          |
+| Sketchbook           | 2 Cloth, 1 Plank          | 1          |
+| Sticky Notes         | 1 Cloth                   | 1          |
+| Wooden Clipboard     | 2 Plank, 1 Iron           | 1          |
+| Letter Organizer     | 4 Plank                   | 1          |
+| File Box             | 4 Plank, 1 Iron           | 2          |
+| Magnifying Glass     | 1 Iron, 2 Glass           | 1          |
+| Reading Glasses      | 1 Iron, 2 Glass           | 1          |
+| Typewriter           | 6 Iron, 2 Scrap, 1 Glass  | 3          |
+| Polaroid Camera      | 3 Iron, 2 Glass, 1 Scrap  | 2          |
+| Film Camera          | 4 Iron, 2 Glass           | 2          |
+| Desk Globe           | 2 Plank, 1 Iron, 1 Glass  | 2          |
+| Mini Telescope       | 3 Iron, 2 Glass           | 2          |
+| Pocket Watch Display | 2 Iron, 1 Glass, 1 Plank  | 2          |
+| Desktop Calendar     | 2 Plank, 1 Cloth          | 1          |
+| Hourglass            | 2 Glass, 1 Iron, 1 Stone  | 2          |
+
+# Kitchen Clutter
+| Item                 | Recipe                   | Difficulty |
+| -------------------- | ------------------------ | ---------- |
+| Bread Basket         | 3 Plank, 1 Cloth         | 1          |
+| Cookie Jar           | 3 Glass, 1 Iron          | 1          |
+| Flour Sack           | 3 Cloth                  | 1          |
+| Rolling Pin          | 2 Plank, 1 Iron          | 1          |
+| Cutting Board        | 3 Plank                  | 1          |
+| Wooden Spoon Holder  | 3 Plank                  | 1          |
+| Spice Rack           | 4 Plank, 2 Glass         | 2          |
+| Tea Kettle           | 4 Iron                   | 2          |
+| Tea Cup Set          | 3 Glass, 1 Cloth         | 1          |
+| Coffee Mug Rack      | 3 Plank, 2 Iron          | 2          |
+| Fruit Basket         | 3 Plank, 1 Rope          | 1          |
+| Egg Basket           | 2 Plank, 1 Rope          | 1          |
+| Butter Dish          | 2 Glass, 1 Plank         | 1          |
+| Jam Jar              | 2 Glass                  | 1          |
+| Honey Pot            | 2 Glass, 1 Plank         | 1          |
+| Cookie Plate         | 2 Glass                  | 1          |
+| Pie Cooling Rack     | 3 Iron                   | 1          |
+| Recipe Book Stand    | 3 Plank, 1 Iron          | 1          |
+| Mixing Bowl          | 2 Iron, 1 Wood           | 1          |
+| Kitchen Scale        | 3 Iron, 1 Glass          | 2          |
+
+# Plants
+| Item                 | Recipe                    | Difficulty |
+| -------------------- | ------------------------- | ---------- |
+| Tiny Succulent       | 1 Stone, 1 Cloth          | 1          |
+| Hanging Fern         | 2 Cloth, 1 Rope, 1 Stone  | 1          |
+| Snake Plant          | 2 Stone, 2 Cloth          | 1          |
+| Monstera Pot         | 3 Stone, 2 Cloth          | 2          |
+| Bonsai Tree          | 3 Wood, 2 Stone           | 2          |
+| Lavender Pot         | 2 Stone, 2 Cloth          | 1          |
+| Herb Box             | 3 Plank, 1 Stone          | 1          |
+| Sunflower Vase       | 2 Glass, 1 Stone, 1 Cloth | 1          |
+| Wildflower Bouquet   | 2 Cloth, 1 Glass          | 1          |
+| Cactus Pot           | 2 Stone, 1 Cloth          | 1          |
+| Bamboo Pot           | 3 Stick, 2 Stone          | 1          |
+| Moss Terrarium       | 3 Glass, 2 Stone          | 2          |
+| Crystal Terrarium    | 3 Glass, 2 Crystal        | 2          |
+| Fern Basket          | 2 Cloth, 1 Rope, 1 Stone  | 1          |
+| Ivy Pot              | 2 Stone, 2 Cloth          | 1          |
+| Orchid Vase          | 2 Glass, 2 Cloth          | 2          |
+| Tulip Bouquet        | 2 Cloth, 1 Glass          | 1          |
+| Rose Bouquet         | 2 Cloth, 1 Glass          | 1          |
+| Daisy Vase           | 2 Glass, 1 Cloth          | 1          |
+| Clover Pot           | 1 Stone, 1 Cloth          | 1          |
+
+# Cozy Decorations
+| Item                   | Recipe                    | Difficulty |
+| ---------------------- | ------------------------- | ---------- |
+| Scented Candle         | 1 Glass, 1 Cloth          | 1          |
+| Candle Trio            | 3 Glass, 1 Cloth          | 1          |
+| Wax Warmer             | 2 Iron, 1 Glass           | 2          |
+| Incense Holder         | 2 Stone, 1 Stick          | 1          |
+| Aroma Diffuser         | 2 Glass, 1 Iron           | 2          |
+| Fireplace Log Basket   | 4 Wood, 2 Rope            | 2          |
+| Folded Blanket         | 4 Cloth                   | 1          |
+| Knitted Blanket Basket | 6 Cloth, 2 Plank          | 2          |
+| Throw Pillow           | 3 Cloth                   | 1          |
+| Reading Pillow         | 4 Cloth                   | 1          |
+| Floor Cushion Stack    | 6 Cloth                   | 2          |
+| Knit Pouf              | 5 Cloth                   | 2          |
+| Woven Basket           | 3 Plank, 2 Rope           | 1          |
+| Woven Picnic Basket    | 4 Plank, 2 Cloth, 1 Rope  | 2          |
+| Cozy Slippers          | 3 Cloth                   | 1          |
+| House Robe Hook        | 2 Iron, 1 Cloth           | 1          |
+| Sleep Mask             | 2 Cloth                   | 1          |
+| Hot Water Bottle       | 2 Cloth, 1 Iron           | 1          |
+| Yarn Basket            | 4 Cloth, 2 Plank          | 1          |
+| Knitting Needles       | 2 Stick, 1 Iron           | 1          |
+
+# Hobby Items
+| Item                | Recipe                      | Difficulty |
+| ------------------- | --------------------------- | ---------- |
+| Acoustic Guitar     | 6 Plank, 2 Iron, 1 Cloth    | 3          |
+| Ukulele             | 4 Plank, 1 Iron, 1 Cloth    | 2          |
+| Violin              | 4 Plank, 1 Iron, 1 Cloth    | 2          |
+| Grand Piano         | 12 Plank, 6 Iron, 4 Cloth   | 5          |
+| Keyboard            | 6 Iron, 2 Plank, 2 Scrap    | 3          |
+| Drum Set            | 8 Plank, 4 Iron, 2 Cloth    | 4          |
+| Vinyl Record Player | 4 Iron, 2 Plank, 2 Scrap    | 3          |
+| Record Shelf        | 6 Plank, 2 Iron             | 2          |
+| Cassette Player     | 3 Iron, 2 Scrap             | 2          |
+| CD Tower            | 4 Plank, 2 Iron             | 2          |
+| Music Stand         | 4 Iron, 1 Plank             | 2          |
+| Sheet Music         | 2 Cloth, 1 Plank            | 1          |
+| Painting Easel      | 6 Plank, 2 Cloth            | 2          |
+| Paint Palette       | 2 Plank, 1 Cloth            | 1          |
+| Sculpture Stand     | 4 Stone, 2 Plank            | 2          |
+| Sewing Machine      | 6 Iron, 2 Cloth, 2 Scrap    | 3          |
+| Embroidery Hoop     | 2 Stick, 2 Cloth            | 1          |
+| Pottery Wheel       | 6 Stone, 2 Iron, 2 Plank    | 3          |
+| Chess Table         | 8 Plank, 2 Iron             | 3          |
+| Card Table          | 6 Plank, 2 Cloth            | 2          |
+
+# Laundry & Utility
+| Item                | Recipe                    | Difficulty |
+| ------------------- | ------------------------- | ---------- |
+| Laundry Basket      | 4 Plank, 2 Cloth          | 1          |
+| Folded Towels       | 4 Cloth                   | 1          |
+| Ironing Board       | 4 Plank, 2 Iron, 1 Cloth  | 2          |
+| Laundry Drying Rack | 6 Stick, 2 Iron           | 2          |
+| Clothes Hamper      | 4 Plank, 3 Cloth          | 2          |
+| Shoe Rack           | 5 Plank, 1 Iron           | 2          |
+| Umbrella Stand      | 3 Iron, 1 Plank           | 1          |
+| Coat Basket         | 3 Plank, 2 Cloth          | 1          |
+| Cleaning Bucket     | 3 Iron                    | 1          |
+| Mop Bucket          | 3 Iron, 1 Stick           | 1          |
+| Vacuum Cleaner      | 6 Iron, 2 Scrap, 1 Cloth  | 3          |
+| Storage Tote        | 3 Cloth, 1 Plank          | 1          |
+| Utility Shelf       | 6 Plank, 2 Iron           | 2          |
+| Utility Toolbox     | 5 Iron, 2 Scrap           | 2          |
+| Supply Crate        | 5 Plank, 1 Iron           | 1          |
+
+# Pet & Animal Items
+| Item               | Recipe                     | Difficulty |
+| ------------------ | -------------------------- | ---------- |
+| Fish Tank          | 8 Glass, 4 Iron, 2 Stone   | 4          |
+| Goldfish Bowl      | 4 Glass, 1 Stone           | 2          |
+| Bird Cage          | 6 Iron, 2 Stick            | 2          |
+| Hamster Habitat    | 4 Glass, 3 Plank, 1 Iron   | 3          |
+| Cat Bed            | 6 Cloth, 2 Plank           | 2          |
+| Dog Bed            | 8 Cloth, 2 Plank           | 2          |
+| Scratching Post    | 4 Plank, 3 Cloth           | 2          |
+| Pet Food Bowl      | 2 Iron                     | 1          |
+| Water Bowl         | 2 Iron                     | 1          |
+| Pet Toy Basket     | 3 Cloth, 2 Plank           | 1          |
+| Aquarium Plants    | 2 Glass, 1 Stone, 1 Cloth  | 1          |
+| Tiny Pond          | 6 Stone, 2 Glass           | 3          |
+| Butterfly Habitat  | 4 Glass, 2 Stick, 1 Cloth  | 2          |
+| Bee Hotel          | 4 Plank, 2 Stick           | 2          |
+| Ant Farm           | 4 Glass, 2 Stone           | 2          |
+
+# Wall Decor
+| Item                  | Recipe                     | Difficulty |
+| --------------------- | -------------------------- | ---------- |
+| Framed Landscape      | 3 Plank, 1 Cloth           | 1          |
+| Framed Cat Portrait   | 3 Plank, 1 Cloth           | 1          |
+| Ghost Portrait        | 3 Plank, 1 Cloth, 1 Crystal| 2          |
+| Mountain Painting     | 3 Plank, 1 Cloth           | 1          |
+| Ocean Painting        | 3 Plank, 1 Cloth           | 1          |
+| Family Photo Frame    | 2 Plank, 1 Glass           | 1          |
+| Empty Picture Frame   | 2 Plank                    | 1          |
+| Hanging Mirror        | 3 Glass, 2 Iron            | 2          |
+| Decorative Clock      | 3 Plank, 1 Iron            | 2          |
+| Harvest Wreath        | 4 Stick, 2 Cloth, 1 Rope   | 1          |
+| Dreamcatcher          | 3 Stick, 2 Cloth, 1 Crystal| 2          |
+| Hanging Lantern       | 2 Iron, 2 Glass, 1 Rope    | 2          |
+| Hanging Plants        | 2 Cloth, 1 Rope, 1 Stone   | 1          |
+| Simple Wall Shelf     | 4 Plank, 1 Iron            | 1          |
+| Peg Board             | 4 Plank, 2 Iron            | 1          |
+| Macramé Hanging       | 4 Cloth, 2 Rope            | 2          |
+| Tapestry              | 6 Cloth                    | 2          |
+| Bulletin Board        | 4 Plank, 1 Cloth           | 1          |
+| Seasonal Banner       | 4 Cloth, 1 Stick           | 1          |
+| Neon Ghost Sign       | 3 Iron, 2 Glass, 1 Crystal | 3          |
+
+# Bathroom
+| Item                 | Recipe                    | Difficulty |
+| -------------------- | ------------------------- | ---------- |
+| Wooden Bathtub       | 10 Plank, 4 Iron          | 4          |
+| Bubble Bath Bucket   | 3 Iron, 1 Cloth           | 1          |
+| Soap Dish            | 1 Stone, 1 Glass          | 1          |
+| Toothbrush Cup       | 1 Glass                   | 1          |
+| Towel Rack           | 3 Iron, 2 Cloth           | 1          |
+| Bathroom Mirror      | 3 Glass, 2 Iron           | 2          |
+| Bamboo Stool         | 4 Stick, 1 Rope           | 1          |
+| Laundry Shelf        | 5 Plank, 1 Iron           | 2          |
+| Toilet Paper Basket  | 2 Plank, 1 Cloth          | 1          |
+| Bath Tray            | 4 Plank, 1 Glass          | 2          |
+| Rubber Duck          | 2 Cloth, 1 Glass          | 1          |
+| Bath Candle          | 1 Glass, 1 Cloth          | 1          |
+| Wooden Bucket        | 4 Plank, 1 Iron           | 1          |
+| Bamboo Divider       | 8 Stick, 2 Rope           | 3          |
+| Bath Plant           | 2 Stone, 2 Cloth          | 1          |
+
+# Bedroom Details
+| Item                  | Recipe                     | Difficulty |
+| --------------------- | -------------------------- | ---------- |
+| Alarm Clock           | 3 Iron, 1 Glass            | 2          |
+| Bed Tray              | 4 Plank, 1 Iron            | 2          |
+| Open Book             | 2 Cloth, 1 Plank           | 1          |
+| Pajama Basket         | 3 Cloth, 2 Plank           | 1          |
+| Dream Journal         | 2 Cloth, 1 Crystal         | 1          |
+| Night Light           | 2 Glass, 1 Iron            | 1          |
+| Moon Lamp             | 2 Glass, 1 Iron, 1 Crystal | 2          |
+| Star Projector        | 3 Iron, 2 Glass, 1 Crystal | 3          |
+| Sleeping Ghost Plush  | 5 Cloth, 1 Crystal         | 2          |
+| Slipper Rack          | 3 Plank, 1 Iron            | 1          |
+| Jewelry Box           | 4 Plank, 1 Glass, 1 Crystal| 2          |
+| Vanity Mirror         | 4 Glass, 3 Plank, 1 Iron   | 3          |
+| Makeup Organizer      | 3 Plank, 2 Glass           | 2          |
+| Perfume Tray          | 2 Glass, 1 Plank           | 1          |
+| Ring Display          | 2 Plank, 1 Crystal         | 1          |
+
+# Seasonal Oddities
+| Item                      | Recipe                      | Difficulty |
+| ------------------------- | --------------------------- | ---------- |
+| Candy Bucket              | 3 Iron, 1 Cloth             | 1          |
+| Haunted Doll              | 4 Cloth, 1 Crystal          | 2          |
+| Spider Terrarium          | 3 Glass, 1 Stone, 1 Crystal | 2          |
+| Raven Perch               | 4 Stick, 1 Iron             | 2          |
+| Potion Bottle Collection  | 4 Glass, 1 Crystal          | 2          |
+| Spellbook Stack           | 4 Cloth, 1 Crystal          | 2          |
+| Crystal Ball              | 4 Glass, 2 Crystal          | 3          |
+| Floating Candle           | 2 Glass, 1 Crystal          | 2          |
+| Ghost in a Jar            | 3 Glass, 2 Cloth, 1 Crystal | 2          |
+| Monster Plush             | 5 Cloth                     | 2          |
+| Tiny Grave Marker         | 4 Stone                     | 1          |
+| Witch Hat Stand           | 3 Plank, 2 Cloth            | 2          |
+| Pumpkin Candy Bowl        | 2 Wood, 1 Glass             | 1          |
+| Skeleton Plush            | 4 Cloth, 1 Iron             | 2          |
+| Vampire Portrait          | 3 Plank, 1 Cloth, 1 Crystal | 2          |
+
+# Fantasy & Mystical
+| Item                    | Recipe                       | Difficulty |
+| ----------------------- | ---------------------------- | ---------- |
+| Floating Spellbook      | 3 Cloth, 2 Crystal           | 3          |
+| Enchanted Crystal       | 4 Crystal, 1 Glass           | 2          |
+| Moon Dial               | 3 Stone, 2 Crystal           | 2          |
+| Star Globe              | 3 Glass, 2 Crystal           | 3          |
+| Tiny Planet Model       | 2 Stone, 2 Crystal, 1 Glass  | 2          |
+| Crystal Cluster         | 5 Crystal                    | 2          |
+| Fairy Lantern           | 2 Glass, 1 Iron, 1 Crystal   | 2          |
+| Bottle of Starlight     | 2 Glass, 2 Crystal           | 2          |
+| Dream Orb               | 3 Glass, 2 Crystal           | 3          |
+| Spirit Shrine           | 6 Stone, 3 Crystal, 2 Plank  | 4          |
+| Floating Feather        | 2 Cloth, 1 Crystal           | 1          |
+| Celestial Compass       | 2 Iron, 1 Glass, 1 Crystal   | 2          |
+| Wish Fountain           | 10 Stone, 4 Crystal, 2 Glass | 5          |
+| Moonstone Pedestal      | 6 Stone, 3 Crystal           | 3          |
+| Constellation Mobile    | 3 Stick, 2 Crystal, 1 Glass  | 2          |
+| Mini Observatory        | 8 Plank, 4 Glass, 2 Crystal  | 4          |
+| Magic Scroll Rack       | 5 Plank, 2 Cloth, 1 Crystal  | 2          |
+| Spell Components Shelf  | 6 Plank, 2 Glass, 2 Crystal  | 3          |
+| Rune Tablet             | 4 Stone, 1 Crystal           | 2          |
+| Ancient Relic Display   | 4 Plank, 2 Glass, 2 Crystal  | 3          |
+
+# Story Props
+| Item                       | Recipe                      | Difficulty |
+| -------------------------- | --------------------------- | ---------- |
+| Stack of Pizza Boxes       | 3 Plank, 1 Cloth            | 1          |
+| Half-Finished Puzzle       | 2 Plank, 1 Cloth            | 1          |
+| Open Laptop                | 3 Iron, 1 Glass, 1 Scrap    | 2          |
+| Sleeping Cat Cushion       | 5 Cloth                     | 2          |
+| Birdseed Bag               | 3 Cloth                     | 1          |
+| Grocery Bag                | 3 Cloth                     | 1          |
+| Shopping Basket            | 3 Iron, 1 Cloth             | 1          |
+| Camp Backpack              | 4 Cloth, 2 Plank, 1 Rope    | 2          |
+| Hiking Boots               | 3 Cloth, 1 Iron             | 1          |
+| Snow Boots                 | 3 Cloth, 1 Iron             | 1          |
+| Rain Boots                 | 3 Cloth                     | 1          |
+| Skateboard Rack            | 4 Plank, 2 Iron             | 2          |
+| Bicycle Helmet             | 2 Iron, 1 Cloth             | 1          |
+| Fishing Tackle Box         | 4 Iron, 1 Plank, 1 Scrap    | 2          |
+| Bucket of Apples           | 3 Plank, 1 Iron             | 1          |
+| Fresh Bread Basket         | 3 Plank, 1 Cloth            | 1          |
+| Sack of Potatoes           | 3 Cloth                     | 1          |
+| Mushroom Harvest Basket    | 3 Plank, 2 Cloth            | 1          |
+| Flower Delivery Cart       | 8 Plank, 4 Iron, 2 Cloth    | 4          |
+| Tiny Lemonade Stand        | 8 Plank, 2 Cloth, 2 Glass   | 4          |
+| Mail Parcel Stack          | 3 Cloth, 1 Plank            | 1          |
+| Picnic Cooler              | 4 Iron, 2 Plank, 1 Glass    | 2          |
+| Ice Cream Cart             | 8 Iron, 4 Plank, 2 Glass    | 4          |
+| Cookie Sampling Tray       | 3 Plank, 1 Glass            | 1          |
+| Yarn Ball Basket           | 4 Cloth, 2 Plank            | 1          |
+| Board Game Shelf           | 6 Plank, 1 Cloth            | 2          |
+| Puzzle Box                 | 3 Plank, 1 Iron             | 1          |
+| Dice Tray                  | 2 Plank, 1 Cloth            | 1          |
+| Comic Book Stack           | 3 Cloth                     | 1          |
+| Bookmark Collection        | 2 Cloth, 1 Plank            | 1          |
+| Tea Sampler Box            | 3 Plank, 1 Glass            | 1          |
+| Hot Cocoa Tray             | 3 Plank, 1 Glass, 1 Cloth   | 1          |
+| Fresh Laundry Pile         | 5 Cloth                     | 1          |
+| Campfire Marshmallow Kit   | 3 Stick, 1 Cloth            | 1          |
+| Bird Watching Binoculars   | 3 Iron, 2 Glass             | 2          |
+| Treasure Map Display       | 2 Cloth, 1 Plank, 1 Crystal | 2          |
+| Seashell Collection Box    | 3 Plank, 2 Stone            | 1          |
+| Pressed Flower Album       | 2 Cloth, 1 Plank            | 1          |
+| Mini Greenhouse Cabinet    | 8 Glass, 6 Plank, 2 Iron    | 4          |
+| Lucky Bamboo Arrangement   | 3 Stick, 2 Stone, 1 Glass   | 2          |

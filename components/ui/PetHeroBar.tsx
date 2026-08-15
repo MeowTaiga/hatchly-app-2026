@@ -19,6 +19,7 @@ import { useAuth } from '@/store/AuthProvider';
 import { useTheme } from '@/store/ThemeProvider';
 import { CachedImage } from '@/components/ui/CachedImage';
 import { getPoseForContext, useNeutralPoseCycle } from '@/game/creature/pet';
+import { averageSkillProgress, resolveCompanionLevel } from '@/constants/skills';
 
 // ─── Layout Constants ────────────────────────────────────────────────────────
 
@@ -56,9 +57,15 @@ export function PetHeroBar({ activeTabIndex }: PetHeroBarProps) {
   const visible = VISIBLE_TABS.has(activeTabIndex);
   const neutralPoseOverride = useNeutralPoseCycle(visible);
 
-  const xpProgress = pet ? Math.min(pet.xp / Math.max(pet.xpToNextLevel, 1), 1) : 0;
+  const skills = user?.skills ?? pet?.skills;
+  const xpProgress = averageSkillProgress(skills);
   const petName = pet?.customName || pet?.name || 'Buddy';
-  const petLevel = pet?.level ?? 1;
+  const petLevel = resolveCompanionLevel({
+    totalLevel: user?.totalLevel,
+    petTotalLevel: pet?.totalLevel,
+    petLevel: pet?.level,
+    skills,
+  });
   const hunger = pet?.hunger ?? 100;
   const happy = pet?.happy ?? 100;
   const mood = pet?.mood ?? 100;
@@ -75,7 +82,7 @@ export function PetHeroBar({ activeTabIndex }: PetHeroBarProps) {
   return (
     <PetHeroBarInner
       onPetPress={() => router.push('/(tabs)/game')}
-      onStatsPress={openPetProfileDrawer}
+      onStatsPress={() => openPetProfileDrawer()}
       collapsed={collapsed}
       safeTop={insets.top}
       petImageUrl={petImageUrl}
@@ -119,7 +126,7 @@ const PetHeroBarInner = React.memo(function PetHeroBarInner({
   happy: number;
   mood: number;
   xpProgress: number;
-  xpGainEvent: { amount: number; key: number };
+  xpGainEvent: { amount: number; key: number; skillLabel?: string };
   clearXpGainEvent: () => void;
 }) {
   const { theme } = useTheme();
@@ -320,7 +327,10 @@ const PetHeroBarInner = React.memo(function PetHeroBarInner({
             pointerEvents="none"
           >
             <View style={styles.xpBadge}>
-              <Text style={styles.xpBadgeText}>+{xpGainEvent.amount} XP ✨</Text>
+              <Text style={styles.xpBadgeText}>
+                +{xpGainEvent.amount}
+                {xpGainEvent.skillLabel ? ` ${xpGainEvent.skillLabel}` : ''} XP ✨
+              </Text>
             </View>
           </Animated.View>
         )}

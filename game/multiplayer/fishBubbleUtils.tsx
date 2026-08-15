@@ -52,6 +52,24 @@ export const RARITY_BUBBLE_COLORS: Record<FishRarity, { bg: string; text: string
   mythic: { bg: 'rgba(219,39,119,0.88)', text: '#FFFFFF', textMuted: 'rgba(255,255,255,0.88)' },
 };
 
+export function mapToFishRarity(rarity?: string): FishRarity {
+  if (rarity === 'uncommon') return 'rare';
+  if (rarity === 'very_rare') return 'unique';
+  if (rarity === 'common' || rarity === 'rare' || rarity === 'epic' || rarity === 'unique' || rarity === 'legendary' || rarity === 'mythic') {
+    return rarity;
+  }
+  return 'common';
+}
+
+export function bubblePalette(rarity?: string) {
+  return RARITY_BUBBLE_COLORS[mapToFishRarity(rarity)];
+}
+
+export function catchBubbleSubtitle(result: { kind?: 'fish' | 'ore'; qty?: number; size?: number; sizeLabel?: string }): string {
+  if (result.kind === 'ore') return `×${result.qty ?? 1}`;
+  return formatFishSize(result.size ?? 0, result.sizeLabel);
+}
+
 export function formatFishSize(size: number, sizeLabel?: string): string {
   if (typeof size !== 'number' || size <= 0) return sizeLabel ?? '—';
   return `${size.toFixed(1)} in`;

@@ -31,12 +31,11 @@ export function GlobalPetDialog() {
 
   return (
     <QuestDialogOverlay
-      steps={[{ text: serverPetDialog.text }]}
+      dialog={{ steps: [{ text: serverPetDialog.text }], blocking: false }}
       stepIndex={0}
       petName={petName}
       petImageUrl={petImageUrl}
       playerName={petName}
-      blocking={false}
       onAdvance={dismissServerPetDialog}
     />
   );

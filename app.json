@@ -11,16 +11,21 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.hatchly.app",
+      "appleTeamId": "P7TLSM5BX9",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSSupportsLiveActivities": true,
         "NSLocationWhenInUseUsageDescription": "Hatchly uses your location to provide weather information and personalize your experience.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Hatchly uses your location to provide weather information and personalize your experience.",
         "NSLocationAlwaysUsageDescription": "Hatchly uses your location to provide weather information and personalize your experience.",
-        "NSCameraUsageDescription": "Hatchly uses your camera to scan food barcodes and personalize your experience.",
+        "NSCameraUsageDescription": "Hatchly uses your camera to scan food barcodes and Nutrition Facts labels so you can log meals.",
         "NSPhotoLibraryAddUsageDescription": "Hatchly saves images to your photo library so you can share your pet and progress.",
         "NSPhotoLibraryUsageDescription": "Hatchly accesses your photos so you can set a profile picture and share moments."
       },
       "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.hatchly.app"
+        ],
         "com.apple.security.personal-information.location": true,
         "com.apple.developer.in-app-payments": [
           "merchant.hatchly.me"
@@ -46,6 +51,22 @@
       "expo-router",
       "expo-dev-client",
       "expo-camera",
+      [
+        "expo-mlkit-ocr",
+        {
+          "iosEngine": "auto"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.2"
+          }
+        }
+      ],
+      "./plugins/withFastingLiveActivityPod.js",
+      "@bacons/apple-targets",
       [
         "expo-splash-screen",
         {
@@ -73,7 +94,10 @@
           "healthSharePermission": "Hatchly uses Apple Health to track your steps and keep your fitness goals in sync.",
           "healthUpdatePermission": "Hatchly uses Apple Health to record your activity data."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-mlkit-ocr",
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true,

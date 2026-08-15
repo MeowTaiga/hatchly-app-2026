@@ -20,8 +20,10 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CachedImage } from '@/components/ui/CachedImage';
+import { GameIcon } from '@/assets/icons/GameIcons';
 import { useTheme } from '@/store/ThemeProvider';
 import { useAuth } from '@/store/AuthProvider';
+import { useGame } from '@/game/GameProvider';
 import { PET_POSES } from '@/constants/pet';
 import { useMultiplayer } from './MultiplayerProvider';
 import { SPRING_CONFIG, CLOSE_DURATION } from '../GameHUD/constants';
@@ -38,6 +40,7 @@ const KEYBOARD_OPEN_OFFSET = 80;
 interface MPBottomBarProps {
   onBackToFarm: () => void;
   onOpenEquip?: () => void;
+  onOpenBackpack?: () => void;
 }
 
 interface VisibleBubble {
@@ -47,13 +50,17 @@ interface VisibleBubble {
   text: string;
 }
 
-export function MPBottomBar({ onBackToFarm, onOpenEquip }: MPBottomBarProps) {
+export function MPBottomBar({ onBackToFarm, onOpenEquip, onOpenBackpack }: MPBottomBarProps) {
   const { theme, themeMode } = useTheme();
   const colors = theme.colors;
   const isDark = themeMode === 'dark';
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { inventory, backpackSlots } = useGame();
   const { chatMessages, sendChat, setMyPose, myActivePose, players } = useMultiplayer();
+
+  const backpackUsed = inventory.filter((s) => s.qty > 0).length;
+  const backpackFull = backpackUsed >= backpackSlots;
 
   const [text, setText] = useState('');
   const [posePickerOpen, setPosePickerOpen] = useState(false);
@@ -230,9 +237,32 @@ export function MPBottomBar({ onBackToFarm, onOpenEquip }: MPBottomBarProps) {
 
         {/* Container 2: Nav actions (matches farm toolbar: icon-only, 40x40, gap 6, surface bg) */}
         <View style={[s.navBar, { backgroundColor: colors.surface + 'EB' }]}>
+          {onOpenBackpack && (
+            <Pressable style={s.toolBtn} onPress={onOpenBackpack}>
+              <GameIcon name="backpack" size={20} color={colors.textMuted} />
+              <View
+                style={[
+                  s.backpackBadge,
+                  {
+                    backgroundColor: backpackFull ? colors.error : colors.surface,
+                    borderColor: backpackFull ? colors.error : colors.primary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    s.backpackBadgeText,
+                    { color: backpackFull ? '#fff' : colors.textMuted },
+                  ]}
+                >
+                  {backpackUsed}/{backpackSlots}
+                </Text>
+              </View>
+            </Pressable>
+          )}
           {onOpenEquip && (
             <Pressable style={s.toolBtn} onPress={onOpenEquip}>
-              <Ionicons name="bag-handle-outline" size={20} color={colors.textMuted} />
+              <GameIcon name="pickaxe" size={20} color={colors.textMuted} />
             </Pressable>
           )}
           <Pressable style={s.toolBtn} onPress={onBackToFarm}>
@@ -303,6 +333,24 @@ const s = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  backpackBadge: {
+    position: 'absolute',
+    right: -6,
+    bottom: -4,
+    minWidth: 28,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backpackBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
   },
   bubbleStack: {
     marginBottom: 6,

@@ -1,0 +1,184 @@
+🌊 Common (40)
+Fish	Location	Time
+Minnow	Pond	All Day
+Bluegill	Pond	Morning
+Sunfish	Pond	Day
+Perch	River	Day
+Carp	River	All Day
+Koi	Pond	Day
+Smallmouth Bass	River	Morning
+Largemouth Bass	Lake	Day
+Trout	River	Morning
+Rainbow Trout	River	Morning
+Salmon	River	Evening
+Catfish	River	Night
+Bullhead Catfish	Pond	Night
+Crappie	Lake	Morning
+Tilapia	Lake	Day
+Sardine	Ocean	Morning
+Anchovy	Ocean	Morning
+Herring	Ocean	Day
+Mackerel	Ocean	Day
+Flounder	Ocean	Evening
+Halibut	Ocean	Day
+Snapper	Ocean	Day
+Grouper	Ocean	Evening
+Pufferfish	Ocean	Day
+Butterfly Fish	Reef	Day
+Clownfish	Reef	Day
+Goby	River	Day
+Loach	River	Evening
+Pike	Lake	Morning
+Walleye	Lake	Night
+Eel	River	Night
+Jellyfin	Ocean	Night
+Silver Shiner	River	Morning
+Mudfish	Swamp	Day
+Reed Carp	Marsh	Day
+Moss Minnow	Pond	Morning
+Pebble Darter	Creek	Day
+Bronze Bream	River	Evening
+White Sucker	River	Day
+Golden Shiner	Pond	Evening
+💎 Rare (25)
+Fish	Location	Time
+Crystal Carp	Pond	Dawn
+Ember Bass	Lake	Sunset
+Sapphire Trout	River	Morning
+Moss Catfish	Swamp	Night
+Golden Koi	Pond	Day
+Lunar Perch	Lake	Night
+Aurora Salmon	River	Dawn
+Storm Pike	Lake	Rain
+Cloud Minnow	Pond	Morning
+Coral Snapper	Reef	Day
+Frost Flounder	Ocean	Winter Night
+Shadow Eel	River	Night
+Glowfin Guppy	Pond	Night
+Moonscale Carp	Lake	Night
+Cherry Koi	Pond	Spring
+Emberfin Sardine	Ocean	Sunset
+Bloom Betta	Pond	Spring
+Azure Herring	Ocean	Morning
+Mossback Trout	River	Day
+Pearl Catfish	River	Night
+Honey Sunfish	Pond	Day
+Rainbow Discus	Lake	Day
+Twilight Goby	River	Dusk
+Ocean Prismfish	Reef	Noon
+Starlight Mackerel	Ocean	Night
+⭐ Unique (15)
+Fish	Location	Time
+Spirit Koi	Shrine Pond	Midnight
+Celestial Trout	Mountain River	Dawn
+Whisper Catfish	Swamp	Foggy Night
+Blossom Betta	Garden Pond	Spring Morning
+Thunder Salmon	River	Storm
+Mirage Flounder	Ocean	Sunset
+Void Eel	Deep River	Midnight
+Prism Guppy	Crystal Pond	Noon
+Ancient Carp	Temple Lake	Dawn
+Singing Sardine	Ocean	Night
+Phantom Pike	Lake	Fog
+Mirror Bass	Lake	Sunrise
+Starfall Snapper	Ocean	Meteor Shower
+Dream Goldfish	Pond	Night
+Echo Trout	River	Dawn
+👑 Legendary (12)
+Fish	Location	Time
+Galactic Trout	Cosmic Lake	Midnight
+Phoenix Koi	Sacred Pond	Sunrise
+Leviathan Eel	Abyss Ocean	Storm Night
+Sunfire Marlin	Ocean	Noon
+Aurora Whalefish	Deep Ocean	Midnight
+Dragon Carp	Mountain Lake	Dawn
+Nebula Flounder	Cosmic Ocean	Night
+Royal Moonfish	Ocean	Full Moon
+Celestfin Salmon	River	Dawn
+Crown Pike	King's Lake	Morning
+Titan Grouper	Ocean	Storm
+Astral Ray	Reef	Midnight
+🌌 Mythic (8)
+Fish	Location	Time
+Cosmic Koi	Celestial Pond	Eclipse
+Void Whale	Abyss	Midnight
+Stardust Angelfish	Sky Lake	Meteor Shower
+Timekeeper Trout	Ancient River	Dawn
+Ethereal Leviathan	Abyss Ocean	Full Moon Storm
+Dreamfin Serpent	Dream Lake	Sleep Event
+Worldtree Carp	Sacred Grove	Sunrise
+Infinity Goldfish	Hidden Pond	Random
+🎃 Autumn Exclusive Spooky Fish (30)
+
+These only appear during the Autumn event.
+
+Fish	Location	Time
+Spooky Flounder	Ocean	Night
+Haunted Herring	Ocean	Night
+Ghost Koi	Pond	Midnight
+Skeleton Salmon	River	Night
+Phantom Pike	Lake	Fog
+Witch Carp	Pond	Midnight
+Pumpkin Puffer	Ocean	Sunset
+Vampire Eel	River	Midnight
+Cursed Catfish	Swamp	Night
+Bone Bass	Lake	Night
+Graveyard Goldfish	Pond	Evening
+Hollow Trout	River	Foggy Morning
+Lantern Minnow	Pond	Evening
+Wisp Sardine	Ocean	Night
+Soul Snapper	Reef	Midnight
+Nightmare Grouper	Ocean	Storm Night
+Jack-o'-Perch	River	Sunset
+Crowfin Mackerel	Ocean	Evening
+Rotten Carp	Swamp	Night
+Ghostly Goby	Creek	Fog
+Specter Sunfish	Pond	Dawn
+Moonlit Bonefish	Ocean	Full Moon
+Haunted Halibut	Ocean	Midnight
+Fogscale Bass	Lake	Fog
+Banshee Betta	Pond	Midnight
+Spiderfin Trout	River	Night
+Casket Catfish	Swamp	Midnight
+Cursed Clownfish	Reef	Night
+Black Flame Koi	Sacred Pond	Midnight
+Grim Reaper Ray	Abyss Ocean	Midnight
+Fishing Locations
+🌊 Ocean
+🌊 Deep Ocean
+🌊 Abyss Ocean
+🪸 Coral Reef
+🏞️ River
+🏔️ Mountain River
+🪨 Creek
+🏕️ Lake
+🌿 Sacred Lake
+🌸 Pond
+🍃 Garden Pond
+🌌 Celestial Pond
+🌾 Marsh
+🐸 Swamp
+🌳 Sacred Grove
+🏯 Shrine Pond
+💎 Crystal Pond
+🌠 Cosmic Lake
+☁️ Sky Lake
+🌙 Dream Lake
+🏛️ Ancient River
+Time Categories
+Morning (6–10 AM)
+Day (10 AM–5 PM)
+Evening (5–8 PM)
+Night (8 PM–12 AM)
+Midnight (12–4 AM)
+Dawn (4–6 AM)
+Sunset
+Fog
+Rain
+Storm
+Full Moon
+Meteor Shower
+Eclipse
+Seasonal (Spring, Summer, Autumn, Winter)
+
+One thing I'd also recommend for Hatchly is making fish collections themed around biomes and events rather than only rarity. For example, players could complete sets like Pond Collection, Ocean Collection, Ghost Collection, Celestial Collection, Ancient Collection, and Royal Collection. Completing an entire set could award cosmetics, bait, furniture, or even exclusive ghost mascot accessories, giving collectors a satisfying long-term goal beyond simply catching the rarest fish.

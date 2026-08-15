@@ -7,13 +7,27 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { CachedImage } from '@/components/ui/CachedImage';
 import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import type { SharedValue } from 'react-native-reanimated';
 import type { ItemCategory, ItemDefinition, QuestHighlight } from '../types';
 import { ITEM_CATEGORIES } from '../types';
 import { DraggablePaletteSlot } from '../DraggablePaletteSlot';
+import { QuestHighlightGlow } from '../shared/QuestHighlightGlow';
 
 interface InventorySlot {
   itemType: string;
   qty: number;
+}
+
+/**
+ * Everything a slot needs to run a drag. Bundled so it stays one stable object
+ * rather than five props the palette has to keep reference-equal by hand.
+ */
+export interface PaletteDragHandlers {
+  dragX: SharedValue<number>;
+  dragY: SharedValue<number>;
+  onDragStart: (itemType: string, def: ItemDefinition) => void;
+  onDragEnd: (itemType: string, x: number, y: number) => void;
+  onDragCancel: () => void;
 }
 
 interface BuildPaletteProps {
@@ -21,10 +35,12 @@ interface BuildPaletteProps {
   toolMode: string;
   expanded: boolean;
   displaySlots: InventorySlot[];
+  /** Full inventory (unfiltered) — used to hide empty category tabs. */
+  inventorySlots: InventorySlot[];
   selectedItemType: string | null;
   activeCategory: ItemCategory | 'all';
   bottomOffset: number;
-  buildPaletteRef: React.RefObject<View>;
+  buildPaletteRef: React.RefObject<View | null>;
   styles: ReturnType<typeof import('./styles').createHudStyles>;
   highlightGlowStyle: object;
   buildPaletteAnimatedStyle: object;
@@ -33,9 +49,7 @@ interface BuildPaletteProps {
   onSetCategory: (cat: ItemCategory | 'all') => void;
   onSetExpanded: (expanded: boolean) => void;
   onSelectItem: (itemType: string | null) => void;
-  onPaletteDragStart?: (itemType: string, def: ItemDefinition) => void;
-  onPaletteDragUpdate?: (x: number, y: number, def: ItemDefinition) => void;
-  onPaletteDragEnd?: (itemType: string, x: number, y: number) => void;
+  drag: PaletteDragHandlers;
   paletteDismissed?: boolean;
   itemDefs: Record<string, ItemDefinition>;
   colors: { onPrimary?: string; textSecondary: string };
@@ -46,27 +60,18 @@ function ItemSlotRow({
   selectedItemType,
   itemDefs,
   styles,
-  highlightGlowStyle,
   isHighlighted,
   onSelectItem,
-  onPaletteDragStart,
-  onPaletteDragUpdate,
-  onPaletteDragEnd,
-  horizontal,
+  drag,
 }: {
   displaySlots: InventorySlot[];
   selectedItemType: string | null;
   itemDefs: Record<string, ItemDefinition>;
   styles: ReturnType<typeof import('./styles').createHudStyles>;
-  highlightGlowStyle: object;
   isHighlighted: (type: QuestHighlight['type'], target: string) => boolean;
   onSelectItem: (itemType: string | null) => void;
-  onPaletteDragStart?: (itemType: string, def: ItemDefinition) => void;
-  onPaletteDragUpdate?: (x: number, y: number, def: ItemDefinition) => void;
-  onPaletteDragEnd?: (itemType: string, x: number, y: number) => void;
-  horizontal: boolean;
+  drag: PaletteDragHandlers;
 }) {
-  const noop = () => {};
   const slotList = displaySlots.map((slot) => {
     const def = itemDefs[slot.itemType];
     if (!def) return null;
@@ -78,18 +83,20 @@ function ItemSlotRow({
         key={slot.itemType}
         itemType={slot.itemType}
         def={def}
-        qty={slot.qty}
+        canPlace={canPlace}
         isActive={isActive}
-        onPress={() => (canPlace ? onSelectItem(isActive ? null : slot.itemType) : undefined)}
-        onDragStart={canPlace ? (onPaletteDragStart ?? noop) : noop}
-        onDragUpdate={canPlace ? (onPaletteDragUpdate ?? noop) : noop}
-        onDragEnd={canPlace ? (onPaletteDragEnd ?? noop) : noop}
+        onSelect={onSelectItem}
+        onDragStart={drag.onDragStart}
+        onDragEnd={drag.onDragEnd}
+        onDragCancel={drag.onDragCancel}
+        dragX={drag.dragX}
+        dragY={drag.dragY}
       >
         <View
           style={[
             styles.buildSlot,
             isActive && styles.buildSlotActive,
-            hl && styles.highlightBorder,
+            hl ? styles.highlightBorder : styles.highlightClear,
             !canPlace && styles.buildSlotInert,
           ]}
         >
@@ -127,6 +134,7 @@ export function BuildPalette({
   toolMode,
   expanded,
   displaySlots,
+  inventorySlots,
   selectedItemType,
   activeCategory,
   bottomOffset,
@@ -139,9 +147,7 @@ export function BuildPalette({
   onSetCategory,
   onSetExpanded,
   onSelectItem,
-  onPaletteDragStart,
-  onPaletteDragUpdate,
-  onPaletteDragEnd,
+  drag,
   paletteDismissed,
   itemDefs,
   colors,
@@ -164,17 +170,29 @@ export function BuildPalette({
     },
   });
 
+  const visibleCategories = React.useMemo(() => {
+    const owned = new Set<string>();
+    for (const slot of inventorySlots) {
+      const cat = itemDefs[slot.itemType]?.category;
+      if (cat) owned.add(cat);
+    }
+    return ITEM_CATEGORIES.filter((cat) => cat.key === 'all' || owned.has(cat.key));
+  }, [inventorySlots, itemDefs]);
+
+  React.useEffect(() => {
+    if (activeCategory === 'all') return;
+    if (visibleCategories.some((c) => c.key === activeCategory)) return;
+    onSetCategory('all');
+  }, [activeCategory, visibleCategories, onSetCategory]);
+
   const slotProps = {
     displaySlots,
     selectedItemType,
     itemDefs,
     styles,
-    highlightGlowStyle,
     isHighlighted,
     onSelectItem,
-    onPaletteDragStart,
-    onPaletteDragUpdate,
-    onPaletteDragEnd,
+    drag,
   };
 
   const isTrashMode = toolMode === 'trash';
@@ -207,16 +225,21 @@ export function BuildPalette({
                 contentContainerStyle={styles.buildChipScrollContent}
                 style={styles.buildChipScroll}
               >
-                {ITEM_CATEGORIES.map((cat) => {
+                {visibleCategories.map((cat) => {
                   const active = activeCategory === cat.key;
                   const hl = isHighlighted('category_chip', cat.key);
                   return (
-                    <Animated.View key={cat.key} style={[hl && highlightGlowStyle, { borderRadius: 20 }]}>
+                    <QuestHighlightGlow
+                      key={cat.key}
+                      active={hl}
+                      glowStyle={highlightGlowStyle}
+                      style={{ borderRadius: 20 }}
+                    >
                       <Pressable
                         style={[
                           styles.buildChip,
                           active && styles.buildChipActive,
-                          hl && styles.highlightBorder,
+                          hl ? styles.highlightBorder : styles.highlightClear,
                         ]}
                         onPress={() => onSetCategory(cat.key)}
                       >
@@ -229,7 +252,7 @@ export function BuildPalette({
                           {cat.label}
                         </Text>
                       </Pressable>
-                    </Animated.View>
+                    </QuestHighlightGlow>
                   );
                 })}
               </ScrollView>
@@ -254,7 +277,7 @@ export function BuildPalette({
                   contentContainerStyle={[styles.buildSlotRow, styles.buildSlotRowWrap]}
                   style={{ flex: 1 }}
                 >
-                  <ItemSlotRow {...slotProps} horizontal={false} />
+                  <ItemSlotRow {...slotProps} />
                 </ScrollView>
               ) : (
                 <ScrollView
@@ -264,7 +287,7 @@ export function BuildPalette({
                   contentContainerStyle={styles.buildSlotRow}
                   style={{ flex: 1 }}
                 >
-                  <ItemSlotRow {...slotProps} horizontal={true} />
+                  <ItemSlotRow {...slotProps} />
                 </ScrollView>
               )}
             </Animated.View>

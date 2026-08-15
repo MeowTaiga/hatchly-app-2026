@@ -87,6 +87,8 @@ export function QuestBubble({ status, itemDefs, centerX, topY, size = SIZE }: Qu
 const styles = StyleSheet.create({
   box: {
     position: 'absolute',
+    // Above live props / pets (those use footprint Y as zIndex).
+    zIndex: 1_000_000,
     borderRadius: 16,
     overflow: 'hidden',
     alignItems: 'center',
@@ -105,45 +107,29 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Computes the quest bubble status for an NPC.
- * Returns the highest-priority status: completable > in_progress > available.
+ * The bubble to float above an NPC, or null when it has nothing to offer.
+ * Highest priority wins: completable beats in progress beats available.
+ *
+ * Both the NPC link and the availability gates come from the server, so this no
+ * longer re-derives level and prerequisite rules that had already drifted out of
+ * step with the server's copy.
  */
 export function getQuestStatusForNpc(
   npcItemType: string,
   quests: QuestProgress[],
-  petLevel: number,
-  farmLevel: number,
 ): QuestBubbleStatus | null {
   let status: QuestBubbleStatus | null = null;
 
   for (const q of quests) {
-    const talkTrigger = q.triggers?.find((t) => t.type === 'talk_to_npc' && t.npcItemType === npcItemType);
-    if (!talkTrigger) continue;
+    if (q.npcItemType !== npcItemType) continue;
 
     if (q.status === 'active') {
       if (q.canComplete) return 'completable';
-      if (!status) status = 'in_progress';
-    } else if (q.status === 'locked') {
-      if (!meetsActivationRequirements(q, petLevel, farmLevel, quests)) continue;
-      if (!status) status = 'available';
+      status ??= 'in_progress';
+    } else if (q.status === 'locked' && q.gatesPass) {
+      status ??= 'available';
     }
   }
 
   return status;
-}
-
-/** Exported for use in NPC click handlers (useGameActions, MultiplayerScene). */
-export function meetsActivationRequirements(
-  quest: QuestProgress,
-  petLevel: number,
-  farmLevel: number,
-  allQuests: QuestProgress[],
-): boolean {
-  if (quest.petLevelMin != null && petLevel < quest.petLevelMin) return false;
-  if (quest.farmLevelMin != null && farmLevel < quest.farmLevelMin) return false;
-  if (quest.requiredQuestId) {
-    const req = allQuests.find((q) => q.questId === quest.requiredQuestId);
-    if (req?.status !== 'completed') return false;
-  }
-  return true;
 }

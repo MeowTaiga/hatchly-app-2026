@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientBackground } from '@/components/ui/GradientBackground';
+import { CachedImage } from '@/components/ui/CachedImage';
 import { ItemSearchDropdown, type SearchableItem } from '@/components/ui/ItemSearchDropdown';
 import { api, type BalloonLootEntry, type AdminGameItem } from '@/lib/api';
 import { useTheme } from '@/store/ThemeProvider';

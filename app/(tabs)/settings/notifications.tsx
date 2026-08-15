@@ -16,6 +16,12 @@ import type { ApiNotification, NotificationType } from '@/lib/api';
 const ICON_MAP: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   friend_request: 'person-add-outline',
   friend_accepted: 'people-outline',
+  fasting_complete: 'timer-outline',
+  goal_reminder: 'checkbox-outline',
+  marriage_proposal: 'heart-outline',
+  marriage_accepted: 'heart',
+  shared_goal_complete: 'checkbox-outline',
+  shared_goal_added: 'heart-outline',
 };
 
 function relativeTime(iso: string): string {
@@ -157,7 +163,7 @@ export default function NotificationsScreen() {
       >
         {/* Header */}
         <View style={st.header}>
-          <Pressable onPress={() => router.back()} style={st.backBtn} hitSlop={12}>
+          <Pressable onPress={() => router.navigate('/(tabs)/settings')} style={st.backBtn} hitSlop={12}>
             <Ionicons name="chevron-back" size={26} color={colors.text} />
           </Pressable>
           <Text style={st.headerTitle}>Notifications</Text>

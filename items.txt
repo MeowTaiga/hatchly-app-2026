@@ -1,0 +1,350 @@
+Themed furniture — all craftable.
+
+Difficulty is 1–5 (crafting minigame). Recipes use 1–4 ingredients.
+
+# Materials
+
+Gathered
+| Item     | Source                         |
+| -------- | ------------------------------ |
+| Stick    | Ground pickup                  |
+| Stone    | Ground pickup                  |
+| Wood     | Trees                          |
+| Iron Ore | Mining                         |
+| Scrap    | Salvage / industrial           |
+| Cloth    | Fiber / shop                   |
+| Crystal  | Mining (rare)                  |
+
+Processed (craft these first)
+| Item  | Recipe         | Difficulty |
+| ----- | -------------- | ---------- |
+| Plank | 2 Wood         | 1          |
+| Iron  | 2 Iron Ore     | 2          |
+| Rope  | 4 Stick        | 1          |
+| Glass | 3 Stone        | 2          |
+
+# Cozy Cabin Set
+| Item                | Recipe                    | Difficulty |
+| ------------------- | ------------------------- | ---------- |
+| Cabin Bed           | 12 Plank, 6 Cloth, 2 Iron | 4          |
+| Cabin Nightstand    | 4 Plank, 1 Iron           | 2          |
+| Cabin Dresser       | 8 Plank, 2 Iron, 2 Cloth  | 3          |
+| Cabin Wardrobe      | 12 Plank, 3 Iron          | 4          |
+| Cabin Chair         | 6 Plank, 2 Cloth          | 2          |
+| Cabin Rocking Chair | 8 Plank, 2 Cloth          | 3          |
+| Cabin Sofa          | 10 Plank, 8 Cloth, 2 Iron | 3          |
+| Cabin Coffee Table  | 6 Plank, 2 Iron           | 2          |
+| Cabin Dining Table  | 10 Plank, 4 Iron          | 3          |
+| Cabin Dining Chair  | 5 Plank, 1 Cloth          | 2          |
+| Cabin Bookshelf     | 8 Plank, 2 Iron           | 3          |
+| Cabin Fireplace     | 20 Stone, 4 Iron, 4 Plank | 4          |
+| Cabin Rug           | 6 Cloth                   | 1          |
+| Cabin Lamp          | 2 Plank, 2 Glass, 1 Iron  | 2          |
+| Cabin Wall Shelf    | 4 Plank, 1 Iron           | 1          |
+
+# Sakura Set
+| Item                 | Recipe                      | Difficulty |
+| -------------------- | --------------------------- | ---------- |
+| Sakura Bed           | 10 Plank, 8 Cloth, 2 Glass  | 4          |
+| Sakura Chair         | 5 Plank, 3 Cloth            | 2          |
+| Sakura Bench         | 8 Plank, 4 Cloth            | 3          |
+| Sakura Table         | 8 Plank, 2 Iron             | 2          |
+| Sakura Picnic Table  | 10 Plank, 2 Cloth           | 3          |
+| Sakura Lantern       | 2 Plank, 2 Glass, 1 Cloth   | 2          |
+| Sakura Tree Planter  | 6 Plank, 4 Stone            | 2          |
+| Sakura Divider       | 8 Plank, 4 Cloth            | 3          |
+| Sakura Wardrobe      | 12 Plank, 4 Cloth, 2 Iron   | 4          |
+| Sakura Dresser       | 8 Plank, 3 Cloth, 2 Iron    | 3          |
+| Sakura Vanity        | 8 Plank, 4 Glass, 2 Cloth   | 3          |
+| Sakura Rug           | 6 Cloth                     | 1          |
+| Sakura Sofa          | 10 Plank, 8 Cloth           | 3          |
+| Sakura Cushion       | 4 Cloth                     | 1          |
+| Sakura Tea Table     | 6 Plank, 2 Cloth            | 2          |
+
+# Mushroom Set
+| Item                | Recipe                     | Difficulty |
+| ------------------- | -------------------------- | ---------- |
+| Mushroom Stool      | 4 Wood, 2 Cloth            | 1          |
+| Mushroom Chair      | 6 Wood, 3 Cloth            | 2          |
+| Mushroom Table      | 8 Wood, 2 Stone            | 2          |
+| Mushroom Lamp       | 3 Wood, 2 Glass            | 2          |
+| Mushroom Bed        | 10 Wood, 8 Cloth, 2 Plank  | 4          |
+| Mushroom Wardrobe   | 12 Wood, 4 Cloth, 2 Iron   | 4          |
+| Mushroom Shelf      | 6 Wood, 2 Stone            | 2          |
+| Mushroom Bookcase   | 10 Wood, 2 Cloth           | 3          |
+| Mushroom Side Table | 4 Wood, 1 Stone            | 2          |
+| Mushroom Planter    | 4 Wood, 4 Stone            | 2          |
+| Mushroom Rug        | 5 Cloth                    | 1          |
+| Giant Mushroom Seat | 12 Wood, 6 Cloth, 4 Stone  | 4          |
+
+# Teddy Bear Set
+| Item                 | Recipe                    | Difficulty |
+| -------------------- | ------------------------- | ---------- |
+| Teddy Bear Chair     | 6 Cloth, 4 Plank          | 2          |
+| Teddy Bear Sofa      | 12 Cloth, 6 Plank, 2 Iron | 3          |
+| Teddy Bear Bed       | 10 Cloth, 8 Plank, 2 Iron | 4          |
+| Teddy Bear Shelf     | 4 Plank, 3 Cloth          | 2          |
+| Teddy Bear Toy Chest | 8 Plank, 4 Cloth, 2 Iron  | 3          |
+| Teddy Bear Lamp      | 3 Cloth, 2 Glass, 1 Plank | 2          |
+| Teddy Bear Rug       | 6 Cloth                   | 1          |
+| Teddy Bear Clock     | 3 Plank, 2 Cloth, 1 Iron  | 2          |
+| Teddy Bear Cushion   | 4 Cloth                   | 1          |
+| Teddy Bear Dresser   | 8 Plank, 4 Cloth, 2 Iron  | 3          |
+
+# Cottagecore Set
+| Item                 | Recipe                     | Difficulty |
+| -------------------- | -------------------------- | ---------- |
+| Cottage Bed          | 10 Plank, 8 Cloth, 2 Iron  | 4          |
+| Cottage Sofa         | 8 Plank, 8 Cloth, 2 Iron   | 3          |
+| Cottage Armchair     | 6 Plank, 6 Cloth           | 2          |
+| Cottage Coffee Table | 6 Plank, 2 Iron            | 2          |
+| Cottage Dining Table | 10 Plank, 4 Iron           | 3          |
+| Cottage Chair        | 5 Plank, 2 Cloth           | 2          |
+| Cottage Wardrobe     | 12 Plank, 3 Iron, 2 Cloth  | 4          |
+| Cottage Cabinet      | 8 Plank, 2 Iron            | 3          |
+| Cottage Shelf        | 5 Plank, 1 Iron            | 2          |
+| Cottage Window Seat  | 8 Plank, 6 Cloth, 2 Iron   | 3          |
+| Cottage Rug          | 6 Cloth                    | 1          |
+| Cottage Lamp         | 2 Plank, 2 Glass, 1 Cloth  | 2          |
+| Cottage Plant Stand  | 4 Plank, 2 Stone           | 1          |
+| Cottage Tea Cart     | 8 Plank, 2 Iron, 2 Cloth   | 3          |
+| Cottage Fireplace    | 18 Stone, 4 Iron, 4 Plank  | 4          |
+
+# Beach Set
+| Item            | Recipe                    | Difficulty |
+| --------------- | ------------------------- | ---------- |
+| Beach Chair     | 4 Plank, 3 Cloth          | 2          |
+| Beach Towel     | 4 Cloth                   | 1          |
+| Beach Umbrella  | 6 Cloth, 4 Stick, 1 Iron  | 3          |
+| Sand Table      | 8 Stone, 2 Plank          | 2          |
+| Seashell Lamp   | 3 Stone, 2 Glass, 1 Iron  | 2          |
+| Coral Shelf     | 6 Stone, 2 Glass          | 2          |
+| Driftwood Bench | 8 Wood, 2 Rope            | 3          |
+| Driftwood Table | 8 Wood, 2 Stone           | 2          |
+| Lifeguard Chair | 8 Plank, 4 Stick, 2 Iron  | 3          |
+| Beach Cooler    | 4 Iron, 2 Glass, 2 Plank  | 2          |
+| Surfboard Rack  | 6 Plank, 2 Iron, 2 Rope   | 2          |
+| Seashell Rug    | 5 Cloth, 2 Stone          | 1          |
+
+# Fishing Set
+| Item                 | Recipe                    | Difficulty |
+| -------------------- | ------------------------- | ---------- |
+| Fishing Rod Rack     | 6 Plank, 2 Iron, 2 Stick  | 2          |
+| Fish Display         | 4 Plank, 2 Glass, 1 Iron  | 2          |
+| Aquarium Stand       | 8 Plank, 6 Glass, 2 Iron  | 4          |
+| Tackle Box           | 4 Iron, 2 Plank, 1 Scrap  | 2          |
+| Fishing Stool        | 4 Plank, 1 Cloth          | 1          |
+| Fishing Bench        | 8 Plank, 2 Rope           | 2          |
+| Dock Chair           | 5 Plank, 2 Cloth          | 2          |
+| Bait Barrel          | 6 Plank, 2 Iron, 1 Rope   | 2          |
+| Fish Cleaning Table  | 8 Plank, 2 Iron, 2 Stone  | 3          |
+| Fisherman's Shelf    | 6 Plank, 2 Iron           | 2          |
+
+# Garden Set
+| Item              | Recipe                     | Difficulty |
+| ----------------- | -------------------------- | ---------- |
+| Garden Bench      | 8 Plank, 2 Iron            | 2          |
+| Garden Chair      | 5 Plank, 1 Iron            | 2          |
+| Garden Table      | 8 Plank, 4 Stone           | 2          |
+| Garden Arch       | 12 Plank, 4 Iron, 2 Rope   | 4          |
+| Garden Trellis    | 10 Stick, 4 Plank, 2 Rope  | 3          |
+| Garden Fountain   | 24 Stone, 4 Iron, 2 Glass  | 5          |
+| Garden Planter    | 4 Plank, 4 Stone           | 1          |
+| Garden Shelf      | 6 Plank, 2 Stone           | 2          |
+| Bird Bath         | 12 Stone, 2 Iron           | 3          |
+| Watering Station  | 6 Iron, 4 Plank, 2 Stone   | 3          |
+| Flower Cart       | 8 Plank, 2 Iron, 2 Cloth   | 3          |
+| Hedge Divider     | 8 Stick, 4 Stone, 2 Rope   | 2          |
+
+# Café Set
+| Item                 | Recipe                      | Difficulty |
+| -------------------- | --------------------------- | ---------- |
+| Café Table           | 6 Plank, 2 Iron             | 2          |
+| Café Chair           | 4 Plank, 2 Cloth            | 2          |
+| Espresso Machine     | 10 Iron, 4 Glass, 4 Scrap   | 5          |
+| Bakery Display       | 8 Glass, 6 Plank, 2 Iron    | 4          |
+| Dessert Shelf        | 6 Plank, 4 Glass            | 2          |
+| Pastry Cabinet       | 8 Plank, 4 Glass, 2 Iron    | 3          |
+| Counter Register     | 6 Iron, 2 Glass, 2 Scrap    | 3          |
+| Menu Board           | 4 Plank, 1 Iron             | 1          |
+| Coffee Grinder       | 6 Iron, 2 Plank, 2 Scrap    | 3          |
+| Tea Shelf            | 5 Plank, 2 Cloth            | 2          |
+| Outdoor Café Table   | 6 Plank, 2 Iron, 2 Stone    | 2          |
+| Bar Stool            | 4 Plank, 2 Iron             | 2          |
+
+# Library Set
+| Item             | Recipe                     | Difficulty |
+| ---------------- | -------------------------- | ---------- |
+| Tall Bookcase    | 12 Plank, 3 Iron           | 3          |
+| Reading Chair    | 6 Plank, 6 Cloth           | 2          |
+| Reading Lamp     | 2 Iron, 2 Glass, 1 Plank   | 2          |
+| Library Desk     | 10 Plank, 4 Iron           | 3          |
+| Writing Desk     | 8 Plank, 2 Iron, 1 Glass   | 3          |
+| Globe Stand      | 4 Plank, 2 Iron, 1 Glass   | 2          |
+| Book Cart        | 6 Plank, 4 Iron            | 3          |
+| Magazine Rack    | 4 Plank, 1 Iron            | 1          |
+| Study Table      | 8 Plank, 2 Iron            | 2          |
+| Cozy Rug         | 6 Cloth                    | 1          |
+| Window Seat      | 8 Plank, 6 Cloth, 2 Iron   | 3          |
+| Fireplace Mantle | 10 Stone, 4 Plank, 2 Iron  | 3          |
+
+# Royal Set
+| Item                | Recipe                         | Difficulty |
+| ------------------- | ------------------------------ | ---------- |
+| Royal Throne        | 12 Iron, 10 Cloth, 4 Crystal   | 5          |
+| Royal Bed           | 12 Plank, 10 Cloth, 4 Iron     | 4          |
+| Royal Sofa          | 8 Plank, 10 Cloth, 4 Iron      | 3          |
+| Royal Coffee Table  | 6 Iron, 4 Glass, 2 Crystal     | 3          |
+| Royal Dining Table  | 10 Plank, 6 Iron, 2 Crystal    | 4          |
+| Royal Chair         | 6 Plank, 6 Cloth, 2 Iron       | 2          |
+| Royal Wardrobe      | 12 Plank, 6 Iron, 4 Cloth      | 4          |
+| Royal Vanity        | 8 Plank, 6 Glass, 4 Iron       | 3          |
+| Royal Dresser       | 8 Plank, 4 Iron, 4 Cloth       | 3          |
+| Royal Chandelier    | 8 Iron, 8 Glass, 4 Crystal     | 5          |
+| Royal Rug           | 10 Cloth, 2 Crystal            | 2          |
+| Royal Bookshelf     | 10 Plank, 4 Iron, 2 Crystal    | 3          |
+
+# Celestial Set
+| Item                 | Recipe                        | Difficulty |
+| -------------------- | ----------------------------- | ---------- |
+| Moon Bed             | 10 Plank, 8 Cloth, 4 Crystal  | 4          |
+| Star Chair           | 4 Plank, 4 Cloth, 2 Crystal   | 2          |
+| Crescent Sofa        | 8 Plank, 8 Cloth, 3 Crystal   | 3          |
+| Galaxy Rug           | 6 Cloth, 2 Crystal            | 2          |
+| Starlight Lamp       | 2 Iron, 3 Glass, 2 Crystal    | 2          |
+| Moon Clock           | 3 Iron, 2 Glass, 2 Crystal    | 2          |
+| Planet Shelf         | 6 Plank, 2 Iron, 2 Crystal    | 2          |
+| Constellation Table  | 6 Plank, 4 Glass, 2 Crystal   | 3          |
+| Nebula Wardrobe      | 12 Plank, 4 Cloth, 4 Crystal  | 4          |
+| Aurora Divider       | 6 Glass, 4 Crystal, 2 Iron    | 3          |
+| Floating Crystal     | 6 Crystal, 2 Glass, 1 Iron    | 3          |
+| Star Fountain        | 8 Crystal, 8 Stone, 4 Glass   | 5          |
+
+# Winter Set
+| Item                 | Recipe                     | Difficulty |
+| -------------------- | -------------------------- | ---------- |
+| Snow Sofa            | 8 Plank, 10 Cloth, 2 Iron  | 3          |
+| Snow Chair           | 5 Plank, 5 Cloth           | 2          |
+| Snow Table           | 6 Plank, 2 Iron            | 2          |
+| Winter Fireplace     | 18 Stone, 4 Iron, 4 Plank  | 4          |
+| Hot Cocoa Cart       | 8 Plank, 2 Iron, 2 Cloth   | 3          |
+| Wool Rug             | 8 Cloth                    | 1          |
+| Pine Shelf           | 6 Wood, 2 Iron             | 2          |
+| Winter Bed           | 10 Plank, 10 Cloth, 2 Iron | 4          |
+| Snow Globe Table     | 4 Plank, 6 Glass, 2 Iron   | 3          |
+| Ice Lamp             | 4 Glass, 2 Iron, 1 Crystal | 2          |
+| Winter Wreath        | 6 Stick, 2 Cloth, 1 Rope   | 1          |
+| Cozy Blanket Basket  | 4 Plank, 6 Cloth           | 2          |
+
+# Autumn Harvest Set
+| Item               | Recipe                    | Difficulty |
+| ------------------ | ------------------------- | ---------- |
+| Pumpkin Chair      | 6 Wood, 3 Cloth           | 2          |
+| Pumpkin Table      | 8 Wood, 2 Stone           | 2          |
+| Pumpkin Bench      | 8 Wood, 2 Cloth           | 2          |
+| Hay Bale Seat      | 6 Cloth, 4 Stick          | 1          |
+| Harvest Wagon      | 10 Plank, 4 Iron, 2 Rope  | 4          |
+| Apple Crate        | 4 Plank, 1 Rope           | 1          |
+| Corn Basket        | 3 Plank, 2 Rope, 1 Cloth  | 1          |
+| Barrel Table       | 8 Plank, 2 Iron           | 2          |
+| Harvest Shelf      | 6 Plank, 2 Wood           | 2          |
+| Leaf Rug           | 5 Cloth                   | 1          |
+| Harvest Lantern    | 2 Plank, 2 Glass, 1 Iron  | 2          |
+| Scarecrow Display  | 6 Stick, 4 Cloth, 2 Plank | 3          |
+
+# Halloween Set
+# Candy Corn is the event currency — earned from Wick's quests / Spirit Snatch.
+| Item                 | Recipe                                    | Difficulty |
+| -------------------- | ----------------------------------------- | ---------- |
+| Haunted Chair        | 6 Plank, 3 Cloth, 1 Iron, 12 Candy Corn   | 2          |
+| Haunted Table        | 8 Plank, 2 Iron, 15 Candy Corn            | 2          |
+| Coffin Bed           | 12 Plank, 6 Cloth, 4 Iron, 25 Candy Corn  | 4          |
+| Witch Wardrobe       | 12 Plank, 4 Iron, 2 Crystal, 25 Candy Corn| 4          |
+| Ghost Lamp           | 2 Glass, 2 Cloth, 1 Crystal, 10 Candy Corn| 2          |
+| Skeleton Throne      | 10 Iron, 6 Stone, 2 Crystal, 40 Candy Corn| 5          |
+| Spiderweb Rug        | 6 Cloth, 5 Candy Corn                     | 1          |
+| Jack-o'-Lantern Lamp | 3 Wood, 2 Glass, 1 Iron, 10 Candy Corn    | 2          |
+| Haunted Bookcase     | 10 Plank, 2 Iron, 1 Crystal, 18 Candy Corn| 3          |
+| Witch Cauldron       | 10 Iron, 4 Stone, 2 Crystal, 30 Candy Corn| 4          |
+| Bone Shelf           | 6 Stone, 2 Iron, 8 Candy Corn             | 2          |
+| Haunted Mirror       | 4 Glass, 4 Iron, 2 Crystal, 20 Candy Corn | 3          |
+
+# Ghost Companion Set
+| Item              | Recipe                      | Difficulty |
+| ----------------- | --------------------------- | ---------- |
+| Ghost Bed         | 8 Plank, 10 Cloth, 2 Crystal| 4          |
+| Ghost Bean Bag    | 8 Cloth, 1 Crystal          | 2          |
+| Ghost Plush       | 5 Cloth, 1 Crystal          | 1          |
+| Ghost Sofa        | 8 Plank, 10 Cloth, 2 Crystal| 3          |
+| Ghost Cushion     | 4 Cloth                     | 1          |
+| Ghost Nightstand  | 4 Plank, 1 Crystal          | 2          |
+| Ghost Bookshelf   | 8 Plank, 2 Crystal          | 3          |
+| Ghost Lamp        | 2 Glass, 2 Cloth, 1 Crystal | 2          |
+| Ghost Rug         | 6 Cloth                     | 1          |
+| Ghost Toy Box     | 6 Plank, 4 Cloth, 1 Crystal | 2          |
+| Ghost Clock       | 3 Plank, 2 Glass, 1 Crystal | 2          |
+| Ghost Wallpaper   | 6 Cloth, 1 Crystal          | 1          |
+
+# Pastel Dream Set
+| Item                | Recipe                      | Difficulty |
+| ------------------- | --------------------------- | ---------- |
+| Cloud Bed           | 10 Plank, 10 Cloth, 2 Glass | 4          |
+| Rainbow Chair       | 4 Plank, 5 Cloth            | 2          |
+| Cotton Candy Sofa   | 8 Plank, 10 Cloth           | 3          |
+| Pastel Dresser      | 8 Plank, 4 Cloth, 2 Iron    | 3          |
+| Star Shelf          | 5 Plank, 2 Cloth, 1 Crystal | 2          |
+| Dream Lamp          | 2 Glass, 2 Cloth, 1 Crystal | 2          |
+| Rainbow Rug         | 6 Cloth                     | 1          |
+| Plush Ottoman       | 6 Cloth, 2 Plank            | 2          |
+| Cloud Coffee Table  | 6 Plank, 4 Cloth            | 2          |
+| Dream Wardrobe      | 12 Plank, 6 Cloth, 2 Iron   | 4          |
+| Pastel Vanity       | 8 Plank, 4 Glass, 3 Cloth   | 3          |
+| Bubble Bookshelf    | 8 Plank, 4 Glass, 2 Cloth   | 3          |
+
+# Alchemist Set
+| Item              | Recipe                       | Difficulty |
+| ----------------- | ---------------------------- | ---------- |
+| Potion Shelf      | 6 Plank, 4 Glass             | 2          |
+| Potion Cabinet    | 8 Plank, 6 Glass, 2 Iron     | 3          |
+| Alchemy Table     | 8 Plank, 4 Glass, 4 Crystal  | 4          |
+| Herb Rack         | 6 Stick, 2 Plank, 1 Rope     | 2          |
+| Crystal Display   | 4 Glass, 6 Crystal, 2 Iron   | 3          |
+| Spell Bookcase    | 10 Plank, 2 Crystal, 2 Cloth | 3          |
+| Cauldron Stand    | 8 Iron, 4 Stone, 2 Crystal   | 4          |
+| Herb Drying Rack  | 8 Stick, 2 Rope, 2 Plank     | 2          |
+| Potion Cart       | 6 Plank, 4 Glass, 2 Iron     | 3          |
+| Crystal Lamp      | 3 Crystal, 2 Glass, 1 Iron   | 2          |
+| Magic Stool       | 4 Plank, 1 Crystal           | 1          |
+| Enchanted Cabinet | 10 Plank, 4 Crystal, 2 Iron  | 4          |
+
+# Industrial Workshop Set
+| Item            | Recipe                      | Difficulty |
+| --------------- | --------------------------- | ---------- |
+| Workshop Bench  | 10 Plank, 6 Iron, 2 Scrap   | 3          |
+| Tool Cabinet    | 8 Iron, 4 Plank, 2 Scrap    | 3          |
+| Blueprint Desk  | 8 Plank, 2 Iron, 1 Glass    | 3          |
+| Rolling Toolbox | 8 Iron, 4 Scrap             | 3          |
+| Parts Shelf     | 6 Iron, 4 Scrap, 2 Plank    | 2          |
+| Storage Locker  | 10 Iron, 4 Scrap            | 3          |
+| Gear Clock      | 6 Iron, 4 Scrap, 1 Glass    | 3          |
+| Drafting Table  | 8 Plank, 4 Iron             | 3          |
+| Metal Stool     | 4 Iron, 1 Scrap             | 1          |
+| Utility Cart    | 6 Iron, 4 Scrap, 2 Plank    | 3          |
+| Crate Shelf     | 8 Plank, 2 Iron, 2 Scrap    | 2          |
+| Pipe Lamp       | 4 Iron, 2 Glass, 2 Scrap    | 2          |
+
+# Camping Set
+| Item              | Recipe                     | Difficulty |
+| ----------------- | -------------------------- | ---------- |
+| Camping Cot       | 8 Stick, 6 Cloth, 2 Plank  | 3          |
+| Camp Stool        | 4 Stick, 1 Cloth           | 1          |
+| Folding Chair     | 4 Plank, 2 Cloth, 1 Iron   | 2          |
+| Folding Camp Table | 6 Plank, 4 Stick          | 2          |
+| Lantern Stand     | 4 Stick, 2 Glass, 1 Iron   | 2          |
+| Firewood Rack     | 6 Stick, 2 Plank           | 1          |
+| Cooler Chest      | 4 Iron, 2 Plank, 2 Glass   | 2          |
+| Sleeping Bag      | 8 Cloth, 1 Rope            | 1          |
+| Tent Shelf        | 6 Stick, 2 Plank, 2 Cloth  | 2          |
+| Trail Kitchen     | 8 Plank, 4 Iron, 2 Stone   | 3          |
+| Marshmallow Stool | 4 Stick, 2 Cloth           | 1          |
+| Picnic Basket     | 4 Plank, 2 Cloth, 1 Rope   | 1          |

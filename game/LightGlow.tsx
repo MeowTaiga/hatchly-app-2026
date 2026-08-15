@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import Animated, {
   Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -11,11 +12,13 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { useIsFocused } from '@react-navigation/native';
 import { TILE_SIZE } from './constants';
 
 const NUM_RINGS = 4;
 const MIN_DAY_FACTOR = 0.2;
-const MAX_DARKNESS = 0.55;
+/** Keep in sync with DayNightOverlay MAX_NIGHT_OPACITY (midnight peak). */
+const MAX_DARKNESS = 0.78;
 
 interface LightGlowProps {
   x: number;
@@ -157,12 +160,20 @@ const PULSE_DELAYS = [0, 300, 120, 500, 200, 420, 80, 280, 460, 160];
 
 const SoftRing = React.memo(function SoftRing({ ring, color, index }: SoftRingProps) {
   const pulse = useSharedValue(0);
+  const isFocused = useIsFocused();
 
   const duration = PULSE_DURATIONS[index % PULSE_DURATIONS.length];
   const amplitude = PULSE_AMPLITUDES[index % PULSE_AMPLITUDES.length];
   const delay = PULSE_DELAYS[index % PULSE_DELAYS.length];
 
+  // Every lit item mounts four of these, and the world stays mounted after the
+  // user leaves the tab — without the focus gate they pulse on the UI thread
+  // behind whatever screen the user is actually looking at.
   useEffect(() => {
+    if (!isFocused) {
+      cancelAnimation(pulse);
+      return;
+    }
     pulse.value = withDelay(
       delay,
       withRepeat(
@@ -174,7 +185,8 @@ const SoftRing = React.memo(function SoftRing({ ring, color, index }: SoftRingPr
         false,
       ),
     );
-  }, [pulse, duration, delay]);
+    return () => cancelAnimation(pulse);
+  }, [pulse, duration, delay, isFocused]);
 
   const animStyle = useAnimatedStyle(() => {
     const opacityMod = 1 - amplitude + amplitude * pulse.value;

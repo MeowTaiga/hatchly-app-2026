@@ -224,13 +224,33 @@ export function pathToWaypoints(
     const start = { x: options.startX, y: options.startY };
     waypoints = [start];
     let current = 0;
+    const MAX_ANGLE_DEVIATION = Math.PI / 4; // 45 degrees
     while (current < tileWaypoints.length) {
       let furthest = current;
-      for (let i = current + 1; i < tileWaypoints.length; i++) {
-        const from = waypoints[waypoints.length - 1];
-        const to = tileWaypoints[i];
-        if (hasLineOfSightPixels(from.x, from.y, to.x, to.y, options.rect, options.unwalkableSet, options.worldCols, options.worldRows)) {
-          furthest = i;
+      const from = waypoints[waypoints.length - 1];
+      const isFirstHop = current === 0 && waypoints.length === 1;
+
+      if (isFirstHop && tileWaypoints.length > 1) {
+        const dest = tileWaypoints[tileWaypoints.length - 1];
+        const directAngle = Math.atan2(dest.y - start.y, dest.x - start.x);
+        for (let i = current + 1; i < tileWaypoints.length; i++) {
+          const to = tileWaypoints[i];
+          if (!hasLineOfSightPixels(from.x, from.y, to.x, to.y, options.rect, options.unwalkableSet, options.worldCols, options.worldRows)) continue;
+          const angle = Math.atan2(to.y - from.y, to.x - from.x);
+          let angleDiff = Math.abs(angle - directAngle);
+          if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+          if (angleDiff <= MAX_ANGLE_DEVIATION && i > furthest) furthest = i;
+        }
+        if (furthest === current) {
+          for (let i = current + 1; i < tileWaypoints.length; i++) {
+            const to = tileWaypoints[i];
+            if (hasLineOfSightPixels(from.x, from.y, to.x, to.y, options.rect, options.unwalkableSet, options.worldCols, options.worldRows)) furthest = i;
+          }
+        }
+      } else {
+        for (let i = current + 1; i < tileWaypoints.length; i++) {
+          const to = tileWaypoints[i];
+          if (hasLineOfSightPixels(from.x, from.y, to.x, to.y, options.rect, options.unwalkableSet, options.worldCols, options.worldRows)) furthest = i;
         }
       }
       if (furthest === current) break;

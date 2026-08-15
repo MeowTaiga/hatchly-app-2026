@@ -2,7 +2,7 @@
  * Your machine's LAN IP — needed for physical devices to reach the backend.
  * Update this if your IP changes (check with `ipconfig` / `ifconfig`).
  */
-const LAN_IP = '192.168.1.146';
+const LAN_IP = '10.0.0.198';
 
 const DEV_API_URL = `http://${LAN_IP}:5000`;
 

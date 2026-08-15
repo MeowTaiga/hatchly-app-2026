@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '@/components/ui/CachedImage';
-import { ItemChip } from '@/components/ui/ItemChip';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -12,42 +11,44 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
 import { DialogText } from './DialogText';
-import type { DialogStep, QuestReward, ItemDefinition } from './types';
+import { DIALOG_SKIP_AFTER_MS, stepBlocks } from './dialogBlocking';
+import { BELOW_TOP_ROW_OFFSET } from './GameHUD/constants';
+import type { DialogEntry, ItemDefinition } from './types';
+
+/** HUD targets that sit in the top band under the dialog bubble. */
+const TOP_SCREEN_HUD_TARGETS = new Set(['farm_info']);
 
 interface QuestDialogOverlayProps {
-  steps: DialogStep[] | null;
+  /** The dialog to show, or null when nobody is speaking. */
+  dialog: DialogEntry | null;
   stepIndex: number;
   petName: string;
   petImageUrl: string | null;
-  /** Pet name (or fallback) for {playername} placeholder in dialog text. */
+  /** Substituted for {playername} in dialog text. */
   playerName?: string;
-  /** When provided, use instead of pet for speaker name and avatar. */
-  speakerName?: string;
-  speakerImageUrl?: string | null;
-  /** Rewards to show on last step (e.g. items, gems, xp from quest completion). */
-  rewards?: QuestReward | null;
-  /** Item definitions for reward display and {item_slug} placeholders. */
+  /** Item definitions for {item_slug} placeholders. */
   itemDefs?: Record<string, ItemDefinition>;
-  /** When false, user can tap to dismiss without completing highlight. Default true. */
-  blocking?: boolean;
   onAdvance: () => void;
 }
 
 export function QuestDialogOverlay({
-  steps,
+  dialog,
   stepIndex,
   petName,
   petImageUrl,
   playerName = 'Player',
-  speakerName,
-  speakerImageUrl,
-  rewards,
   itemDefs = {},
-  blocking = true,
   onAdvance,
 }: QuestDialogOverlayProps) {
-  const displayName = speakerName ?? petName;
-  const displayImageUrl = speakerImageUrl !== undefined ? speakerImageUrl : petImageUrl;
+  const steps = dialog?.steps ?? null;
+
+  // A step can override the dialog's speaker, which is how a pet can chime in
+  // mid-conversation with an NPC.
+  const speaksAsNpc = (steps?.[stepIndex]?.speaker ?? (dialog?.speaker ? 'npc' : 'pet')) === 'npc';
+  const speaker = speaksAsNpc ? dialog?.speaker : undefined;
+  const displayName = speaker?.name ?? petName;
+  const displayImageUrl = speaker ? speaker.imageUrl : petImageUrl;
+
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const topOverlayHeight = Math.min(screenHeight * 0.45, 320);
@@ -57,26 +58,50 @@ export function QuestDialogOverlay({
 
   const currentStep = steps?.[stepIndex] ?? null;
   const isLast = steps ? stepIndex >= steps.length - 1 : true;
-  const hasHighlight = !!currentStep?.highlight;
-  const showRewards = isLast && rewards && (rewards.items?.length || rewards.gems || rewards.xp);
-  /** When blocking is false, user can always tap to advance (dismiss). */
-  const canAdvance = !blocking || !hasHighlight;
+  const highlight = currentStep?.highlight;
+  const hasHighlight = !!highlight;
+  const blocks = stepBlocks(dialog, stepIndex);
+
+  // Only duck the bubble when the highlight is literally under it (top HUD).
+  const clearTopBand =
+    highlight?.type === 'hud_button' && TOP_SCREEN_HUD_TARGETS.has(highlight.target);
+
+  const bubbleTop = clearTopBand
+    ? insets.top + BELOW_TOP_ROW_OFFSET
+    : insets.top + 24;
+
+  // A blocking step earns an escape hatch if the player sits on it. Without one
+  // an unsatisfiable highlight is a dead end, and anything queued behind the
+  // dialog — including the quest's reward screen — never gets its turn.
+  const [skippable, setSkippable] = useState(false);
+  useEffect(() => {
+    if (!blocks) {
+      setSkippable(false);
+      return;
+    }
+    setSkippable(false);
+    const timer = setTimeout(() => setSkippable(true), DIALOG_SKIP_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [blocks, dialog, stepIndex]);
+
+  const canAdvance = !blocks || skippable;
 
   useEffect(() => {
     if (currentStep) {
       bgOpacity.value = withTiming(hasHighlight ? 0 : 1, { duration: 250 });
       bubbleOpacity.value = withTiming(1, { duration: 280 });
+      bubbleSlideY.value = clearTopBand ? 14 : -30;
       bubbleSlideY.value = withSpring(0, { damping: 14, stiffness: 120 });
     } else {
       bgOpacity.value = withTiming(0, { duration: 200 });
       bubbleOpacity.value = withTiming(0, { duration: 180 });
       bubbleSlideY.value = -30;
     }
-  }, [currentStep?.text, hasHighlight]);
+  }, [currentStep?.text, hasHighlight, clearTopBand]);
 
   useEffect(() => {
     if (currentStep && stepIndex > 0) {
-      bubbleSlideY.value = -12;
+      bubbleSlideY.value = clearTopBand ? 10 : -12;
       bubbleSlideY.value = withSpring(0, { damping: 14, stiffness: 140 });
       bubbleOpacity.value = 0.7;
       bubbleOpacity.value = withTiming(1, { duration: 200 });
@@ -94,42 +119,45 @@ export function QuestDialogOverlay({
 
   if (!currentStep) return null;
 
-  const hintText = !blocking
-    ? 'Tap to dismiss'
-    : hasHighlight
-      ? 'Complete the action to continue'
+  const hintText = !canAdvance
+    ? 'Complete the action to continue'
+    : blocks
+      ? 'Tap to skip'
       : isLast
         ? 'Tap to close'
         : 'Tap to continue';
 
+  // Not a Modal — Modal is a separate native window and blocks the whole app
+  // even with pointerEvents="box-none". Absolute overlay keeps visual z-index
+  // while letting HUD / world receive taps outside the bubble.
   return (
     <View style={styles.overlay} pointerEvents="box-none">
-      {/* Show backdrop when user can advance (tap to dismiss) */}
-      {canAdvance && (
-        <Animated.View style={[styles.backdropTop, { height: topOverlayHeight }, backdropStyle]} pointerEvents="auto">
+      {/* Visual only — never steal taps from the farm / HUD underneath. */}
+      {!hasHighlight && (
+        <Animated.View
+          style={[styles.backdropTop, { height: topOverlayHeight }, backdropStyle]}
+          pointerEvents="none"
+        >
           <LinearGradient
-            colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.35)', 'transparent']}
-            locations={[0, 0.6, 1]}
+            colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.25)', 'transparent']}
+            locations={[0, 0.55, 1]}
             style={StyleSheet.absoluteFill}
           />
-          <Pressable style={StyleSheet.absoluteFill} onPress={onAdvance} />
         </Animated.View>
       )}
 
       <Animated.View
-        style={[
-          styles.contentWrap,
-          { top: insets.top + 24 },
-          contentStyle,
-        ]}
+        style={[styles.contentWrap, { top: bubbleTop }, contentStyle]}
         pointerEvents="box-none"
       >
+        {/* Only the bubble captures presses (to advance). Everything else on
+            screen stays interactive while the dialog is up. */}
         <Pressable
           style={styles.container}
           onPress={canAdvance ? onAdvance : undefined}
-          disabled={!canAdvance}
+          pointerEvents={canAdvance ? 'auto' : 'none'}
         >
-          <View style={styles.avatarWrap}>
+          <View style={styles.avatarWrap} pointerEvents="none">
             {displayImageUrl ? (
               <CachedImage source={{ uri: displayImageUrl }} style={styles.avatar} resizeMode="contain" />
             ) : (
@@ -139,49 +167,15 @@ export function QuestDialogOverlay({
             )}
           </View>
 
-          <View style={styles.bubble}>
+          <View style={styles.bubble} pointerEvents="none">
             <View style={styles.bubbleTail} />
             <Text style={styles.petName}>{displayName}</Text>
             <DialogText
               text={currentStep.text}
               playerName={playerName}
               itemDefs={itemDefs}
-              defaultItemType={rewards?.items?.[0]?.itemType}
               textStyle={styles.messageText}
             />
-            {showRewards && (
-              <>
-                <View style={styles.rewardsDivider} />
-                <View style={styles.rewardsSection}>
-                  {rewards.items?.map((r) => {
-                    const def = itemDefs[r.itemType];
-                    return (
-                      <ItemChip
-                        key={`${r.itemType}-${r.qty}`}
-                        label={def?.label ?? r.itemType}
-                        imageUrl={def?.imageUrl}
-                        emoji={def?.emoji}
-                        qty={r.qty}
-                        size={36}
-                      />
-                    );
-                  })}
-                  {rewards.gems ? (
-                    <ItemChip asGems gemsAmount={rewards.gems} label="" size={36} />
-                  ) : null}
-                  {rewards.xp ? (
-                    <View style={styles.rewardRow}>
-                      <View style={[styles.rewardImage, styles.rewardImagePlaceholder]}>
-                        <Text style={styles.rewardEmoji}>⭐</Text>
-                      </View>
-                      <View style={styles.rewardInfo}>
-                        <Text style={styles.rewardName}>+{rewards.xp} XP</Text>
-                      </View>
-                    </View>
-                  ) : null}
-                </View>
-              </>
-            )}
             <Text style={styles.tapHint}>{hintText}</Text>
           </View>
         </Pressable>
@@ -198,7 +192,8 @@ const shadow = Platform.select({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 500,
+    // Above GameHUD (200) so the bubble paints on top; box-none lets taps pass.
+    zIndex: 300,
   },
   backdropTop: {
     position: 'absolute',
@@ -277,49 +272,5 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'right',
     letterSpacing: 0.2,
-  },
-  rewardsDivider: {
-    height: 1,
-    backgroundColor: colors.border ?? '#e0e0e0',
-    marginVertical: 10,
-  },
-  rewardsSection: {
-    gap: 8,
-  },
-  rewardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  rewardImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-  },
-  rewardImagePlaceholder: {
-    backgroundColor: colors.primaryLight ?? '#e8f4f8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rewardEmoji: {
-    fontSize: 18,
-  },
-  rewardInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  rewardName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
-    flex: 1,
-  },
-  rewardQty: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primary,
   },
 });

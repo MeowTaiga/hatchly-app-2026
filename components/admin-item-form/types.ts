@@ -31,6 +31,8 @@ export interface FormState {
   farmLevel: string;
   petLevel: string;
   shopSection: string;
+  shopCurrency: string;
+  isCurrency: boolean;
   availableUntil: string;
 
   // Crop

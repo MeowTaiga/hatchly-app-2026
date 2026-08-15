@@ -1,5 +1,5 @@
-import React, { forwardRef, useCallback, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import React, { forwardRef, useCallback, useMemo, useRef } from 'react';
+import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
@@ -11,8 +11,33 @@ import {
 } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { useTheme } from '@/store/ThemeProvider';
 import { spacing, radius } from '@/constants/theme';
+
+const ABOVE_SHEET_GAP = 14;
+
+function DrawerAboveOverlay({
+  animatedPosition,
+  children,
+}: {
+  animatedPosition: SharedValue<number>;
+  children: React.ReactNode;
+}) {
+  const { height: screenH } = useWindowDimensions();
+  const style = useAnimatedStyle(() => ({
+    bottom: screenH - animatedPosition.value + ABOVE_SHEET_GAP,
+  }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      collapsable={false}
+      style={[styles.aboveOverlay, style]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,12 +60,29 @@ export interface AppDrawerProps {
   scrollable?: boolean;
   /** Sticky footer rendered below the scroll view — keyboard-aware */
   footer?: React.ReactNode;
+  /**
+   * Remount the sticky footer when this changes (e.g. details → edit).
+   * Keep it stable while typing so inputs don’t lose focus.
+   */
+  footerKey?: string | number;
   /** Optional node to render on the right side of the header (before close) */
   headerRight?: React.ReactNode;
+  /**
+   * Floats over drawer content (does not scroll). Use for toasts / popups
+   * that should sit above the sheet body without blocking touches.
+   */
+  overlay?: React.ReactNode;
+  /**
+   * Renders in the sheet portal, pinned just above the handle so rewards
+   * stay visible while the drawer is open.
+   */
+  overlayAbove?: React.ReactNode;
   /** Called when the drawer fully closes */
   onClose?: () => void;
   /** Called when snap index changes */
   onChange?: (index: number) => void;
+  /** How the sheet reacts to the keyboard (default: extend). */
+  keyboardBehavior?: 'extend' | 'fillParent' | 'interactive';
   children: React.ReactNode;
 }
 
@@ -65,18 +107,25 @@ export const AppDrawer = forwardRef<AppDrawerRef, AppDrawerProps>(
       showCloseButton = true,
       scrollable = true,
       footer,
+      footerKey,
       headerRight,
+      overlay,
+      overlayAbove,
       onClose,
       onChange,
+      keyboardBehavior = 'extend',
       children,
     },
     ref,
   ) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
+    const snapPointsKey = (snapPointsProp ?? ['50%', '90%']).join('|');
     const snapPoints = useMemo(
       () => snapPointsProp ?? ['50%', '90%'],
-      [snapPointsProp],
+      // Identity of the array changes every parent render; key on values only.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [snapPointsKey],
     );
 
     // ── Sheet ref + imperative handle ─────────────────────────────────────
@@ -124,7 +173,7 @@ export const AppDrawer = forwardRef<AppDrawerRef, AppDrawerProps>(
     // ── Footer (keyboard-aware via BottomSheetFooter) ─────────────────────
     // Keep renderFooter stable so footerComponent reference doesn't change on each keystroke.
     // When footer changes (e.g. query state), we'd otherwise remount the footer and lose input focus.
-    const footerRef = React.useRef(footer);
+    const footerRef = useRef(footer);
     footerRef.current = footer;
     const renderFooter = useCallback(
       (props: BottomSheetFooterProps) => (
@@ -132,8 +181,27 @@ export const AppDrawer = forwardRef<AppDrawerRef, AppDrawerProps>(
           {footerRef.current}
         </BottomSheetFooter>
       ),
-      [],
+      // Identity change remounts the sheet footer. Only do that when the
+      // caller says the mode changed — not on every keystroke.
+      [footerKey],
     );
+
+    const overlayAboveRef = useRef(overlayAbove);
+    overlayAboveRef.current = overlayAbove;
+    const animatedPosition = useSharedValue(0);
+    const OverlayContainer = useMemo(() => {
+      function OverlayContainerInner({ children }: { children?: React.ReactNode }) {
+        return (
+          <View style={styles.portalWrap} pointerEvents="box-none">
+            {children}
+            <DrawerAboveOverlay animatedPosition={animatedPosition}>
+              {overlayAboveRef.current}
+            </DrawerAboveOverlay>
+          </View>
+        );
+      }
+      return OverlayContainerInner;
+    }, [animatedPosition]);
 
     return (
       <BottomSheetModal
@@ -149,49 +217,71 @@ export const AppDrawer = forwardRef<AppDrawerRef, AppDrawerProps>(
         handleIndicatorStyle={[styles.handleIndicator, { backgroundColor: theme.colors.border }]}
         backgroundStyle={[styles.sheetBackground, { backgroundColor: theme.colors.surface }]}
         style={styles.sheet}
-        keyboardBehavior="extend"
+        keyboardBehavior={keyboardBehavior}
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"
+        enableContentPanningGesture
+        enableHandlePanningGesture
+        animatedPosition={overlayAbove ? animatedPosition : undefined}
+        containerComponent={overlayAbove ? OverlayContainer : undefined}
       >
-        {/* Header */}
-        {(title || showCloseButton || headerRight) && (
-          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-            <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
-              {title ?? ''}
-            </Text>
-            <View style={styles.headerRight}>
-              {headerRight}
-              {showCloseButton && (
-              <Pressable
-                onPress={() => sheetRef.current?.dismiss()}
-                hitSlop={12}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close-circle" size={28} color={theme.colors.textMuted} />
-              </Pressable>
-            )}
-            </View>
-          </View>
-        )}
-
-        {/* Body */}
-        <ContentWrapper
-          style={styles.contentContainer}
-          contentContainerStyle={[
-            styles.contentInner,
-            { paddingBottom: footer ? spacing.base : insets.bottom + spacing.xl },
-          ]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {scrollable ? (
-            children
-          ) : (
-            <View style={[styles.contentInner, { paddingBottom: footer ? spacing.base : insets.bottom + spacing.xl, flex: 1 }]}>
-              {children}
+        <View style={styles.sheetInner}>
+          {/* Header */}
+          {(title || showCloseButton || headerRight) && (
+            <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                {title ?? ''}
+              </Text>
+              <View style={styles.headerRight}>
+                {headerRight}
+                {showCloseButton && (
+                <Pressable
+                  onPress={() => sheetRef.current?.dismiss()}
+                  hitSlop={12}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close-circle" size={28} color={theme.colors.textMuted} />
+                </Pressable>
+              )}
+              </View>
             </View>
           )}
-        </ContentWrapper>
+
+          {/* Body */}
+          <View style={styles.bodyWrap}>
+            <ContentWrapper
+              style={styles.contentContainer}
+              contentContainerStyle={[
+                styles.contentInner,
+                { paddingBottom: footer ? spacing.base : insets.bottom + spacing.xl },
+              ]}
+              showsVerticalScrollIndicator={false}
+              {...(scrollable
+                ? {
+                    keyboardShouldPersistTaps: 'handled' as const,
+                    keyboardDismissMode: 'on-drag' as const,
+                    nestedScrollEnabled: true,
+                  }
+                : {})}
+            >
+              {scrollable ? (
+                children
+              ) : (
+                <View style={[styles.contentInner, { paddingBottom: footer ? spacing.base : insets.bottom + spacing.xl, flex: 1 }]}>
+                  {children}
+                </View>
+              )}
+            </ContentWrapper>
+          </View>
+
+          {/* Same window as the sheet — floats like the old Modal, but taps
+              on empty space hit shop cards (not the game behind the sheet). */}
+          {overlay ? (
+            <View style={styles.overlay} pointerEvents="box-none" collapsable={false}>
+              {overlay}
+            </View>
+          ) : null}
+        </View>
       </BottomSheetModal>
     );
   },
@@ -232,11 +322,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: 'System',
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '600',
     lineHeight: 22,
-    flex: 1,
-    fontSize: 18,
     flex: 1,
   },
   headerRight: {
@@ -248,11 +336,36 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
 
+  sheetInner: {
+    flex: 1,
+  },
+  bodyWrap: {
+    flex: 1,
+  },
   contentContainer: {
     flex: 1,
   },
   contentInner: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.base,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    zIndex: 1000,
+    elevation: 1000,
+  },
+  portalWrap: {
+    ...StyleSheet.absoluteFillObject,
+    pointerEvents: 'box-none',
+  },
+  aboveOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 9999,
+    elevation: 9999,
   },
 });

@@ -30,6 +30,8 @@ interface CircleRevealOverlaySeqProps {
   onConcealComplete: () => void | Promise<void>;
   onComplete: () => void;
   children?: React.ReactNode;
+  /** Rendered above the solid circle (e.g. loading tip while waiting on assets). */
+  coverContent?: React.ReactNode;
 }
 
 type CircleRevealOverlayProps = CircleRevealOverlayBaseProps | CircleRevealOverlaySeqProps;
@@ -116,6 +118,8 @@ export function CircleRevealOverlay(props: CircleRevealOverlayProps) {
     [diameter, screenW, screenH],
   );
 
+  const coverContent = isSeqProps(props) ? props.coverContent : undefined;
+
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       {'children' in props && props.children != null && (
@@ -125,6 +129,11 @@ export function CircleRevealOverlay(props: CircleRevealOverlayProps) {
         style={[circleStyle, { backgroundColor: props.backgroundColor }, animatedStyle]}
         renderToHardwareTextureAndroid
       />
+      {coverContent != null ? (
+        <View style={styles.cover} pointerEvents="auto">
+          {coverContent}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -141,5 +150,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
+  },
+  cover: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+    elevation: 2,
   },
 });

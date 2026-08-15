@@ -22,15 +22,26 @@ interface BakedSceneryLayerProps {
  * only when the image actually fails to load (network error / 404) or the
  * server confirmed no bake exists (snapshotLoaded + empty URL).
  *
- * Before the snapshot arrives, imageUrl is '' and snapshotLoaded is false —
- * renders nothing so we don't eagerly mount the heavy procedural layer.
+ * Keeps the last successful bake on screen while a snapshot reloads so the
+ * farm grass underlay never flashes through.
  */
 export function BakedSceneryLayer({
   farmCols, farmRows, worldCols, worldRows, itemDefs, onReady, imageUrl,
   snapshotLoaded,
 }: BakedSceneryLayerProps) {
   const [loadFailed, setLoadFailed] = useState(false);
+  const stickyUrlRef = useRef(imageUrl);
   const prevUrl = useRef(imageUrl);
+
+  // Keep last bake across snapshot reloads; clear only when server confirms none.
+  if (imageUrl) stickyUrlRef.current = imageUrl;
+  const displayUrl = imageUrl || stickyUrlRef.current;
+
+  useEffect(() => {
+    if (snapshotLoaded && !imageUrl) {
+      stickyUrlRef.current = '';
+    }
+  }, [snapshotLoaded, imageUrl]);
 
   // Reset failure state when URL changes (e.g. admin re-bakes)
   useEffect(() => {
@@ -55,7 +66,7 @@ export function BakedSceneryLayer({
   }, []);
 
   const handleLoad = useCallback(() => {
-    if (__DEV__) console.log('[Scenery] Baked image loaded:', imageUrl);
+    if (__DEV__) console.log('[Scenery] Baked image loaded:', displayUrl);
     // onLoad fires when decoded, not when painted. Defer until compositor has painted.
     InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
@@ -64,13 +75,10 @@ export function BakedSceneryLayer({
         });
       });
     });
-  }, [onReady, imageUrl]);
+  }, [onReady, displayUrl]);
 
-  if (!snapshotLoaded) {
-    return null;
-  }
-
-  if (!imageUrl || loadFailed) {
+  // Snapshot confirmed empty bake — procedural only.
+  if (snapshotLoaded && !imageUrl) {
     return (
       <SceneryLayer
         farmCols={farmCols}
@@ -83,14 +91,33 @@ export function BakedSceneryLayer({
     );
   }
 
+  // Current URL failed — procedural fallback (keep sticky for next URL).
+  if (snapshotLoaded && imageUrl && loadFailed) {
+    return (
+      <SceneryLayer
+        farmCols={farmCols}
+        farmRows={farmRows}
+        worldCols={worldCols}
+        worldRows={worldRows}
+        itemDefs={itemDefs}
+        onReady={onReady}
+      />
+    );
+  }
+
+  // No URL yet (cold start before snapshot) — render nothing under the load overlay.
+  if (!displayUrl) {
+    return null;
+  }
+
   const width = worldCols * TILE_SIZE;
   const height = worldRows * TILE_SIZE;
 
   return (
     <View style={[styles.container, { width, height }]} pointerEvents="none">
       <CachedImage
-        key={imageUrl}
-        source={{ uri: imageUrl }}
+        key={displayUrl}
+        source={{ uri: displayUrl }}
         style={StyleSheet.absoluteFill}
         resizeMode="contain"
         onLoad={handleLoad}

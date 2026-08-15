@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { CachedImage } from '@/components/ui/CachedImage';
 import Animated, {
@@ -9,7 +9,14 @@ import Animated, {
 import { TILE_SIZE } from '../../constants';
 import { PetBubble, type BubbleMood } from './PetBubble';
 import { PetHeartEffect } from './PetHeartEffect';
-import { equipmentStyles } from './equipmentStyles';
+import {
+  TOOL_ANIM_IDLE_ROTATION_DEG,
+  buildEquipEmojiStyle,
+  buildEquipImageStyle,
+  buildEquipWrapStyle,
+  resolveEquipOverlay,
+  type EquipOverlayConfig,
+} from './equipmentStyles';
 
 const PET_SIZE = TILE_SIZE * 2;
 const HALF_PET = PET_SIZE / 2;
@@ -22,7 +29,7 @@ interface PetSpriteProps {
   facingRight: SharedValue<number>;
   bounceOffset: SharedValue<number>;
   behaviorOffset?: SharedValue<number>;
-  /** Hand tool rotation (deg). -50 default; 70 when digging. */
+  /** Hand tool rotation (deg). -50 default; ~50 when digging. */
   toolRotationDeg?: SharedValue<number>;
   jumpOffset: SharedValue<number>;
   imageUrl?: string | null;
@@ -32,8 +39,10 @@ interface PetSpriteProps {
   onHeartDone?: () => void;
   equippedHandToolImageUrl?: string | null;
   equippedHandToolEmoji?: string;
+  equippedHandToolOverlay?: EquipOverlayConfig | null;
   equippedChairImageUrl?: string | null;
   equippedChairEmoji?: string;
+  equippedChairOverlay?: EquipOverlayConfig | null;
 }
 
 /**
@@ -54,9 +63,48 @@ export const PetSprite = React.memo(function PetSprite({
   onHeartDone,
   equippedHandToolImageUrl,
   equippedHandToolEmoji,
+  equippedHandToolOverlay,
   equippedChairImageUrl,
   equippedChairEmoji,
+  equippedChairOverlay,
 }: PetSpriteProps) {
+  const handResolved = useMemo(
+    () => resolveEquipOverlay('handTool', equippedHandToolOverlay),
+    [equippedHandToolOverlay],
+  );
+  const chairResolved = useMemo(
+    () => resolveEquipOverlay('chair', equippedChairOverlay),
+    [equippedChairOverlay],
+  );
+  const handWrapStyle = useMemo(
+    () => buildEquipWrapStyle('handTool', handResolved),
+    [handResolved],
+  );
+  const handImageStyle = useMemo(
+    () => buildEquipImageStyle('handTool', handResolved),
+    [handResolved],
+  );
+  const handEmojiStyle = useMemo(
+    () => buildEquipEmojiStyle('handTool', handResolved),
+    [handResolved],
+  );
+  const chairWrapStyle = useMemo(
+    () => buildEquipWrapStyle('chair', chairResolved),
+    [chairResolved],
+  );
+  const chairImageStyle = useMemo(
+    () => buildEquipImageStyle('chair', chairResolved),
+    [chairResolved],
+  );
+  const chairEmojiStyle = useMemo(
+    () => buildEquipEmojiStyle('chair', chairResolved),
+    [chairResolved],
+  );
+  const chairRotStyle = useMemo(
+    () => ({ transform: [{ rotate: `${chairResolved.rotationDeg}deg` }] }),
+    [chairResolved.rotationDeg],
+  );
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: petX.value - HALF_PET },
@@ -76,13 +124,12 @@ export const PetSprite = React.memo(function PetSprite({
     transform: [{ scaleX: facingRight.value }],
   }));
 
+  const baseRotation = handResolved.rotationDeg;
   const poleAnimatedStyle = useAnimatedStyle(() => {
-    const base = toolRotationDeg != null ? toolRotationDeg.value : -50;
+    const anim = toolRotationDeg != null ? toolRotationDeg.value : TOOL_ANIM_IDLE_ROTATION_DEG;
+    const animDelta = anim - TOOL_ANIM_IDLE_ROTATION_DEG;
     return {
-      transform: [
-        { scaleX: -1 },
-        { rotate: `${base + bounceOffset.value * POLE_WADDLE_DEG}deg` },
-      ],
+      transform: [{ rotate: `${baseRotation + animDelta + bounceOffset.value * POLE_WADDLE_DEG}deg` }],
     };
   });
 
@@ -100,20 +147,20 @@ export const PetSprite = React.memo(function PetSprite({
       )}
       {/* Equipment rendered behind pet (chair, hand tool) */}
       {(equippedChairImageUrl || equippedChairEmoji) ? (
-        <View style={equipmentStyles.chairWrap} pointerEvents="none">
+        <View style={[chairWrapStyle, chairRotStyle]} pointerEvents="none">
           {equippedChairImageUrl ? (
-            <CachedImage source={{ uri: equippedChairImageUrl }} style={equipmentStyles.chairImage} resizeMode="contain" />
+            <CachedImage source={{ uri: equippedChairImageUrl }} style={chairImageStyle} resizeMode="contain" />
           ) : (
-            <Text style={equipmentStyles.chairEmoji}>{equippedChairEmoji ?? '🪑'}</Text>
+            <Text style={chairEmojiStyle}>{equippedChairEmoji ?? '🪑'}</Text>
           )}
         </View>
       ) : null}
       {(equippedHandToolImageUrl || equippedHandToolEmoji) ? (
-        <Animated.View style={[equipmentStyles.poleWrap, poleAnimatedStyle]}>
+        <Animated.View style={[handWrapStyle, poleAnimatedStyle]}>
           {equippedHandToolImageUrl ? (
-            <CachedImage source={{ uri: equippedHandToolImageUrl }} style={equipmentStyles.poleImage} resizeMode="contain" />
+            <CachedImage source={{ uri: equippedHandToolImageUrl }} style={handImageStyle} resizeMode="contain" />
           ) : (
-            <Text style={equipmentStyles.poleEmoji}>{equippedHandToolEmoji ?? '🔧'}</Text>
+            <Text style={handEmojiStyle}>{equippedHandToolEmoji ?? '🔧'}</Text>
           )}
         </Animated.View>
       ) : null}

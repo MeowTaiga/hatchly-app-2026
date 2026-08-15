@@ -28,10 +28,24 @@ function getDayOfYear(): number {
 
 // ─── Darkness calculation ───────────────────────────────────────────────────
 
+/** Peak overlay opacity at midnight — properly dark, lights still readable. */
+export const MAX_NIGHT_OPACITY = 0.78;
+/** Opacity once dusk finishes / just before dawn starts. */
+const EDGE_NIGHT_OPACITY = 0.48;
+
 /**
- * Returns an opacity (0 = full daylight, max ~0.55 = deep night) and a tint
- * color based on the current fractional hour and seasonal sun times.
+ * Smoothstep 0→1 for softer dusk/dawn ramps.
+ */
+function smoothstep(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * (3 - 2 * x);
+}
+
+/**
+ * Returns an opacity (0 = full daylight, {@link MAX_NIGHT_OPACITY} = midnight)
+ * and a tint color based on the current fractional hour and seasonal sun times.
  *
+ * Night curve peaks at midnight (00:00), then eases toward dawn.
  * Transition zones:
  *   sunrise-1h .. sunrise+0.5h  (dawn)
  *   sunset-0.5h .. sunset+1h    (dusk)
@@ -44,32 +58,36 @@ function getDarkness(hour: number, dayOfYear: number): { opacity: number; color:
   const duskStart = sunset - 0.5;
   const duskEnd = sunset + 1;
 
-  let t: number;
+  let opacity = 0;
 
   if (hour >= dawnEnd && hour <= duskStart) {
-    t = 0;
+    opacity = 0;
   } else if (hour >= dawnStart && hour < dawnEnd) {
-    t = 1 - (hour - dawnStart) / (dawnEnd - dawnStart);
+    // Dawn: EDGE_NIGHT → 0
+    const t = 1 - (hour - dawnStart) / (dawnEnd - dawnStart);
+    opacity = EDGE_NIGHT_OPACITY * smoothstep(t);
   } else if (hour > duskStart && hour <= duskEnd) {
-    t = (hour - duskStart) / (duskEnd - duskStart);
+    // Dusk: 0 → EDGE_NIGHT
+    const t = (hour - duskStart) / (duskEnd - duskStart);
+    opacity = EDGE_NIGHT_OPACITY * smoothstep(t);
+  } else if (hour > duskEnd) {
+    // Evening night: duskEnd → midnight (24) — climb to peak
+    const span = 24 - duskEnd;
+    const p = span > 0 ? (hour - duskEnd) / span : 1;
+    opacity = EDGE_NIGHT_OPACITY + (MAX_NIGHT_OPACITY - EDGE_NIGHT_OPACITY) * smoothstep(p);
   } else {
-    t = 1;
+    // Pre-dawn night: midnight (0) → dawnStart — fall from peak
+    // hour is in [0, dawnStart)
+    const span = Math.max(dawnStart, 0.001);
+    const p = 1 - hour / span;
+    opacity = EDGE_NIGHT_OPACITY + (MAX_NIGHT_OPACITY - EDGE_NIGHT_OPACITY) * smoothstep(p);
   }
 
-  // Deep night is darkest around 1-4 AM
-  let nightBoost = 0;
-  if (t >= 1) {
-    if (hour < dawnStart) {
-      const midNight = (duskEnd + 24 + dawnStart) / 2 - (hour < 12 ? 0 : 24);
-      const distFromMid = Math.abs(hour - (midNight < 0 ? midNight + 24 : midNight));
-      nightBoost = Math.max(0, 1 - distFromMid / 4) * 0.15;
-    }
-  }
+  opacity = Math.min(MAX_NIGHT_OPACITY, Math.max(0, opacity));
 
-  const opacity = Math.min(0.55, t * 0.4 + nightBoost);
-
-  // Tint shifts from warm orange at dusk/dawn to cool blue at deep night
-  const color = t > 0.5 ? 'rgba(15, 20, 50, 1)' : 'rgba(40, 30, 60, 1)';
+  // Warm purple at dusk/dawn, deep navy at midnight
+  const nightDepth = opacity / MAX_NIGHT_OPACITY;
+  const color = nightDepth > 0.55 ? 'rgba(8, 12, 32, 1)' : 'rgba(28, 22, 48, 1)';
 
   return { opacity, color };
 }
@@ -82,7 +100,7 @@ function getCurrentHour(): number {
 // ─── Exported helpers for light sources ──────────────────────────────────────
 
 /**
- * Returns the current darkness level (0 = full daylight, ~0.55 = deep night).
+ * Returns the current darkness level (0 = full daylight, up to {@link MAX_NIGHT_OPACITY} at midnight).
  * Light sources call this to scale their intensity.
  */
 export function getCurrentDarkness(): number {

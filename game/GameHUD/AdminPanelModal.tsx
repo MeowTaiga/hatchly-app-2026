@@ -1,6 +1,6 @@
 /**
- * In-game admin panel modal: reset quests, reset farm, modify gems, modify level.
- * Clean, simple UI matching HUD aesthetics.
+ * In-game admin panel modal: reset quests, full game reset, modify gems, modify level,
+ * and preview weather effects locally.
  */
 
 import React, { useState } from 'react';
@@ -13,11 +13,13 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/store/ThemeProvider';
 import { api } from '@/lib/api';
-
+import { useAuth } from '@/store/AuthProvider';
+import { useGame } from '../GameProvider';
+import type { WeatherType } from '../types';
 
 interface AdminPanelModalProps {
   visible: boolean;
@@ -25,9 +27,19 @@ interface AdminPanelModalProps {
   onRefresh: () => void;
 }
 
+const WEATHER_PRESETS: { key: WeatherType | null; label: string }[] = [
+  { key: null, label: 'Auto' },
+  { key: 'clear', label: 'Clear' },
+  { key: 'rain', label: 'Rain' },
+  { key: 'snow', label: 'Snow' },
+  { key: 'meteor_shower', label: 'Meteors' },
+];
+
 export function AdminPanelModal({ visible, onClose, onRefresh }: AdminPanelModalProps) {
   const { theme } = useTheme();
   const { colors, typography } = theme;
+  const { weatherOverride, setWeatherOverride, weather } = useGame();
+  const { refreshUser } = useAuth();
   const [gemsInput, setGemsInput] = useState('');
   const [levelInput, setLevelInput] = useState('1');
 
@@ -61,8 +73,8 @@ export function AdminPanelModal({ visible, onClose, onRefresh }: AdminPanelModal
 
   const resetFarm = async () => {
     Alert.alert(
-      'Reset Farm',
-      'Delete your farm? You will start fresh.',
+      'Reset farm',
+      'This wipes your farm, quests, farm level, skills, recipes, collections, and mailbox — same as a new player. Health logs, your pet, and account settings stay.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -72,6 +84,7 @@ export function AdminPanelModal({ visible, onClose, onRefresh }: AdminPanelModal
             setLoading('farm');
             try {
               await api.resetMyFarm();
+              await refreshUser();
               onRefresh();
               onClose();
             } catch (e: any) {
@@ -115,6 +128,17 @@ export function AdminPanelModal({ visible, onClose, onRefresh }: AdminPanelModal
       onRefresh();
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to update level');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const resetSpiritSnatch = async () => {
+    setLoading('snatch');
+    try {
+      await api.resetSpiritSnatchCooldown();
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to reset Spirit Snatch');
     } finally {
       setLoading(null);
     }
@@ -165,6 +189,33 @@ export function AdminPanelModal({ visible, onClose, onRefresh }: AdminPanelModal
     },
     btnDestructive: { backgroundColor: colors.error ?? '#DC2626' },
     btnText: { ...typography.button, fontSize: 13, color: colors.onPrimary ?? '#fff' },
+    sectionLabel: {
+      ...typography.caption,
+      color: colors.textMuted,
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 16,
+    },
+    chip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    chipActive: {
+      borderColor: colors.primary,
+      backgroundColor: (colors.primary ?? '#4CAF50') + '22',
+    },
+    chipText: { ...typography.caption, color: colors.text, fontWeight: '600' },
+    chipTextActive: { color: colors.primary },
+    hint: { ...typography.caption, color: colors.textMuted, marginBottom: 16, marginTop: -8 },
     closeBtn: {
       marginTop: 12,
       paddingVertical: 10,
@@ -177,7 +228,43 @@ export function AdminPanelModal({ visible, onClose, onRefresh }: AdminPanelModal
     <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.panel} onPress={(e) => e.stopPropagation()}>
+          <ScrollView showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>Admin</Text>
+
+          <Text style={styles.sectionLabel}>Weather preview (local only)</Text>
+          <View style={styles.chipRow}>
+            {WEATHER_PRESETS.map(({ key, label }) => {
+              const active = weatherOverride === key;
+              return (
+                <Pressable
+                  key={label}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setWeatherOverride(key)}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.hint}>
+            Server today: {weather.type}
+            {weatherOverride != null ? ` · previewing ${weatherOverride}` : ''}
+          </Text>
+
+          <View style={styles.row}>
+            <Text style={styles.label}>Spirit Snatch cooldown</Text>
+            <Pressable
+              style={styles.btn}
+              onPress={resetSpiritSnatch}
+              disabled={!!loading}
+            >
+              {loading === 'snatch' ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.btnText}>Reset</Text>
+              )}
+            </Pressable>
+          </View>
 
           <View style={styles.row}>
             <Text style={styles.label}>Reset quests</Text>
@@ -254,6 +341,7 @@ export function AdminPanelModal({ visible, onClose, onRefresh }: AdminPanelModal
           <Pressable style={styles.closeBtn} onPress={onClose}>
             <Text style={styles.closeText}>Close</Text>
           </Pressable>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>

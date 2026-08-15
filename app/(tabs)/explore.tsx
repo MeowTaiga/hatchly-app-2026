@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedKeyboard,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import {
   View,
   Text,
@@ -7,10 +13,8 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Keyboard,
   useWindowDimensions,
   Modal,
   Switch,
@@ -22,20 +26,33 @@ import { CachedImage } from '@/components/ui/CachedImage';
 import { TAB_BAR_TOTAL_HEIGHT } from '@/components/ui/FloatingTabBar';
 import { useTheme } from '@/store/ThemeProvider';
 import { useAuth } from '@/store/AuthProvider';
+import { usePetHero } from '@/store/PetHeroProvider';
 import { api, type ChatMessageEntry } from '@/lib/api';
 import { SuggestionCard } from '@/components/chat/SuggestionCard';
+import { GoalChatCard } from '@/components/chat/GoalChatCard';
 import { MoodPickerCard } from '@/components/chat/MoodPickerCard';
 import { MOOD_OPTIONS } from '@/components/chat/moodOptions';
 import { useGameSummary } from '@/hooks/useGameSummary';
 import { useToast } from '@/store/ToastProvider';
+import { useGoals } from '@/store/GoalsProvider';
+import { showAppRewards } from '@/lib/showAppRewards';
 import { spacing } from '@/constants/theme';
-import { useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 
 const STREAMING_PREF_KEY = 'chat_streaming_enabled';
 
 const MAX_LENGTH = 500;
 const STREAMING_CHAR_MS = 15;
+/** Messages fetched per page. Older ones stream in as the user scrolls up. */
+const PAGE_SIZE = 50;
+/** Space kept below the input so the floating tab bar never covers it. */
+const TAB_BAR_CLEARANCE = TAB_BAR_TOTAL_HEIGHT + 10;
+/**
+ * Resolved outside the worklet — reading `Platform.OS` inside one makes
+ * Reanimated serialize the whole Platform module into the UI runtime, where the
+ * lookup does not reliably return the host platform.
+ */
+const TRACKS_KEYBOARD = Platform.OS === 'ios';
 
 function BlinkingCursor({ color }: { color: string }) {
   const opacity = useSharedValue(1);
@@ -51,7 +68,8 @@ function BlinkingCursor({ color }: { color: string }) {
 export default function ExploreScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { theme, themeMode } = useTheme();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const { triggerXpGain } = usePetHero();
   const [messages, setMessages] = useState<ChatMessageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -65,8 +83,10 @@ export default function ExploreScreen() {
   const [streamingRevealedLength, setStreamingRevealedLength] = useState(0);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const listRef = useRef<FlatList>(null);
-  const hasInitiallyScrolled = useRef(false);
+  const loadingOlderRef = useRef(false);
 
   useEffect(() => {
     SecureStore.getItemAsync(STREAMING_PREF_KEY).then((v) => {
@@ -84,22 +104,51 @@ export default function ExploreScreen() {
   const isDark = themeMode === 'dark';
   const { refresh: refreshGameSummary } = useGameSummary();
   const { toast } = useToast();
+  const { state: goalsState, completeGoal, refresh: refreshGoals } = useGoals();
+  const [busyGoalKey, setBusyGoalKey] = useState<string | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       setStreamingMessageId(null);
-      const { messages: msgs, needsMoodToday: needs } = await api.getChatHistory();
+      const { messages: msgs, hasMore: more, needsMoodToday: needs } = await api.getChatHistory({
+        limit: PAGE_SIZE,
+      });
       setMessages(msgs);
-      setNeedsMoodToday(needs);
+      setHasMore(more);
+      setNeedsMoodToday(!!needs);
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load chat');
       setMessages([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  /** Pages backwards from the oldest loaded message. Fired when the user scrolls up. */
+  const loadOlder = useCallback(async () => {
+    if (loadingOlderRef.current || !hasMore) return;
+    const oldest = messages[0];
+    if (!oldest) return;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const { messages: older, hasMore: more } = await api.getChatHistory({
+        limit: PAGE_SIZE,
+        before: oldest.id,
+      });
+      if (older.length) setMessages((prev) => [...older, ...prev]);
+      setHasMore(more);
+    } catch {
+      // Leave the loaded range alone — scrolling up again retries.
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [hasMore, messages]);
 
   useEffect(() => {
     if (user?.pet) {
@@ -110,42 +159,20 @@ export default function ExploreScreen() {
     }
   }, [user?.pet, loadHistory]);
 
-  useFocusEffect(
-    useCallback(() => {
-      hasInitiallyScrolled.current = false;
-      // When navigating to this tab from another, scroll to bottom immediately with no animation
-      const t = setTimeout(() => {
-        if (listRef.current && messages.length > 0) {
-          listRef.current.scrollToEnd({ animated: false });
-        }
-      }, 0);
-      return () => clearTimeout(t);
-    }, [messages.length]),
-  );
+  // The list is inverted, so it is already anchored to the newest message —
+  // no scroll-to-bottom pass is needed when the tab opens or the keyboard moves.
+  const invertedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
-  useEffect(() => {
-    const sub = Keyboard.addListener('keyboardDidShow', () => {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
-    });
-    return () => sub.remove();
-  }, []);
-
-  const scrollToEnd = useCallback((animated: boolean) => {
-    if (listRef.current && messages.length > 0) {
-      listRef.current.scrollToEnd({ animated });
-    }
-  }, [messages.length]);
-
-  useEffect(() => {
-    if (!loading && messages.length > 0) {
-      const animate = hasInitiallyScrolled.current;
-      const t = setTimeout(() => {
-        scrollToEnd(animate);
-        hasInitiallyScrolled.current = true;
-      }, 50);
-      return () => clearTimeout(t);
-    }
-  }, [loading, messages.length, scrollToEnd]);
+  // Keyboard height is read on the UI thread so the input tracks the system
+  // animation curve instead of catching up after it via JS layout passes.
+  // Shifting with a transform rather than padding keeps the message list out of
+  // the layout pass entirely, which is what made the input lag behind the keyboard.
+  const keyboard = useAnimatedKeyboard();
+  const keyboardShiftStyle = useAnimatedStyle(() => {
+    // Android resizes the window itself; shifting here would double-count it.
+    const height = TRACKS_KEYBOARD ? keyboard.height.value : 0;
+    return { transform: [{ translateY: -Math.max(height - TAB_BAR_CLEARANCE, 0) }] };
+  });
 
   const streamingMessage = streamingMessageId ? messages.find((m) => m.id === streamingMessageId) : null;
   const fullLength = streamingMessage?.content.length ?? 0;
@@ -178,17 +205,24 @@ export default function ExploreScreen() {
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, optimisticUserMsg]);
+      // Offset 0 is the newest message on an inverted list.
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
 
       try {
-        const { message, reply } = await api.sendChatMessage(contentToSend.trim());
+        const { message, reply, xpGained } = await api.sendChatMessage(contentToSend.trim());
         setMessages((prev) => {
           const withoutOpt = prev.filter((m) => m.id !== optimisticUserMsg.id);
           return [...withoutOpt, message, reply];
         });
+        if ((xpGained ?? 0) > 0) {
+          triggerXpGain?.(xpGained!, 'Social');
+          void refreshUser();
+        }
         if (streamingEnabled) {
           setStreamingRevealedLength(0);
           setStreamingMessageId(reply.id);
         }
+        if (reply.goalCards?.length) void refreshGoals();
       } catch (err: any) {
         setError(err?.message ?? 'Failed to send');
         setMessages((prev) => prev.filter((m) => m.id !== optimisticUserMsg.id));
@@ -196,7 +230,7 @@ export default function ExploreScreen() {
         setSending(false);
       }
     },
-    [sending, user?.pet, streamingEnabled],
+    [sending, user?.pet, streamingEnabled, triggerXpGain, refreshUser, refreshGoals],
   );
 
   const handleSend = useCallback(() => {
@@ -211,13 +245,18 @@ export default function ExploreScreen() {
       if (loggingMood || !user?.pet) return;
       setLoggingMood(true);
       try {
-        const { xpGained, gemsAwarded } = await api.logMood(moodId);
+        const { xpGained, gemsAwarded, item, rewarded } = await api.logMood(moodId);
         setNeedsMoodToday(false);
-        refreshGameSummary();
-        const parts: string[] = [];
-        if (xpGained > 0) parts.push(`+${xpGained} XP`);
-        if (gemsAwarded > 0) parts.push(`+${gemsAwarded} gems`);
-        if (parts.length) toast(parts.join(' · '), 'success');
+        if (xpGained > 0) {
+          triggerXpGain?.(xpGained, 'Health');
+          void refreshUser();
+        }
+        if (xpGained > 0 || gemsAwarded > 0 || item) {
+          showAppRewards({ xpGained, gemsAwarded, item });
+          refreshGameSummary();
+        } else if (!rewarded) {
+          toast('Mood saved to your diary', 'success');
+        }
         const label = MOOD_OPTIONS.find((o) => o.id === moodId)?.label ?? moodId;
         sendMessage(`I'm feeling ${label.toLowerCase()} today!`);
       } catch (err: any) {
@@ -226,7 +265,24 @@ export default function ExploreScreen() {
         setLoggingMood(false);
       }
     },
-    [loggingMood, user?.pet, sendMessage, refreshGameSummary, toast],
+    [loggingMood, user?.pet, sendMessage, refreshGameSummary, toast, triggerXpGain, refreshUser],
+  );
+
+  const handleGoalComplete = useCallback(
+    async (messageId: string, goalId: string, title: string) => {
+      const key = `${messageId}:${goalId}`;
+      if (busyGoalKey) return;
+      setBusyGoalKey(key);
+      try {
+        await completeGoal(goalId);
+        sendMessage(`I finished ${title}!`);
+      } catch (err: unknown) {
+        toast(err instanceof Error ? err.message : 'Could not check off that goal', 'error');
+      } finally {
+        setBusyGoalKey(null);
+      }
+    },
+    [busyGoalKey, completeGoal, sendMessage, toast],
   );
 
   const handleSuggestionDone = useCallback(
@@ -242,10 +298,7 @@ export default function ExploreScreen() {
             [messageId]: { gemsAwarded: result.gemsAwarded, item: result.item },
           }));
           refreshGameSummary();
-          const parts: string[] = [];
-          if (result.gemsAwarded > 0) parts.push(`+${result.gemsAwarded} gems`);
-          if (result.item) parts.push(result.item.label);
-          if (parts.length) toast(parts.join(' · '), 'success');
+          showAppRewards({ gemsAwarded: result.gemsAwarded, item: result.item });
         }
       } catch {
         // Still send message even if reward fails
@@ -259,6 +312,7 @@ export default function ExploreScreen() {
     ({ item }: { item: ChatMessageEntry }) => {
       const isUser = item.role === 'user';
       const hasSuggest = item.role === 'assistant' && item.suggest;
+      const hasGoalCards = item.role === 'assistant' && !!item.goalCards?.length;
       const completed = hasSuggest && completedSuggestions.has(item.id);
       const isStreamingThis = streamingEnabled && item.id === streamingMessageId;
       const streamComplete = !isStreamingThis || streamingRevealedLength >= item.content.length;
@@ -294,17 +348,37 @@ export default function ExploreScreen() {
                 />
               </View>
             )}
+            {hasGoalCards && item.goalCards && streamComplete && (
+              <View style={{ width: screenWidth * 0.85 }}>
+                {item.goalCards.map((card, i) => {
+                  const live = goalsState.goals.find((g) => g.id === card.goal.id);
+                  const done = live?.completedToday ?? card.goal.completedToday;
+                  return (
+                    <GoalChatCard
+                      key={`${item.id}-${card.goal.id}-${i}`}
+                      card={card}
+                      completed={done}
+                      busy={busyGoalKey === `${item.id}:${card.goal.id}`}
+                      onComplete={() => void handleGoalComplete(item.id, card.goal.id, card.goal.title)}
+                    />
+                  );
+                })}
+              </View>
+            )}
           </View>
         </View>
       );
     },
-    [theme, isDark, completedSuggestions, handleSuggestionDone, screenWidth, streamingMessageId, streamingRevealedLength],
+    [theme, isDark, completedSuggestions, handleSuggestionDone, handleGoalComplete, screenWidth, streamingMessageId, streamingRevealedLength, goalsState.goals, busyGoalKey],
   );
 
   const styles = useMemo(
     () =>
       StyleSheet.create({
         safe: { flex: 1 },
+        // Clips the body while it slides up, so messages can't ride over the header.
+        bodyClip: { flex: 1, overflow: 'hidden' },
+        chatBody: { flex: 1, paddingBottom: TAB_BAR_CLEARANCE },
         header: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -348,6 +422,7 @@ export default function ExploreScreen() {
           paddingVertical: spacing.md,
           paddingBottom: spacing.md,
         },
+        olderLoader: { paddingVertical: spacing.md, alignItems: 'center' },
         bubbleRow: { marginBottom: spacing.sm },
         bubbleRowUser: { alignItems: 'flex-end' },
         bubbleRowPet: { alignItems: 'flex-start' },
@@ -379,7 +454,6 @@ export default function ExploreScreen() {
           alignItems: 'center',
           paddingHorizontal: spacing.md,
           paddingVertical: spacing.sm,
-          paddingBottom: TAB_BAR_TOTAL_HEIGHT + spacing.sm + 10,
           gap: spacing.sm,
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
@@ -424,12 +498,7 @@ export default function ExploreScreen() {
 
   return (
     <GradientBackground bubbleCount={3}>
-      <KeyboardAvoidingView
-        style={styles.safe}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={-70}
-      >
-        <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.avatar}>
@@ -489,72 +558,92 @@ export default function ExploreScreen() {
               <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
           ) : (
-            <>
+            <View style={styles.bodyClip}>
+            <Animated.View style={[styles.chatBody, keyboardShiftStyle]}>
               {error && (
                 <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
-              <FlatList
-                ref={listRef}
-                data={messages}
-                keyExtractor={(m) => m.id}
-                renderItem={renderItem}
-                style={styles.list}
-                contentContainerStyle={[
-                  styles.listContent,
-                  messages.length === 0 && !needsMoodToday && { flexGrow: 1, justifyContent: 'flex-end' },
-                  messages.length === 0 && needsMoodToday && { flexGrow: 1 },
-                ]}
-                onContentSizeChange={() => {
-                  const animate = hasInitiallyScrolled.current;
-                  listRef.current?.scrollToEnd({ animated: animate });
-                  if (messages.length > 0) hasInitiallyScrolled.current = true;
-                }}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                ListHeaderComponent={
-                  needsMoodToday ? (
-                    <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
-                      <View style={{ width: screenWidth * 0.85 }}>
-                        <MoodPickerCard
-                          onSelect={handleMoodSelect}
-                          subtitle={loggingMood ? 'Logging...' : undefined}
-                        />
-                      </View>
+              {messages.length === 0 ? (
+                <View style={styles.empty}>
+                  {needsMoodToday ? (
+                    <View style={{ width: screenWidth * 0.85 }}>
+                      <MoodPickerCard
+                        onSelect={handleMoodSelect}
+                        subtitle={loggingMood ? 'Logging...' : undefined}
+                      />
                     </View>
-                  ) : null
-                }
-                ListEmptyComponent={
-                  !needsMoodToday ? (
-                    <View style={styles.empty}>
-                      <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>Say hi to {petName}!</Text>
-                    </View>
-                  ) : null
-                }
-                ListFooterComponent={
-                  sending ? (
-                    <View style={[styles.bubbleRow, styles.bubbleRowPet]}>
-                      <View style={styles.bubbleWrapper}>
-                        <View
-                          style={[
-                            styles.bubble,
-                            styles.typingBubble,
-                            { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : theme.colors.surface },
-                          ]}
-                        >
-                          <View style={styles.typingDots}>
-                            <ActivityIndicator size="small" color={theme.colors.textMuted} />
-                            <Text style={[styles.typingText, { color: theme.colors.textMuted }]}>
-                              {petName} is thinking...
-                            </Text>
+                  ) : (
+                    <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>Say hi to {petName}!</Text>
+                  )}
+                </View>
+              ) : (
+                <FlatList
+                  ref={listRef}
+                  inverted
+                  data={invertedMessages}
+                  keyExtractor={(m) => m.id}
+                  renderItem={renderItem}
+                  style={styles.list}
+                  contentContainerStyle={styles.listContent}
+                  onEndReached={loadOlder}
+                  onEndReachedThreshold={0.4}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="interactive"
+                  showsVerticalScrollIndicator={false}
+                  // Keep the mounted cell count small — this screen stays mounted
+                  // behind the other tabs, and every mounted node adds to the cost
+                  // of each Fabric commit app-wide.
+                  initialNumToRender={12}
+                  maxToRenderPerBatch={8}
+                  windowSize={5}
+                  removeClippedSubviews={Platform.OS === 'android'}
+                  // Inverted: the "header" sits at the visual bottom, next to the input.
+                  ListHeaderComponent={
+                    <>
+                      {sending && (
+                        <View style={[styles.bubbleRow, styles.bubbleRowPet]}>
+                          <View style={styles.bubbleWrapper}>
+                            <View
+                              style={[
+                                styles.bubble,
+                                styles.typingBubble,
+                                { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : theme.colors.surface },
+                              ]}
+                            >
+                              <View style={styles.typingDots}>
+                                <ActivityIndicator size="small" color={theme.colors.textMuted} />
+                                <Text style={[styles.typingText, { color: theme.colors.textMuted }]}>
+                                  {petName} is thinking...
+                                </Text>
+                              </View>
+                            </View>
                           </View>
                         </View>
+                      )}
+                      {needsMoodToday && (
+                        <View style={{ paddingBottom: spacing.sm }}>
+                          <View style={{ width: screenWidth * 0.85 }}>
+                            <MoodPickerCard
+                              onSelect={handleMoodSelect}
+                              subtitle={loggingMood ? 'Logging...' : undefined}
+                            />
+                          </View>
+                        </View>
+                      )}
+                    </>
+                  }
+                  // Inverted: the "footer" sits at the visual top, where older messages load in.
+                  ListFooterComponent={
+                    loadingOlder ? (
+                      <View style={styles.olderLoader}>
+                        <ActivityIndicator size="small" color={theme.colors.textMuted} />
                       </View>
-                    </View>
-                  ) : null
-                }
-              />
+                    ) : null
+                  }
+                />
+              )}
 
               <View style={styles.inputRow}>
                 <View style={styles.inputWrapper}>
@@ -584,10 +673,10 @@ export default function ExploreScreen() {
                   )}
                 </Pressable>
               </View>
-            </>
+            </Animated.View>
+            </View>
           )}
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+      </SafeAreaView>
     </GradientBackground>
   );
 }

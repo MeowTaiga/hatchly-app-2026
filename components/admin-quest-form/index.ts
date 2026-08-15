@@ -5,7 +5,7 @@
 export { SectionCard } from './SectionCard';
 export { ListItemChip } from './ListItemChip';
 export { AddButton } from './AddButton';
-export { FormField, FormTextField, ChipSelect, SwitchField, Field } from './FormField';
+export { FormTextField, ChipSelect, SwitchField, Field } from './FormField';
 export { BasicSection } from './sections/BasicSection';
 export { ActivationSection } from './sections/ActivationSection';
 export { TriggersSection } from './sections/TriggersSection';

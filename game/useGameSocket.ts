@@ -1,6 +1,6 @@
 import { useSocket } from '@/lib/socket';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ActiveBalloon, ActiveBug, BalloonPopResult, BugCatchResult, CookResult, CraftResult, DialogStep, FossilDigResult, GameSnapshot, ItemDefinition, StateUpdate } from './types';
+import type { ActiveBalloon, ActiveBug, BalloonPopResult, BugCatchResult, CookResult, CraftResult, FossilDigResult, GameSnapshot, GroundPickupResult, ItemDefinition, MineOreResult, MineReadyPayload, SpiritSnatchResult, SpiritSnatchStartResult, SpiritSnatchTap, StateUpdate } from './types';
 
 // ─── WS Event Names (mirrors server) ────────────────────────────────────────
 
@@ -13,6 +13,7 @@ const EV = {
   REMOVE_ITEM: 'game:remove_item',
   HARVEST: 'game:harvest',
   SHAKE_TREE: 'game:shake_tree',
+  CHOP_TREE: 'game:chop_tree',
   RENAME_FARM: 'game:rename_farm',
   MOVE_ITEM: 'game:move_item',
   WATER_TILE: 'game:water_tile',
@@ -30,22 +31,35 @@ const EV = {
   BALLOON_POP: 'balloon:pop',
   BALLOON_POPPED: 'balloon:popped',
   BALLOON_DESPAWN: 'balloon:despawn',
+  SPIRIT_SNATCH_START: 'game:spirit_snatch_start',
+  SPIRIT_SNATCH_START_RESULT: 'game:spirit_snatch_start_result',
+  SPIRIT_SNATCH: 'game:spirit_snatch',
+  SPIRIT_SNATCH_RESULT: 'game:spirit_snatch_result',
   FOSSIL_DIG: 'fossil:dig',
   FOSSIL_DUG: 'fossil:dug',
+  GROUND_PICKUP: 'ground:pickup',
+  GROUND_PICKED_UP: 'ground:picked_up',
   USER_SET_TIMEZONE: 'user:set_timezone',
   SCENERY_UPDATED: 'scenery:updated',
+  // Quest results all arrive on STATE_UPDATE; these are the four ways the client
+  // reports something quest-relevant.
   QUEST_COMPLETE: 'quest:complete',
-  QUEST_COMPLETED: 'quest:completed',
-  QUEST_DIALOG: 'quest:dialog',
-  QUEST_ACTIVATE_BY_NPC: 'quest:activate_by_npc',
-  QUEST_ACTIVATE_BY_SCENE: 'quest:activate_by_scene',
-  QUEST_ACTIVATED: 'quest:activated',
-  QUEST_NPC_DIALOG_DISMISSED: 'quest:npc_dialog_dismissed',
+  QUEST_TALK_TO_NPC: 'quest:talk_to_npc',
+  QUEST_ENTER_SCENE: 'quest:enter_scene',
   QUEST_MODAL_OPENED: 'quest:modal_opened',
   COOK: 'game:cook',
   COOK_RESULT: 'game:cook_result',
   CRAFT: 'game:craft',
   CRAFT_RESULT: 'game:craft_result',
+  SMELT: 'game:smelt',
+  SMELT_RESULT: 'game:smelt_result',
+  MINE_BEGIN: 'mine:ore_begin',
+  MINE_READY: 'mine:ore_ready',
+  MINE_COMPLETE: 'mine:ore_complete',
+  MINE_CANCEL: 'mine:ore_cancel',
+  MINE_RESULT: 'mine:ore_result',
+  LEARN_RECIPE: 'game:learn_recipe',
+  LEARN_RECIPE_RESULT: 'game:learn_recipe_result',
   FEED_PET: 'game:feed_pet',
   ADD_TO_FOOD_DISH: 'game:add_to_food_dish',
   CONSUME_FROM_FOOD_DISH: 'game:consume_from_food_dish',
@@ -56,6 +70,8 @@ const EV = {
   PET_UPDATED: 'pet:updated',
   COLLECT_WATER: 'game:collect_water',
   COLLECT_WATER_RESULT: 'game:collect_water_result',
+  STORAGE_DEPOSIT: 'game:storage_deposit',
+  STORAGE_WITHDRAW: 'game:storage_withdraw',
 } as const;
 
 // ─── Return Type ────────────────────────────────────────────────────────────
@@ -69,6 +85,7 @@ export interface UseGameSocketReturn {
   emitRemoveItem: (itemId: string) => void;
   emitHarvest: (itemId: string) => void;
   emitShakeTree: (anchorId: string) => void;
+  emitChopTree: (anchorId: string) => void;
   emitRenameFarm: (name: string) => void;
   emitMoveItem: (itemId: string, col: number, row: number) => void;
   emitWaterTile: (col: number, row: number) => void;
@@ -79,20 +96,36 @@ export interface UseGameSocketReturn {
   emitSetEquipped: (slot: 'handTool' | 'bobber' | 'bait' | 'chair', itemType: string | null) => void;
   emitCatchBug: (spawnId: string) => void;
   emitPopBalloon: (spawnId: string) => void;
+  emitSpiritSnatchStart: () => void;
+  emitSpiritSnatchSubmit: (roundId: string, taps: SpiritSnatchTap[]) => void;
   emitDigFossil: (anchorId: string) => void;
+  emitPickupGround: (anchorId: string) => void;
   emitCompleteQuest: (questId: string) => void;
-  emitQuestActivateByNpc: (npcItemType: string) => void;
-  emitQuestActivateByScene: (sceneSlug: string) => void;
-  emitQuestNpcDialogDismissed: (npcItemType: string) => void;
+  emitTalkToNpc: (npcItemType: string) => void;
+  emitEnterScene: (sceneSlug: string) => void;
   emitQuestModalOpened: (payload: string) => void;
-  emitCook: (ingredients: { itemType: string; qty: number }[], minigamePassed: boolean) => void;
-  emitCraft: (materials: { itemType: string; qty: number }[], minigamePassed: boolean) => void;
+  emitCook: (recipeId: string, minigamePassed: boolean) => void;
+  emitCraft: (recipeId: string, minigamePassed: boolean) => void;
+  emitSmelt: (recipeId: string, minigamePassed: boolean) => void;
+  emitMineBegin: (sceneSlug: string, col: number, row: number) => void;
+  emitMineComplete: (payload: {
+    sceneSlug: string;
+    col: number;
+    row: number;
+    taps: number;
+    elapsedMs: number;
+    passed: boolean;
+  }) => void;
+  emitMineCancel: () => void;
+  emitLearnRecipe: (itemType: string) => void;
   emitFeedPet: (anchorId: string, foodItemType: string) => void;
   emitAddToFoodDish: (anchorId: string, items: Array<{ itemType: string; qty: number }>) => void;
   emitConsumeFromFoodDish: (anchorId: string) => void;
   emitPetBehavior: (state: string) => void;
   emitPetActionComplete: (targetCol: number, targetRow: number) => void;
   emitCollectWater: (wellSlug: string) => void;
+  emitStorageDeposit: (items: Array<{ itemType: string; qty: number }>) => void;
+  emitStorageWithdraw: (items: Array<{ itemType: string; qty: number }>) => void;
 }
 
 interface UseGameSocketOptions {
@@ -107,20 +140,17 @@ interface UseGameSocketOptions {
   onBalloonPopped: (result: BalloonPopResult) => void;
   onBalloonDespawn: (data: { spawnId: string }) => void;
   onFossilDug?: (result: FossilDigResult) => void;
+  onGroundPickedUp?: (result: GroundPickupResult) => void;
   onSceneryUpdated: (data: { farmCols: number; farmRows: number; imageUrl: string }) => void;
-  onQuestCompleted?: (data: {
-    questId: string;
-    newFarmLevel?: number;
-    farmLevel?: number;
-    endDialog?: DialogStep[];
-    nextQuestId?: string;
-    nextQuestStartDialog?: DialogStep[];
-  }) => void;
-  onQuestDialog?: (data: { questId: string; dialog: DialogStep[] }) => void;
-  onQuestActivated?: (data: { activated: Array<{ questId: string; startDialog?: DialogStep[] }>; quests: import('./types').QuestProgress[] }) => void;
   onCookResult?: (result: CookResult) => void;
   onCraftResult?: (result: CraftResult) => void;
+  onSmeltResult?: (result: CraftResult) => void;
+  onMineReady?: (payload: MineReadyPayload) => void;
+  onMineResult?: (result: MineOreResult) => void;
+  onLearnRecipeResult?: (result: { recipeId: string; recipeLabel: string; recipeItemType: string }) => void;
   onCollectWaterResult?: (result: { success: boolean; waterQty?: number; nextAvailableAt?: string; onCooldown?: boolean; message?: string }) => void;
+  onSpiritSnatchStart?: (result: SpiritSnatchStartResult) => void;
+  onSpiritSnatchResult?: (result: SpiritSnatchResult) => void;
   onPetBehaviorSync?: (data: { state: string }) => void;
   onPetStateUpdate?: (data: {
     col: number;
@@ -158,13 +188,17 @@ export function useGameSocket({
   onBalloonPopped,
   onBalloonDespawn,
   onFossilDug,
+  onGroundPickedUp,
   onSceneryUpdated,
-  onQuestCompleted,
-  onQuestDialog,
-  onQuestActivated,
   onCookResult,
   onCraftResult,
+  onSmeltResult,
+  onMineReady,
+  onMineResult,
+  onLearnRecipeResult,
   onCollectWaterResult,
+  onSpiritSnatchStart,
+  onSpiritSnatchResult,
   onPetBehaviorSync,
   onPetStateUpdate,
   onPetUpdated,
@@ -189,13 +223,17 @@ export function useGameSocket({
   const onBalloonPoppedRef = useRef(onBalloonPopped);
   const onBalloonDespawnRef = useRef(onBalloonDespawn);
   const onFossilDugRef = useRef(onFossilDug);
+  const onGroundPickedUpRef = useRef(onGroundPickedUp);
   const onSceneryUpdatedRef = useRef(onSceneryUpdated);
-  const onQuestCompletedRef = useRef(onQuestCompleted);
-  const onQuestDialogRef = useRef(onQuestDialog);
-  const onQuestActivatedRef = useRef(onQuestActivated);
   const onCookResultRef = useRef(onCookResult);
   const onCraftResultRef = useRef(onCraftResult);
+  const onSmeltResultRef = useRef(onSmeltResult);
+  const onMineReadyRef = useRef(onMineReady);
+  const onMineResultRef = useRef(onMineResult);
+  const onLearnRecipeResultRef = useRef(onLearnRecipeResult);
   const onCollectWaterResultRef = useRef(onCollectWaterResult);
+  const onSpiritSnatchStartRef = useRef(onSpiritSnatchStart);
+  const onSpiritSnatchResultRef = useRef(onSpiritSnatchResult);
   const onPetBehaviorSyncRef = useRef(onPetBehaviorSync);
   const onPetStateUpdateRef = useRef(onPetStateUpdate);
   const onPetUpdatedRef = useRef(onPetUpdated);
@@ -206,14 +244,21 @@ export function useGameSocket({
   onBugSpawnRef.current = onBugSpawn;
   onBugCaughtRef.current = onBugCaught;
   onBugDespawnRef.current = onBugDespawn;
+  onBalloonSpawnRef.current = onBalloonSpawn;
+  onBalloonPoppedRef.current = onBalloonPopped;
+  onBalloonDespawnRef.current = onBalloonDespawn;
   onFossilDugRef.current = onFossilDug;
+  onGroundPickedUpRef.current = onGroundPickedUp;
   onSceneryUpdatedRef.current = onSceneryUpdated;
-  onQuestCompletedRef.current = onQuestCompleted;
-  onQuestDialogRef.current = onQuestDialog;
-  onQuestActivatedRef.current = onQuestActivated;
   onCookResultRef.current = onCookResult;
   onCraftResultRef.current = onCraftResult;
+  onSmeltResultRef.current = onSmeltResult;
+  onMineReadyRef.current = onMineReady;
+  onMineResultRef.current = onMineResult;
+  onLearnRecipeResultRef.current = onLearnRecipeResult;
   onCollectWaterResultRef.current = onCollectWaterResult;
+  onSpiritSnatchStartRef.current = onSpiritSnatchStart;
+  onSpiritSnatchResultRef.current = onSpiritSnatchResult;
   onPetBehaviorSyncRef.current = onPetBehaviorSync;
   onPetStateUpdateRef.current = onPetStateUpdate;
   onPetUpdatedRef.current = onPetUpdated;
@@ -259,31 +304,26 @@ export function useGameSocket({
     contextSocket.on(EV.BALLOON_POPPED, (data: BalloonPopResult) => onBalloonPoppedRef.current(data));
     contextSocket.on(EV.BALLOON_DESPAWN, (data: { spawnId: string }) => onBalloonDespawnRef.current(data));
     contextSocket.on(EV.FOSSIL_DUG, (data: FossilDigResult) => onFossilDugRef.current?.(data));
+    contextSocket.on(EV.GROUND_PICKED_UP, (data: GroundPickupResult) => onGroundPickedUpRef.current?.(data));
     contextSocket.on(EV.SCENERY_UPDATED, (data: { farmCols: number; farmRows: number; imageUrl: string }) => {
       onSceneryUpdatedRef.current(data);
     });
-    contextSocket.on(EV.QUEST_COMPLETED, (data: {
-      questId: string;
-      newFarmLevel?: number;
-      farmLevel?: number;
-      endDialog?: DialogStep[];
-      rewards?: import('./types').QuestReward;
-      nextQuestId?: string;
-      nextQuestStartDialog?: DialogStep[];
-      inventory?: Record<string, number>;
-      gems?: number;
-      quests?: import('./types').QuestProgress[];
-    }) => { onQuestCompletedRef.current?.(data); });
-    contextSocket.on(EV.QUEST_DIALOG, (data: { questId: string; dialog: DialogStep[] }) => {
-      onQuestDialogRef.current?.(data);
-    });
-    contextSocket.on(EV.QUEST_ACTIVATED, (data: { activated: Array<{ questId: string; startDialog?: DialogStep[] }>; quests: import('./types').QuestProgress[] }) => {
-      onQuestActivatedRef.current?.(data);
-    });
     contextSocket.on(EV.COOK_RESULT, (data: CookResult) => onCookResultRef.current?.(data));
     contextSocket.on(EV.CRAFT_RESULT, (data: CraftResult) => onCraftResultRef.current?.(data));
+    contextSocket.on(EV.SMELT_RESULT, (data: CraftResult) => onSmeltResultRef.current?.(data));
+    contextSocket.on(EV.MINE_READY, (data: MineReadyPayload) => onMineReadyRef.current?.(data));
+    contextSocket.on(EV.MINE_RESULT, (data: MineOreResult) => onMineResultRef.current?.(data));
+    contextSocket.on(EV.LEARN_RECIPE_RESULT, (data: { recipeId: string; recipeLabel: string; recipeItemType: string }) => {
+      onLearnRecipeResultRef.current?.(data);
+    });
     contextSocket.on(EV.COLLECT_WATER_RESULT, (data: { success: boolean; waterQty?: number; nextAvailableAt?: string; onCooldown?: boolean; message?: string }) => {
       onCollectWaterResultRef.current?.(data);
+    });
+    contextSocket.on(EV.SPIRIT_SNATCH_START_RESULT, (data: SpiritSnatchStartResult) => {
+      onSpiritSnatchStartRef.current?.(data);
+    });
+    contextSocket.on(EV.SPIRIT_SNATCH_RESULT, (data: SpiritSnatchResult) => {
+      onSpiritSnatchResultRef.current?.(data);
     });
     contextSocket.on(EV.PET_BEHAVIOR_SYNC, (data: { state: string }) => onPetBehaviorSyncRef.current?.(data));
     contextSocket.on(EV.PET_STATE_UPDATE, (data: {
@@ -301,8 +341,10 @@ export function useGameSocket({
     return () => {
       contextSocket.off(EV.SNAPSHOT).off(EV.STATE_UPDATE).off(EV.ITEM_DEFS_UPDATED).off(EV.ERROR)
         .off(EV.BUG_SPAWN).off(EV.BUG_CAUGHT).off(EV.BUG_DESPAWN)        .off(EV.BALLOON_SPAWN).off(EV.BALLOON_POPPED).off(EV.BALLOON_DESPAWN).off(EV.FOSSIL_DUG)
-        .off(EV.SCENERY_UPDATED).off(EV.QUEST_COMPLETED).off(EV.QUEST_DIALOG).off(EV.QUEST_ACTIVATED)
-        .off(EV.COOK_RESULT).off(EV.CRAFT_RESULT).off(EV.COLLECT_WATER_RESULT)
+        .off(EV.GROUND_PICKED_UP)
+        .off(EV.SCENERY_UPDATED)
+        .off(EV.COOK_RESULT).off(EV.CRAFT_RESULT).off(EV.SMELT_RESULT).off(EV.MINE_READY).off(EV.MINE_RESULT).off(EV.LEARN_RECIPE_RESULT).off(EV.COLLECT_WATER_RESULT)
+        .off(EV.SPIRIT_SNATCH_START_RESULT).off(EV.SPIRIT_SNATCH_RESULT)
         .off(EV.PET_BEHAVIOR_SYNC).off(EV.PET_STATE_UPDATE).off(EV.PET_UPDATED);
     };
   }, [contextSocket, contextConnected]);
@@ -321,6 +363,10 @@ export function useGameSocket({
 
   const emitShakeTree = useCallback((anchorId: string) => {
     socketRef.current?.emit(EV.SHAKE_TREE, { anchorId });
+  }, []);
+
+  const emitChopTree = useCallback((anchorId: string) => {
+    socketRef.current?.emit(EV.CHOP_TREE, { anchorId });
   }, []);
 
   const emitRenameFarm = useCallback((name: string) => {
@@ -370,24 +416,32 @@ export function useGameSocket({
     socketRef.current?.emit(EV.FOSSIL_DIG, { anchorId });
   }, []);
 
+  const emitPickupGround = useCallback((anchorId: string) => {
+    socketRef.current?.emit(EV.GROUND_PICKUP, { anchorId });
+  }, []);
+
   const emitPopBalloon = useCallback((spawnId: string) => {
     socketRef.current?.emit(EV.BALLOON_POP, { spawnId });
+  }, []);
+
+  const emitSpiritSnatchStart = useCallback(() => {
+    socketRef.current?.emit(EV.SPIRIT_SNATCH_START);
+  }, []);
+
+  const emitSpiritSnatchSubmit = useCallback((roundId: string, taps: SpiritSnatchTap[]) => {
+    socketRef.current?.emit(EV.SPIRIT_SNATCH, { roundId, taps });
   }, []);
 
   const emitCompleteQuest = useCallback((questId: string) => {
     socketRef.current?.emit(EV.QUEST_COMPLETE, { questId });
   }, []);
 
-  const emitQuestActivateByNpc = useCallback((npcItemType: string) => {
-    socketRef.current?.emit(EV.QUEST_ACTIVATE_BY_NPC, { npcItemType });
+  const emitTalkToNpc = useCallback((npcItemType: string) => {
+    socketRef.current?.emit(EV.QUEST_TALK_TO_NPC, { npcItemType });
   }, []);
 
-  const emitQuestActivateByScene = useCallback((sceneSlug: string) => {
-    socketRef.current?.emit(EV.QUEST_ACTIVATE_BY_SCENE, { sceneSlug });
-  }, []);
-
-  const emitQuestNpcDialogDismissed = useCallback((npcItemType: string) => {
-    socketRef.current?.emit(EV.QUEST_NPC_DIALOG_DISMISSED, { npcItemType });
+  const emitEnterScene = useCallback((sceneSlug: string) => {
+    socketRef.current?.emit(EV.QUEST_ENTER_SCENE, { sceneSlug });
   }, []);
 
   const emitQuestModalOpened = useCallback((payload: string) => {
@@ -398,12 +452,35 @@ export function useGameSocket({
     socketRef.current?.emit(EV.LOAD);
   }, []);
 
-  const emitCook = useCallback((ingredients: { itemType: string; qty: number }[], minigamePassed: boolean) => {
-    socketRef.current?.emit(EV.COOK, { ingredients, minigamePassed });
+  const emitCook = useCallback((recipeId: string, minigamePassed: boolean) => {
+    socketRef.current?.emit(EV.COOK, { recipeId, minigamePassed });
   }, []);
 
-  const emitCraft = useCallback((materials: { itemType: string; qty: number }[], minigamePassed: boolean) => {
-    socketRef.current?.emit(EV.CRAFT, { ingredients: materials, minigamePassed });
+  const emitCraft = useCallback((recipeId: string, minigamePassed: boolean) => {
+    socketRef.current?.emit(EV.CRAFT, { recipeId, minigamePassed });
+  }, []);
+
+  const emitSmelt = useCallback((recipeId: string, minigamePassed: boolean) => {
+    socketRef.current?.emit(EV.SMELT, { recipeId, minigamePassed });
+  }, []);
+
+  const emitMineBegin = useCallback((sceneSlug: string, col: number, row: number) => {
+    socketRef.current?.emit(EV.MINE_BEGIN, { sceneSlug, col, row });
+  }, []);
+
+  const emitMineComplete = useCallback(
+    (payload: { sceneSlug: string; col: number; row: number; taps: number; elapsedMs: number; passed: boolean }) => {
+      socketRef.current?.emit(EV.MINE_COMPLETE, payload);
+    },
+    [],
+  );
+
+  const emitMineCancel = useCallback(() => {
+    socketRef.current?.emit(EV.MINE_CANCEL);
+  }, []);
+
+  const emitLearnRecipe = useCallback((itemType: string) => {
+    socketRef.current?.emit(EV.LEARN_RECIPE, { itemType });
   }, []);
 
   const emitFeedPet = useCallback((anchorId: string, foodItemType: string) => {
@@ -432,6 +509,14 @@ export function useGameSocket({
     socketRef.current?.emit(EV.COLLECT_WATER, { wellSlug });
   }, []);
 
+  const emitStorageDeposit = useCallback((items: Array<{ itemType: string; qty: number }>) => {
+    socketRef.current?.emit(EV.STORAGE_DEPOSIT, { items });
+  }, []);
+
+  const emitStorageWithdraw = useCallback((items: Array<{ itemType: string; qty: number }>) => {
+    socketRef.current?.emit(EV.STORAGE_WITHDRAW, { items });
+  }, []);
+
   return {
     connected,
     loading,
@@ -440,6 +525,7 @@ export function useGameSocket({
     emitRemoveItem,
     emitHarvest,
     emitShakeTree,
+    emitChopTree,
     emitRenameFarm,
     emitMoveItem,
     emitWaterTile,
@@ -450,19 +536,28 @@ export function useGameSocket({
     emitSetEquipped,
     emitCatchBug,
     emitDigFossil,
+    emitPickupGround,
     emitPopBalloon,
+    emitSpiritSnatchStart,
+    emitSpiritSnatchSubmit,
     emitCompleteQuest,
-    emitQuestActivateByNpc,
-    emitQuestActivateByScene,
-    emitQuestNpcDialogDismissed,
+    emitTalkToNpc,
+    emitEnterScene,
     emitQuestModalOpened,
     emitCook,
     emitCraft,
+    emitSmelt,
+    emitMineBegin,
+    emitMineComplete,
+    emitMineCancel,
+    emitLearnRecipe,
     emitFeedPet,
     emitAddToFoodDish,
     emitConsumeFromFoodDish,
     emitPetBehavior,
     emitPetActionComplete,
     emitCollectWater,
+    emitStorageDeposit,
+    emitStorageWithdraw,
   };
 }

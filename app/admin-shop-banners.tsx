@@ -42,7 +42,7 @@ function BannerRow({
       <View style={cardStyle}>
         <View style={[s.bannerPreview, { backgroundColor: colors.surfaceElevated }]}>
           {showImage ? (
-            <CachedImage source={{ uri: banner.imageUrl }} style={s.bannerImage} resizeMode="cover" />
+            <CachedImage source={{ uri: banner.imageUrl! }} style={s.bannerImage} resizeMode="cover" />
           ) : (
             <View style={s.bannerPlaceholder}>
               <Ionicons name="image-outline" size={32} color={colors.textMuted} />

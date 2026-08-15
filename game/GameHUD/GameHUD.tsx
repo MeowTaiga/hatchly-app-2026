@@ -6,10 +6,11 @@
  * build palette measurement, and expand/collapse state.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
+  cancelAnimation,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -21,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/store/ThemeProvider';
 import { TAB_BAR_TOTAL_HEIGHT } from '@/components/ui/FloatingTabBar';
 
+import { ItemGainToastHost } from '../ItemGainToastHost';
 import { PetStatusBar } from './PetStatusBar';
 import { TopRow } from './TopRow';
 import { HarvestBubblesView } from './HarvestBubblesView';
@@ -41,9 +43,15 @@ import {
   CLOSE_DURATION,
 } from './constants';
 import { createIsHighlighted } from '../shared/questHighlightUtils';
-import type { GameHUDProps } from './types';
+import type { GameHUDProps, ToolMode } from './types';
 
-export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
+/**
+ * Memoized because WorldRenderer re-renders on every drag preview and camera
+ * snapshot, none of which the HUD cares about.
+ */
+export const GameHUD = React.memo(function GameHUD(
+  props: GameHUDProps & { onRefreshGame?: () => void },
+) {
   const {
     activeScene,
     farmName,
@@ -52,6 +60,7 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
     onOpenBestiary,
     onOpenEquip,
     displaySlots,
+    inventorySlots,
     selectedItemType,
     activeCategory,
     farmLevel,
@@ -69,12 +78,12 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
     onSetCategory,
     onCancelMove,
     onSetToolMode,
+    onHudAction,
     onBuildPaletteLayout,
-  onPaletteDragStart,
-  onPaletteDragUpdate,
-  onPaletteDragEnd,
-  onRefreshGame,
-} = props;
+    paletteDrag,
+    onRefreshGame,
+    backpackSlots = 20,
+  } = props;
 
   const [adminPanelVisible, setAdminPanelVisible] = useState(false);
 
@@ -91,8 +100,26 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
     [colors, screenWidth],
   );
 
+  const extraCurrencies = useMemo(() => {
+    const qtyByType = new Map<string, number>();
+    for (const slot of inventorySlots) {
+      if (slot.qty > 0) qtyByType.set(slot.itemType, (qtyByType.get(slot.itemType) ?? 0) + slot.qty);
+    }
+    const out: Array<{ def: (typeof itemDefs)[string]; qty: number }> = [];
+    for (const def of Object.values(itemDefs)) {
+      if (!def.isCurrency) continue;
+      const qty = qtyByType.get(def.itemType) ?? 0;
+      if (qty > 0) out.push({ def, qty });
+    }
+    out.sort((a, b) => a.def.itemType.localeCompare(b.def.itemType));
+    return out;
+  }, [itemDefs, inventorySlots]);
+
   const highlightPulse = useSharedValue(0);
   useEffect(() => {
+    // Cancel any in-flight pulse first. The glow wrapper unmounts when inactive
+    // (see QuestHighlightGlow) so leftover native shadow props cannot stick.
+    cancelAnimation(highlightPulse);
     if (activeHighlight) {
       highlightPulse.value = withRepeat(
         withSequence(
@@ -105,25 +132,52 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
     } else {
       highlightPulse.value = 0;
     }
-  }, [activeHighlight?.type, activeHighlight?.target]);
+  }, [activeHighlight?.type, activeHighlight?.target, highlightPulse]);
 
   const highlightGlowStyle = useAnimatedStyle(() => ({
     shadowColor: '#FFD700',
     shadowOpacity: highlightPulse.value * 0.8,
     shadowRadius: 8 + highlightPulse.value * 4,
     shadowOffset: { width: 0, height: 0 },
-    elevation: highlightPulse.value > 0 ? 8 : 0,
+    elevation: 8,
   }));
 
   const isHighlighted = createIsHighlighted(activeHighlight);
 
   const handleBackpackPress = useCallback(() => {
+    onHudAction?.('backpack');
     if (editMode && paletteDismissed) {
       setPaletteDismissed(false);
     } else {
       onSetToolMode(toolMode === 'build' ? 'none' : 'build');
     }
-  }, [editMode, paletteDismissed, toolMode, onSetToolMode]);
+  }, [editMode, paletteDismissed, toolMode, onSetToolMode, onHudAction]);
+
+  // Every HUD button reports itself so a dialog highlighting one can advance.
+  const handleOpenShop = useCallback(() => {
+    onHudAction?.('shop');
+    onOpenShop();
+  }, [onHudAction, onOpenShop]);
+
+  const handleOpenFarmInfo = useCallback(() => {
+    onHudAction?.('farm_info');
+    onOpenFarmInfo();
+  }, [onHudAction, onOpenFarmInfo]);
+
+  const handleOpenBestiary = useCallback(() => {
+    onHudAction?.('bestiary');
+    onOpenBestiary?.();
+  }, [onHudAction, onOpenBestiary]);
+
+  const handleOpenEquip = useCallback(() => {
+    onHudAction?.('equip');
+    onOpenEquip?.();
+  }, [onHudAction, onOpenEquip]);
+
+  const handleSetToolMode = useCallback((mode: ToolMode) => {
+    if (mode === 'trash') onHudAction?.('trash');
+    onSetToolMode(mode);
+  }, [onHudAction, onSetToolMode]);
 
   useEffect(() => {
     if (!onBuildPaletteLayout) return;
@@ -227,13 +281,14 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
         farmName={farmName}
         farmLevel={farmLevel}
         gems={gems}
+        extraCurrencies={extraCurrencies}
         canUpgrade={canUpgrade}
         topOffset={insets.top + 8}
         styles={styles}
         highlightGlowStyle={highlightGlowStyle}
         isHighlighted={isHighlighted}
         onBackToFarm={onBackToFarm}
-        onOpenFarmInfo={onOpenFarmInfo}
+        onOpenFarmInfo={handleOpenFarmInfo}
         colors={colors}
         rightSlot={<PetStatusBar inline colors={colors} />}
         bottomLeftSlot={<AdminSettingsButton inline onPress={() => setAdminPanelVisible(true)} />}
@@ -244,6 +299,15 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
         itemDefs={itemDefs}
         topOffset={insets.top + BELOW_TOP_ROW_OFFSET}
         onDismissHarvestEffect={onDismissHarvestEffect}
+      />
+      <ItemGainToastHost
+        toneFilter="got"
+        style={{
+          position: 'absolute',
+          top: insets.top + BELOW_TOP_ROW_OFFSET,
+          left: 0,
+          right: 0,
+        }}
       />
 
       {movingItemId && (
@@ -267,14 +331,16 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
         toolbarAnimatedStyle={toolbarAnimatedStyle}
         trashAnimatedStyle={trashAnimatedStyle}
         isHighlighted={isHighlighted}
-        onSetToolMode={onSetToolMode}
+        onSetToolMode={handleSetToolMode}
         onBackpackPress={handleBackpackPress}
         paletteDismissed={paletteDismissed}
         onTogglePalette={() => setPaletteDismissed((p) => !p)}
-        onOpenShop={onOpenShop}
-        onOpenBestiary={onOpenBestiary}
-        onOpenEquip={onOpenEquip}
+        onOpenShop={handleOpenShop}
+        onOpenBestiary={handleOpenBestiary}
+        onOpenEquip={onOpenEquip ? handleOpenEquip : undefined}
         colors={colors}
+        backpackUsed={inventorySlots.filter((s) => s.qty > 0).length}
+        backpackSlots={backpackSlots}
       />
 
       <BuildPalette
@@ -282,6 +348,7 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
         toolMode={toolMode}
         expanded={expanded}
         displaySlots={displaySlots}
+        inventorySlots={inventorySlots}
         selectedItemType={selectedItemType}
         activeCategory={activeCategory}
         bottomOffset={TAB_BAR_TOTAL_HEIGHT + 10}
@@ -294,13 +361,11 @@ export function GameHUD(props: GameHUDProps & { onRefreshGame?: () => void }) {
         onSetCategory={onSetCategory}
         onSetExpanded={setExpanded}
         onSelectItem={onSelectItem}
-        onPaletteDragStart={onPaletteDragStart}
-        onPaletteDragUpdate={onPaletteDragUpdate}
-        onPaletteDragEnd={onPaletteDragEnd}
+        drag={paletteDrag}
         paletteDismissed={paletteDismissed}
         itemDefs={itemDefs}
         colors={colors}
       />
     </View>
   );
-}
+});

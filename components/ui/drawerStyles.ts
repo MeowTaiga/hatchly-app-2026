@@ -8,7 +8,7 @@ import { spacing, radius } from '@/constants/theme';
 
 /** Inner content wrapper - matches AppDrawer contentInner padding. Use for all drawer body content. */
 export const drawerInner = {
-  gap: spacing.base as const,
+  gap: spacing.base,
   paddingBottom: spacing.base,
 };
 

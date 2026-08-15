@@ -39,11 +39,32 @@ export function setAchievementListener(listener: ((achievements: UnlockedAchieve
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export type ApiSkillId =
+  | 'farming'
+  | 'fishing'
+  | 'cooking'
+  | 'crafting'
+  | 'mining'
+  | 'social'
+  | 'health';
+
+export interface ApiSkillProgress {
+  level: number;
+  xp: number;
+  xpToNextLevel: number;
+}
+
+export type ApiSkills = Record<ApiSkillId, ApiSkillProgress>;
+
 export interface ApiPet {
   name: string;
   customName: string;
   vibe: string;
   category: string;
+  /** Primary colour hex used when generating the pet. */
+  baseColor?: string;
+  /** Secondary colour hex used when generating the pet. */
+  secondaryColor?: string;
   imageUrl: string;
   /** Pose-specific images: { sleeping: url, sitting: url, ... } */
   pose?: Record<string, string>;
@@ -53,9 +74,14 @@ export interface ApiPet {
   happy?: number;
   /** 0–100. Sours when over-petted. Default 100 for legacy users. */
   mood?: number;
+  /** Total skill level (sum of all skills). */
   level: number;
+  /** @deprecated Always 0 — use skills */
   xp: number;
+  /** @deprecated Always 1 — use skills */
   xpToNextLevel: number;
+  skills?: ApiSkills;
+  totalLevel?: number;
 }
 
 export interface ApiSubscription {
@@ -76,6 +102,8 @@ export interface ApiUser {
   theme?: 'light' | 'dark';
   accentColor?: string;
   pet?: ApiPet;
+  skills?: ApiSkills;
+  totalLevel?: number;
   subscription?: ApiSubscription | null;
 }
 
@@ -85,13 +113,61 @@ export interface FriendUser {
   id: string;
   username?: string;
   phone: string;
-  pet?: { name: string; customName: string; imageUrl: string };
+  lastLogin?: string;
+  farmLevel?: number;
+  pet?: {
+    name: string;
+    customName: string;
+    imageUrl: string;
+    level?: number;
+    happy?: number;
+    hunger?: number;
+    mood?: number;
+  };
+}
+
+/** Friendship relation relative to the authenticated viewer. */
+export type PublicFriendshipStatus =
+  | 'self'
+  | 'none'
+  | 'friends'
+  | 'pending_outgoing'
+  | 'pending_incoming';
+
+/** Public companion + skills card (multiplayer / friends profile drawer). */
+export interface ApiPublicProfile {
+  id: string;
+  username?: string;
+  farmLevel?: number;
+  totalLevel: number;
+  skills: ApiSkills;
+  friendship: {
+    status: PublicFriendshipStatus;
+    requestId?: string;
+  };
+  pet: {
+    name: string;
+    customName: string;
+    vibe?: string;
+    category?: string;
+    baseColor?: string;
+    secondaryColor?: string;
+    imageUrl: string;
+    pose?: Record<string, string>;
+    hunger?: number;
+    happy?: number;
+    mood?: number;
+    level: number;
+    totalLevel?: number;
+    skills?: ApiSkills;
+  };
 }
 
 export interface FriendEntry {
   id: string;
   user: FriendUser;
   status: 'pending' | 'accepted';
+  friendsSince?: string;
 }
 
 export interface ApiMailEntry {
@@ -109,7 +185,15 @@ export interface ApiMailEntry {
 
 // ─── Notifications Types ────────────────────────────────────────────────────
 
-export type NotificationType = 'friend_request' | 'friend_accepted';
+export type NotificationType =
+  | 'friend_request'
+  | 'friend_accepted'
+  | 'fasting_complete'
+  | 'goal_reminder'
+  | 'marriage_proposal'
+  | 'marriage_accepted'
+  | 'shared_goal_complete'
+  | 'shared_goal_added';
 
 export interface ApiNotification {
   id: string;
@@ -278,6 +362,141 @@ export interface WaterLogRangeResponse {
   goalSourceWeightLbs?: number | null;
 }
 
+// ─── Fasting Types ───────────────────────────────────────────────────────────
+
+export const FASTING_GOAL_HOURS = [12, 16, 18, 20, 24] as const;
+export type FastingGoalHours = (typeof FASTING_GOAL_HOURS)[number];
+export const FASTING_HOURS_MIN = 12;
+export const FASTING_HOURS_MAX = 24;
+
+export interface FastingSession {
+  id: string;
+  goalHours: number;
+  startedAt: string;
+  endsAt: string;
+  endedAt?: string;
+  status: 'active' | 'completed' | 'broken';
+  remainingMs: number;
+}
+
+export interface FastingState {
+  /** null = has not answered the opt-in yet */
+  interested: boolean | null;
+  active: FastingSession | null;
+}
+
+// ─── Goals Types ────────────────────────────────────────────────────────────
+
+export type GoalRepeat = 'daily' | 'weekdays' | 'once';
+
+export interface PublicGoal {
+  id: string;
+  source: 'catalog' | 'custom' | 'shared';
+  catalogId?: string;
+  title: string;
+  notes?: string;
+  iconItemType: string;
+  iconImageUrl?: string;
+  iconEmoji?: string;
+  rewardItemType: string;
+  repeat: GoalRepeat;
+  repeatDays: number[];
+  remindAt?: string;
+  enabled: boolean;
+  dueToday: boolean;
+  completedToday: boolean;
+  completedByUsername?: string;
+  section?: string;
+  sectionIconItemType?: string;
+  sortOrder: number;
+}
+
+export interface GoalCatalogRow {
+  id: string;
+  title: string;
+  iconItemType: string;
+  iconImageUrl?: string;
+  iconEmoji?: string;
+  enabled: boolean;
+}
+
+export interface GoalRewardPayload {
+  xpGained: number;
+  healthXp: number;
+  socialXp: number;
+  item?: { itemType: string; label: string; imageUrl?: string; emoji?: string; qty: number };
+}
+
+export interface MarriagePartner {
+  id: string;
+  username?: string;
+  petName?: string;
+  petImageUrl?: string;
+}
+
+export interface MarriagePublic {
+  id: string;
+  status: 'pending' | 'married';
+  partner: MarriagePartner;
+  proposedByMe: boolean;
+}
+
+export interface GoalsTodayState {
+  dateStr: string;
+  dueCount: number;
+  completedCount: number;
+  rewardedCount: number;
+  goals: PublicGoal[];
+  sharedGoals: PublicGoal[];
+  marriage: MarriagePublic | null;
+  catalog: GoalCatalogRow[];
+  iconPicker: string[];
+  iconArt: Record<string, { imageUrl?: string; emoji?: string }>;
+}
+
+export interface GoalHistoryDay {
+  date: string;
+  due: number;
+  completed: number;
+}
+
+export interface GoalHistoryState {
+  start: string;
+  end: string;
+  days: GoalHistoryDay[];
+  due: number;
+  completed: number;
+  daysWithGoals: number;
+  perfectDays: number;
+  showUpDays: number;
+  streak: number;
+  bestStreak: number;
+  rate: number;
+}
+
+export interface CreateCustomGoalBody {
+  title: string;
+  notes?: string;
+  iconItemType?: string;
+  repeat?: GoalRepeat;
+  repeatDays?: number[];
+  remindAt?: string | null;
+  section?: string | null;
+  sectionIconItemType?: string;
+}
+
+export interface UpdateGoalBody {
+  title?: string;
+  notes?: string | null;
+  iconItemType?: string;
+  repeat?: GoalRepeat;
+  repeatDays?: number[];
+  remindAt?: string | null;
+  section?: string | null;
+  sectionIconItemType?: string;
+  enabled?: boolean;
+}
+
 // ─── Weight Goal Types ──────────────────────────────────────────────────────
 
 export interface WeightGoalData {
@@ -358,6 +577,71 @@ export interface CollectionEntry {
   lastCaught: string;
 }
 
+/** One slot on the museum shelf for a category, whether caught or not. */
+export interface CollectionCatalogEntry {
+  itemType: string;
+  rarity: string;
+}
+
+export interface CollectionResponse {
+  items: CollectionEntry[];
+  catalog: CollectionCatalogEntry[];
+}
+
+/** Themed museum collection set with per-user progress (no claim/rewards in v1). */
+export interface CollectionSetProgress {
+  setId: string;
+  label: string;
+  category: 'fish' | 'bug';
+  emoji: string | null;
+  description: string | null;
+  sortOrder: number;
+  /** Membership for set detail pages. */
+  itemTypes?: string[];
+  total: number;
+  caught: number;
+  complete: boolean;
+}
+
+export interface CollectionSetsResponse {
+  sets: CollectionSetProgress[];
+}
+
+/** One finished quest for the museum quest journal. */
+export interface QuestJournalEntry {
+  questId: string;
+  title: string;
+  description: string;
+  type: string;
+  farmLevel?: number;
+  farmLevelMin?: number;
+  rewards: {
+    items?: { itemType: string; qty: number }[];
+    gems?: number;
+    xp?: number;
+    recipes?: string[];
+  };
+  /** Checklist steps from the quest def (all marked met for completed). */
+  clauses?: {
+    key: string;
+    kind: string;
+    label: string;
+    itemType?: string;
+    have: number;
+    need: number;
+    met: boolean;
+  }[];
+  startDialog?: { text: string; speaker?: 'pet' | 'npc' }[];
+  endDialog?: { text: string; speaker?: 'pet' | 'npc' }[];
+  startDialogSpeaker?: 'pet' | 'npc';
+  endDialogSpeaker?: 'pet' | 'npc';
+  completedAt: string;
+}
+
+export interface QuestJournalResponse {
+  quests: QuestJournalEntry[];
+}
+
 // ─── Admin Game Item Types ───────────────────────────────────────────────────
 
 export interface AdminGameItemHarvestDrop {
@@ -368,6 +652,12 @@ export interface AdminGameItemHarvestDrop {
 export interface AdminGameItemInteractAction {
   type: 'open_scene' | 'open_modal' | 'start_dialog' | 'none';
   payload?: string;
+  farmLevelMin?: number;
+  petLevelMin?: number;
+  requirements?: {
+    items?: { itemType: string; qty: number }[];
+    equips?: { slot: string; itemType?: string }[];
+  };
 }
 
 export interface AdminDirectionalImages {
@@ -421,7 +711,10 @@ export interface AdminGameItem {
   gemPrice?: number;
   farmLevel?: number;
   petLevel?: number;
+  farmingSkillLevel?: number;
   shopSection?: string;
+  shopCurrency?: string;
+  isCurrency?: boolean;
   sellable?: boolean;
   sellPrice?: number;
   availableUntil?: string;
@@ -479,7 +772,10 @@ export interface AdminGameItemInput {
   gemPrice?: number;
   farmLevel?: number | null;
   petLevel?: number | null;
+  farmingSkillLevel?: number | null;
   shopSection?: string | null;
+  shopCurrency?: string | null;
+  isCurrency?: boolean;
   sellable?: boolean;
   sellPrice?: number | null;
   availableUntil?: string | null;
@@ -516,6 +812,9 @@ export interface AdminScenePlacement {
   x: number;
   y: number;
   scale: number;
+  /** Per-axis overrides for unevenly scaled placements; fall back to `scale`. */
+  scaleX?: number;
+  scaleY?: number;
   /** Manual layer offset: positive = render on top, negative = render behind. */
   depthOffset?: number;
   /** Rotation in degrees, 0–360 (default 0). */
@@ -529,6 +828,25 @@ export interface WalkableRect {
   h: number;
 }
 
+export interface SceneColourGrade {
+  hueDegrees?: number;
+  saturation?: number;
+  brightness?: number;
+  contrast?: number;
+  shadowLift?: number;
+  highlightCompress?: number;
+  warmth?: number;
+  opacity?: number;
+  blendMode?:
+    | 'over'
+    | 'multiply'
+    | 'screen'
+    | 'overlay'
+    | 'soft-light'
+    | 'darken'
+    | 'lighten';
+}
+
 export interface AdminScene {
   _id: string;
   name: string;
@@ -538,6 +856,8 @@ export interface AdminScene {
   bgColor: string;
   /** Item type from tiled_flooring category to tile across ground. Null = use bgColor. */
   tiledFlooringItemType?: string | null;
+  /** Colour / opacity grade for the repeating tiled floor. */
+  tiledFlooringStyle?: SceneColourGrade | null;
   /** Grass noise 0–0.2, default 0.04. Subtle texture on ground. */
   grassNoiseStrength?: number;
   farmCols: number;
@@ -549,6 +869,7 @@ export interface AdminScene {
   unwalkableTiles?: Array<{ col: number; row: number }>;
   /** Multiplayer: grid tiles where players can fish (col, row, spotType). */
   fishingTiles?: Array<{ col: number; row: number; spotType?: string }>;
+  miningTiles?: Array<{ col: number; row: number; oreType?: string }>;
   bakedImageUrl?: string;
   /** Player spawn X coordinate (pixels). */
   spawnX?: number;
@@ -565,6 +886,7 @@ export interface AdminSceneInput {
   rows: number;
   bgColor?: string;
   tiledFlooringItemType?: string | null;
+  tiledFlooringStyle?: SceneColourGrade | null;
   farmCols: number;
   farmRows: number;
 }
@@ -575,6 +897,7 @@ export interface AdminSceneUpdate {
   rows?: number;
   bgColor?: string;
   tiledFlooringItemType?: string | null;
+  tiledFlooringStyle?: SceneColourGrade | null;
   grassNoiseStrength?: number;
   farmCols?: number;
   farmRows?: number;
@@ -582,6 +905,7 @@ export interface AdminSceneUpdate {
   walkableRect?: WalkableRect | null;
   unwalkableTiles?: Array<{ col: number; row: number }>;
   fishingTiles?: Array<{ col: number; row: number; spotType?: string }>;
+  miningTiles?: Array<{ col: number; row: number; oreType?: string }>;
   spawnX?: number;
   spawnY?: number;
 }
@@ -747,6 +1071,14 @@ export interface RecipeJournalEntry {
   resultQty: number;
   ingredients: AdminRecipeIngredient[];
   difficulty: number;
+  recipeItemType?: string;
+  group?: string;
+  /** Player has learned this recipe (consumed scroll / journal). */
+  owned?: boolean;
+  /** Unconsumed recipe scroll in inventory. */
+  hasScroll?: boolean;
+  /** Learned and has enough materials. */
+  canCraft?: boolean;
   discoveredAt?: string;
   timesCrafted?: number;
 }
@@ -755,6 +1087,7 @@ export interface RecipeJournalResponse {
   recipes: RecipeJournalEntry[];
   discoveredCount: number;
   totalCount: number;
+  ownedCount?: number;
 }
 
 export interface VerifyCodeResponse {
@@ -778,12 +1111,33 @@ export interface ChatMessageSuggest {
   title: string;
 }
 
+export interface ChatGoalCardGoal {
+  id: string;
+  title: string;
+  notes?: string;
+  iconItemType: string;
+  iconImageUrl?: string;
+  iconEmoji?: string;
+  repeat: GoalRepeat;
+  repeatDays: number[];
+  remindAt?: string;
+  dueToday: boolean;
+  completedToday: boolean;
+}
+
+export interface ChatGoalCard {
+  kind: 'created' | 'complete';
+  alreadyExisted?: boolean;
+  goal: ChatGoalCardGoal;
+}
+
 export interface ChatMessageEntry {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   createdAt: string;
   suggest?: ChatMessageSuggest;
+  goalCards?: ChatGoalCard[];
 }
 
 interface RequestOptions {
@@ -976,6 +1330,14 @@ class ApiClient {
   /** Fetches the authenticated user's profile. */
   async getMe(): Promise<ApiUser> {
     return this.request<ApiUser>('GET', '/users/me');
+  }
+
+  /**
+   * Public companion + skills for another user (or self).
+   * Includes friendship status relative to the authenticated viewer.
+   */
+  async getPublicProfile(userId: string): Promise<ApiPublicProfile> {
+    return this.request<ApiPublicProfile>('GET', `/users/${encodeURIComponent(userId)}/public-profile`);
   }
 
   /** Updates the authenticated user's profile fields. */
@@ -1238,6 +1600,90 @@ class ApiClient {
     return this.request('GET', `/water/log/range?start=${start}&end=${end}`);
   }
 
+  // ── Fasting ────────────────────────────────────────────────────────────
+
+  async getFasting(): Promise<FastingState> {
+    return this.request('GET', '/fasting');
+  }
+
+  async setFastingInterest(interested: boolean): Promise<FastingState> {
+    return this.request('PATCH', '/fasting/interest', { body: { interested } });
+  }
+
+  async startFast(goalHours: number): Promise<FastingState> {
+    return this.request('POST', '/fasting/start', { body: { goalHours } });
+  }
+
+  async endFast(): Promise<FastingState> {
+    return this.request('POST', '/fasting/end');
+  }
+
+  // ── Goals ──────────────────────────────────────────────────────────────
+
+  async getGoals(): Promise<GoalsTodayState> {
+    return this.request('GET', '/goals');
+  }
+
+  async getGoalHistory(start: string, end: string): Promise<GoalHistoryState> {
+    return this.request('GET', `/goals/history?start=${start}&end=${end}`);
+  }
+
+  async createCustomGoal(body: CreateCustomGoalBody): Promise<GoalsTodayState> {
+    return this.request('POST', '/goals', { body });
+  }
+
+  async updateGoal(id: string, body: UpdateGoalBody): Promise<GoalsTodayState> {
+    return this.request('PATCH', `/goals/${id}`, { body });
+  }
+
+  async archiveGoal(id: string): Promise<GoalsTodayState> {
+    return this.request('DELETE', `/goals/${id}`);
+  }
+
+  async completeGoal(id: string): Promise<GoalsTodayState & { reward: GoalRewardPayload }> {
+    return this.request('POST', `/goals/${id}/complete`);
+  }
+
+  async uncompleteGoal(id: string): Promise<GoalsTodayState> {
+    return this.request('POST', `/goals/${id}/uncomplete`);
+  }
+
+  async proposeMarriage(userId: string): Promise<GoalsTodayState> {
+    return this.request('POST', '/goals/marriage/propose', { body: { userId } });
+  }
+
+  async respondToMarriage(id: string, status: 'accepted' | 'rejected'): Promise<GoalsTodayState> {
+    return this.request('PATCH', `/goals/marriage/${id}`, { body: { status } });
+  }
+
+  async endMarriage(): Promise<GoalsTodayState> {
+    return this.request('DELETE', '/goals/marriage');
+  }
+
+  async createSharedGoal(body: CreateCustomGoalBody): Promise<GoalsTodayState> {
+    return this.request('POST', '/goals/shared', { body });
+  }
+
+  async shareCustomGoal(id: string, body?: UpdateGoalBody): Promise<GoalsTodayState> {
+    return this.request('POST', `/goals/${id}/share`, { body: body ?? {} });
+  }
+
+  async updateSharedGoal(id: string, body: UpdateGoalBody): Promise<GoalsTodayState> {
+    return this.request('PATCH', `/goals/shared/${id}`, { body });
+  }
+
+  async archiveSharedGoal(id: string): Promise<GoalsTodayState> {
+    return this.request('DELETE', `/goals/shared/${id}`);
+  }
+
+  async completeSharedGoal(id: string): Promise<GoalsTodayState & { reward: GoalRewardPayload }> {
+    return this.request('POST', `/goals/shared/${id}/complete`);
+  }
+
+  async uncompleteSharedGoal(id: string): Promise<GoalsTodayState> {
+    return this.request('POST', `/goals/shared/${id}/uncomplete`);
+  }
+
   // ── Weight Goal ────────────────────────────────────────────────────────
 
   async getWeightGoal(): Promise<WeightGoalResponse> {
@@ -1273,13 +1719,15 @@ class ApiClient {
     rows: number;
     bgColor: string;
     tiledFlooringItemType?: string | null;
+    tiledFlooringStyle?: SceneColourGrade | null;
     grassNoiseStrength?: number;
     farmCols: number;
     farmRows: number;
-    placements: Array<{ id: string; itemType: string; x: number; y: number; scale: number; depthOffset?: number }>;
+    placements: AdminScenePlacement[];
     walkableRect: { x: number; y: number; w: number; h: number } | null;
     unwalkableTiles: Array<{ col: number; row: number }>;
     fishingTiles: Array<{ col: number; row: number; spotType?: string }>;
+    miningTiles: Array<{ col: number; row: number; oreType?: string }>;
     bakedImageUrl: string | null;
     spawnX?: number;
     spawnY?: number;
@@ -1515,6 +1963,11 @@ class ApiClient {
     return this.request('POST', '/admin/my-farm/reset-farm');
   }
 
+  /** Admin: clear Spirit Snatch hourly cooldown. Requires admin. */
+  async resetSpiritSnatchCooldown(): Promise<{ ok: boolean }> {
+    return this.request('POST', '/admin/my-farm/reset-spirit-snatch');
+  }
+
   /** Admin: search users by ID or username. */
   async adminSearchUsers(q: string): Promise<{ id: string; username: string }[]> {
     if (!q.trim()) return [];
@@ -1557,7 +2010,7 @@ class ApiClient {
 
   // ── Game (authenticated) ────────────────────────────────────────────────
 
-  /** Lightweight game summary for home tab: farm level, gems, quest count. */
+  /** Lightweight game summary for home tab: farm, gems, quests, collection & recipes. */
   async getGameSummary(): Promise<{
     farmLevel: number;
     gems: number;
@@ -1565,20 +2018,67 @@ class ApiClient {
     farmLevelTitle: string;
     farmLevelEmoji: string;
     xpProgress: number;
+    activeQuestTitles?: string[];
+    fishCaught?: number;
+    fishTotal?: number;
+    bugsCaught?: number;
+    bugsTotal?: number;
+    recipesDiscovered?: number;
+    recipesTotal?: number;
+    craftsDiscovered?: number;
+    craftsTotal?: number;
   }> {
     return this.request('GET', '/game/summary');
+  }
+
+  /**
+   * All playable item defs (label + art). Used outside the live game socket
+   * (e.g. skill unlock previews in the companion profile drawer).
+   */
+  async getPlayableGameItems(): Promise<
+    Array<{ itemType: string; label: string; emoji?: string; imageUrl?: string }>
+  > {
+    return this.request('GET', '/game/items');
+  }
+
+  /** Shared US world weather (deterministic calendar — not a live weather API). */
+  async getWeather(): Promise<{
+    type: 'clear' | 'rain' | 'snow' | 'meteor_shower';
+    date: string;
+    label?: string;
+    endsAt?: string;
+  }> {
+    return this.request('GET', '/game/weather');
   }
 
   /** Fetches shop config (banners) for the Shop tab. section= missing = main shop, 'fishing_shop' = fishing shop. */
   async getShopConfig(section?: string): Promise<ShopConfig> {
     const q = section ? `?section=${encodeURIComponent(section)}` : '';
-    return this.request('GET', `/game/shop-config${q}`);
+    const data = await this.request<ShopConfig | ShopBanner[]>('GET', `/game/shop-config${q}`);
+    if (Array.isArray(data)) return { banners: data };
+    return { banners: Array.isArray(data?.banners) ? data.banners : [] };
   }
 
-  /** Fetches the user's collectible catalog (bugs, fish, discoverables). */
-  async getCollection(category?: 'bug' | 'fish' | 'discoverables'): Promise<CollectionEntry[]> {
+  /** Fetches caught items plus the full museum catalog for a category. */
+  async getCollection(category?: 'bug' | 'fish' | 'discoverables'): Promise<CollectionResponse> {
     const q = category ? `?category=${category}` : '';
-    return this.request('GET', `/game/collection${q}`);
+    const data = await this.request<CollectionResponse | CollectionEntry[]>('GET', `/game/collection${q}`);
+    // Older servers returned a bare array — keep that shape usable.
+    if (Array.isArray(data)) return { items: data, catalog: [] };
+    return {
+      items: data.items ?? [],
+      catalog: data.catalog ?? [],
+    };
+  }
+
+  /** Fetches themed collection set progress (fish/bug). Completing a set is display-only in v1. */
+  async getCollectionSets(category: 'fish' | 'bug' = 'fish'): Promise<CollectionSetsResponse> {
+    return this.request('GET', `/game/collection-sets?category=${category}`);
+  }
+
+  /** Fetches completed quests for the museum journal tab. */
+  async getQuestJournal(): Promise<QuestJournalResponse> {
+    return this.request('GET', '/game/quest-journal');
   }
 
   /** Fetches the user's recipe journal (discovered + all cooking recipes). */
@@ -1591,27 +2091,72 @@ class ApiClient {
     return this.request('GET', '/game/craft-journal');
   }
 
-  // ── Chat ─────────────────────────────────────────────────────────────────
-
-  /** Fetches the pet chat history (last ~100 messages). */
-  async getChatHistory(): Promise<{ messages: ChatMessageEntry[]; needsMoodToday: boolean }> {
-    return this.request('GET', '/chat/history');
+  async getSmeltJournal(): Promise<RecipeJournalResponse> {
+    return this.request('GET', '/game/smelt-journal');
   }
 
-  /** Logs mood for the day (once/day). Awards xp + gems. */
-  async logMood(mood: string): Promise<{
-    log: { mood: string; date: string };
+  // ── Chat ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Fetches a page of pet chat history, newest page first.
+   *
+   * @param opts.before - Message id to page backwards from. Omit for the newest page.
+   */
+  async getChatHistory(opts?: { limit?: number; before?: string }): Promise<{
+    messages: ChatMessageEntry[];
+    hasMore: boolean;
+    needsMoodToday?: boolean;
+  }> {
+    const params = new URLSearchParams();
+    if (opts?.limit != null) params.set('limit', String(opts.limit));
+    if (opts?.before) params.set('before', opts.before);
+    const qs = params.toString();
+    return this.request('GET', `/chat/history${qs ? `?${qs}` : ''}`);
+  }
+
+  async logMood(mood: string, note?: string): Promise<{
+    log: { id?: string; mood: string; date: string; note?: string; rewarded?: boolean; createdAt?: string };
     pet: ApiPet | null;
     xpGained: number;
     gemsAwarded: number;
+    rewarded?: boolean;
+    nextAvailableAt?: string | null;
+    item?: { itemType: string; label: string; imageUrl?: string; emoji?: string; qty: number };
   }> {
-    return this.request('POST', '/mood/log', { body: { mood } });
+    return this.request('POST', '/mood/log', {
+      body: { mood, note: note?.trim() || undefined, date: localDateStr() },
+    });
+  }
+
+  async getMoodHistory(limit = 90): Promise<{
+    logs: Array<{
+      id?: string;
+      mood: string;
+      date: string;
+      note?: string;
+      rewarded?: boolean;
+      createdAt?: string;
+    }>;
+    nextAvailableAt: string | null;
+    canReward: boolean;
+  }> {
+    return this.request('GET', `/mood/history?limit=${limit}`);
+  }
+
+  async getMoodStatus(): Promise<{
+    todayCount: number;
+    latest: { mood: string; date: string; note?: string; createdAt?: string } | null;
+    nextAvailableAt: string | null;
+    canReward: boolean;
+  }> {
+    return this.request('GET', '/mood/status');
   }
 
   /** Sends a message to the pet and returns the user message + pet reply. */
   async sendChatMessage(content: string): Promise<{
     message: ChatMessageEntry;
     reply: ChatMessageEntry;
+    xpGained?: number;
   }> {
     return this.request('POST', '/chat/send', { body: { content } });
   }

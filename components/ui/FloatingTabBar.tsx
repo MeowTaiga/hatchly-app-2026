@@ -178,7 +178,16 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
               target: route.key,
               canPreventDefault: true,
             });
-            if (!isFocused && !event.defaultPrevented) {
+            if (event.defaultPrevented) return;
+
+            // Always land on the settings root — avoids soft-locking when a
+            // nested screen (friends/notifications) was opened from another tab.
+            if (route.name === 'settings') {
+              navigation.navigate('settings', { screen: 'index' });
+              return;
+            }
+
+            if (!isFocused) {
               navigation.navigate(route.name);
             }
           };

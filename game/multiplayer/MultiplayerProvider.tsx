@@ -26,11 +26,13 @@ export type FishRarity = 'common' | 'rare' | 'epic' | 'unique' | 'legendary' | '
 export interface FishResultBubble {
   itemType: string;
   label: string;
-  /** Numeric size (e.g. cm). Shown as "24.5 cm" */
-  size: number;
+  /** Numeric size (e.g. cm). Shown as "24.5 cm". Omitted for ore. */
+  size?: number;
   sizeLabel?: string;
-  rarity?: FishRarity;
+  rarity?: string;
   imageUrl?: string;
+  kind?: 'fish' | 'ore';
+  qty?: number;
 }
 
 export interface PendingFishData {
@@ -248,6 +250,7 @@ export function MultiplayerProvider({ sceneSlug, children }: MultiplayerProvider
           sizeLabel: data.sizeLabel,
           rarity: data.rarity ?? 'common',
           imageUrl: data.imageUrl,
+          kind: 'fish',
         });
         return next;
       });
@@ -272,6 +275,34 @@ export function MultiplayerProvider({ sceneSlug, children }: MultiplayerProvider
           return next;
         });
       }
+    };
+    const onOreMined = (data: {
+      userId: string;
+      itemType: string;
+      label: string;
+      qty?: number;
+      rarity?: string;
+      imageUrl?: string;
+    }) => {
+      setFishResultByUser((prev) => {
+        const next = new Map(prev);
+        next.set(data.userId, {
+          itemType: data.itemType,
+          label: data.label,
+          rarity: data.rarity ?? 'common',
+          imageUrl: data.imageUrl,
+          kind: 'ore',
+          qty: typeof data.qty === 'number' ? data.qty : 1,
+        });
+        return next;
+      });
+      setTimeout(() => {
+        setFishResultByUser((prev) => {
+          const next = new Map(prev);
+          next.delete(data.userId);
+          return next;
+        });
+      }, 5000);
     };
     const onFishFailed = (data: { userId: string }) => {
       setReelingByUser((prev) => {
@@ -311,6 +342,7 @@ export function MultiplayerProvider({ sceneSlug, children }: MultiplayerProvider
     socket.on('mp:fish_started', onFishStarted);
     socket.on('mp:fish_canceled', onFishCanceled);
     socket.on('mp:fish_caught', onFishCaught);
+    socket.on('mp:ore_mined', onOreMined);
     socket.on('mp:fish_failed', onFishFailed);
 
     return () => {
@@ -327,6 +359,7 @@ export function MultiplayerProvider({ sceneSlug, children }: MultiplayerProvider
       socket.off('mp:fish_started', onFishStarted);
       socket.off('mp:fish_canceled', onFishCanceled);
       socket.off('mp:fish_caught', onFishCaught);
+      socket.off('mp:ore_mined', onOreMined);
       socket.off('mp:fish_failed', onFishFailed);
       setIsJoined(false);
       setPlayers(new Map());

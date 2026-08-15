@@ -1,0 +1,87 @@
+| Item                | Recipe   |
+| ------------------- | -------- |
+| Stone Stool         | 12 Stone |
+| Stone Chair         | 16 Stone |
+| Stone Bench         | 20 Stone |
+| Stone Table         | 28 Stone |
+| Stone Shelf         | 24 Stone |
+| Stone Pedestal      | 18 Stone |
+| Stone Bird Bath     | 20 Stone |
+| Stone Fountain      | 40 Stone |
+| Stone Fire Pit      | 20 Stone |
+| Campfire Ring       | 14 Stone |
+| Stone Well          | 50 Stone |
+| Stone Arch          | 45 Stone |
+| Stone Path Tile     | 3 Stone  |
+| Stone Wall          | 12 Stone |
+| Stone Pillar        | 20 Stone |
+| Stone Statue        | 50 Stone |
+| Stone Garden Border | 8 Stone  |
+| Stone Marker        | 10 Stone |
+| Stone Lantern       | 18 Stone |
+| Stone Totem         | 30 Stone |
+| Item                     | Recipe             |
+| ------------------------ | ------------------ |
+| Primitive Chair          | 6 Stick, 4 Stone   |
+| Primitive Bench          | 10 Stick, 8 Stone  |
+| Primitive Table          | 10 Stick, 10 Stone |
+| Primitive Workbench      | 20 Stick, 12 Stone |
+| Primitive Crafting Table | 24 Stick, 16 Stone |
+| Stone Torch              | 6 Stick, 8 Stone   |
+| Camp Kitchen             | 20 Stick, 20 Stone |
+| Primitive Shrine         | 18 Stick, 24 Stone |
+| Primitive Sundial        | 10 Stick, 16 Stone |
+| Garden Rock Display      | 8 Stick, 20 Stone  |
+| Primitive Gate           | 16 Stick, 12 Stone |
+| Stone Bridge Tile        | 12 Stick, 18 Stone |
+| Camp Notice Board        | 18 Stick, 6 Stone  |
+| Primitive Lamp Post      | 16 Stick, 10 Stone |
+| Primitive Clock Post     | 18 Stick, 12 Stone |
+| Rocking Chair            | 18 Stick, 4 Stone  |
+| Display Pedestal         | 8 Stick, 18 Stone  |
+| Fishing Station          | 20 Stick, 10 Stone |
+| Primitive Market Stall   | 28 Stick, 12 Stone |
+| Camp Shelter Frame       | 30 Stick, 16 Stone |
+| Item                     | Recipe   |
+| ------------------------ | -------- |
+| Stick Stool              | 8 Stick  |
+| Stick Chair              | 10 Stick |
+| Stick Bench              | 16 Stick |
+| Stick Table              | 14 Stick |
+| Small Side Table         | 10 Stick |
+| Primitive Shelf          | 18 Stick |
+| Tall Shelf               | 24 Stick |
+| Storage Rack             | 20 Stick |
+| Display Rack             | 18 Stick |
+| Drying Rack              | 16 Stick |
+| Tool Rack                | 14 Stick |
+| Fishing Rod Rack         | 12 Stick |
+| Coat Rack                | 10 Stick |
+| Plant Stand              | 12 Stick |
+| Primitive Bed Frame      | 24 Stick |
+| Stick Divider            | 20 Stick |
+| Branch Fence             | 8 Stick  |
+| Fence Gate               | 12 Stick |
+| Garden Trellis           | 18 Stick |
+| Simple Archway           | 24 Stick |
+| Camp Clothesline         | 16 Stick |
+| Signpost                 | 6 Stick  |
+| Mail Post                | 10 Stick |
+| Primitive Ladder         | 16 Stick |
+| Camp Table               | 18 Stick |
+| Camp Seat                | 10 Stick |
+| Primitive Bridge Section | 20 Stick |
+| Dock Section             | 24 Stick |
+| Dock Corner              | 20 Stick |
+| Bird Perch               | 10 Stick |
+| Item                  | Recipe            |
+| --------------------- | ----------------- |
+| Stick Fishing Pole    | 5 Stick           |
+| Stone Fishing Pole    | 4 Stick, 2 Stone  |
+| Stick Net             | 5 Stick, 2 Stone  |
+| Stick Axe             | 6 Stick           |
+| Stone Axe             | 4 Stick, 3 Stone  |
+| Stick Pickaxe         | 6 Stick           |
+| Stone Pickaxe         | 4 Stick, 4 Stone  |
+| Stick Shovel          | 5 Stick           |
+| Stone Shovel          | 4 Stick, 3 Stone  |

@@ -101,7 +101,7 @@ export const WellDrawer = forwardRef<WellDrawerRef, WellDrawerProps>(
           </Text>
 
           {result?.success && result.waterQty != null && (
-            <View style={[styles.resultBox, { backgroundColor: theme.colors.surfaceAlt ?? theme.colors.surface }]}>
+            <View style={[styles.resultBox, { backgroundColor: theme.colors.surfaceElevated }]}>
               <Text style={[styles.resultText, { color: theme.colors.success ?? theme.colors.primary }]}>
                 +{result.waterQty} Water 💧
               </Text>
@@ -109,7 +109,7 @@ export const WellDrawer = forwardRef<WellDrawerRef, WellDrawerProps>(
           )}
 
           {(result?.onCooldown || result?.message) && !result?.success && (
-            <View style={[styles.resultBox, { backgroundColor: theme.colors.surfaceAlt ?? theme.colors.surface }]}>
+            <View style={[styles.resultBox, { backgroundColor: theme.colors.surfaceElevated }]}>
               <Text style={[styles.resultText, { color: theme.colors.textMuted }]}>
                 {result.message ?? 'Well is refilling. Try again in a few minutes.'}
               </Text>

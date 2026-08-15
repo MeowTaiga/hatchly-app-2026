@@ -5,16 +5,22 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 
 const CropTickContext = createContext<number>(Date.now());
 
 export function CropTickProvider({ children }: { children: React.ReactNode }) {
   const [now, setNow] = useState(() => Date.now());
+  const isFocused = useIsFocused();
 
+  // The game tab stays mounted after the user leaves it, so the tick has to be
+  // stopped explicitly or it keeps re-rendering the world behind other tabs.
   useEffect(() => {
+    if (!isFocused) return;
+    setNow(Date.now());
     const iv = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(iv);
-  }, []);
+  }, [isFocused]);
 
   return (
     <CropTickContext.Provider value={now}>

@@ -315,12 +315,15 @@ export function usePetAI({
       facingRight.value = newFacing;
 
       const moveEasing = Easing.inOut(Easing.cubic);
+      // Read the ref out here: referencing it inside the worklet would capture
+      // the ref object itself, freezing it so later `.current` writes warn.
+      const onComplete = onWalkCompleteRef.current;
       const walkAnimX = withTiming(targetPx.x, { duration, easing: moveEasing });
       const walkAnimY = withTiming(
         targetPx.y,
         { duration, easing: moveEasing },
         (finished) => {
-          if (finished) runOnJS(onWalkCompleteRef.current)(target);
+          if (finished) runOnJS(onComplete)(target);
         },
       );
 

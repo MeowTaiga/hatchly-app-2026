@@ -24,10 +24,16 @@ import type {
   FossilDigResult,
   CookResult,
   CraftResult,
+  MineReadyPayload,
+  SpiritSnatchRound,
+  SpiritSnatchTap,
   QuestProgress,
-  DialogStep,
-  DialogSpeaker,
+  QuestCompletion,
+  DialogEntry,
   QuestHighlight,
+  ScenePlacement,
+  ActiveWeather,
+  WeatherType,
 } from '../types';
 
 /** Public context value exposed to consumers via useGame(). */
@@ -43,6 +49,13 @@ export interface GameContextValue {
   editMode: boolean;
   activeCategory: ItemCategory | 'all';
   inventory: InventorySlot[];
+  /** Farm-wide vault (uncapped). */
+  storage: Record<string, number>;
+  /** Max backpack stacks. */
+  backpackSlots: number;
+  miningEnergy: number;
+  miningEnergyCap: number;
+  miningEnergyAt: number;
   placeableSlots: InventorySlot[];
   /** All inventory items filtered by active category (includes non-placeable). */
   displaySlots: InventorySlot[];
@@ -59,7 +72,7 @@ export interface GameContextValue {
   sceneWorldCols?: number;
   sceneWorldRows?: number;
   /** Scene placements for tap detection when using scene bake. */
-  scenePlacements?: Array<{ id: string; itemType: string; x: number; y: number; scale: number; depthOffset?: number }>;
+  scenePlacements?: ScenePlacement[];
   connected: boolean;
   loading: boolean;
   pendingInteraction: InteractAction | null;
@@ -80,15 +93,19 @@ export interface GameContextValue {
   lastFossilDigResult: FossilDigResult | null;
   quests: QuestProgress[];
   canUpgrade: boolean;
-  currentQuestDialog: DialogStep[] | null;
+  /** The dialog on screen, or null when nothing is being said. */
+  currentDialog: DialogEntry | null;
   questDialogIndex: number;
   activeHighlight: QuestHighlight | null;
-  /** When non-null, use instead of pet for dialog speaker. */
-  currentDialogSpeaker: DialogSpeaker | null;
-  /** Rewards shown on last step of current quest dialog. */
-  currentDialogRewards: import('../types').QuestReward | null;
-  /** When false, user can tap to dismiss without completing highlight. */
-  currentDialogBlocking: boolean;
+  /** Quests that just finished, for the celebration overlay. */
+  questCompletions: QuestCompletion[];
+  dismissQuestCompletions: () => void;
+  /** Shared US world weather from the server calendar. */
+  weather: ActiveWeather;
+  setWeather: (weather: ActiveWeather) => void;
+  /** Local admin preview override; null = use server weather. */
+  weatherOverride: WeatherType | null;
+  setWeatherOverride: (type: WeatherType | null) => void;
 
   placeItem: (col: number, row: number) => void;
   placeItemAt: (itemType: string, col: number, row: number) => boolean;
@@ -120,36 +137,59 @@ export interface GameContextValue {
   sellItem: (itemType: string, qty?: number) => void;
   sellItemsBatch: (items: Array<{ itemType: string; qty: number }>) => void;
   addToFoodDish: (anchorId: string, items: Array<{ itemType: string; qty: number }>) => void;
+  depositToStorage: (items: Array<{ itemType: string; qty: number }>) => void;
+  withdrawFromStorage: (items: Array<{ itemType: string; qty: number }>) => void;
   equipItem: (slot: 'handTool' | 'bobber' | 'bait' | 'chair', itemType: string | null) => void;
   catchBug: (spawnId: string) => void;
   dismissCatchResult: () => void;
   popBalloon: (spawnId: string) => void;
+  spiritSnatchRound: SpiritSnatchRound | null;
+  emitSpiritSnatchStart: () => void;
+  emitSpiritSnatchSubmit: (roundId: string, taps: SpiritSnatchTap[]) => void;
   dismissBalloonPopResult: () => void;
   digFossil: (anchorId: string) => void;
+  pickupGroundItem: (anchorId: string) => void;
   shakeTree: (anchorId: string) => void;
+  chopTree: (anchorId: string) => void;
   dismissFossilDigResult: () => void;
   completeQuest: (questId: string) => void;
-  emitQuestActivateByNpc: (npcItemType: string) => void;
-  emitQuestActivateByScene: (sceneSlug: string) => void;
+  /** Reports a conversation. The server decides what the NPC says back. */
+  talkToNpc: (npcItemType: string) => void;
+  enterScene: (sceneSlug: string) => void;
   emitQuestModalOpened: (payload: string) => void;
   advanceQuestDialog: () => void;
-  queueNpcDialog: (steps: DialogStep[], speaker?: DialogSpeaker, npcItemType?: string, blocking?: boolean, questIdToComplete?: string) => void;
-  /** Store pending NPC dialog to show if no quest activates. Called before emitQuestActivateByNpc. */
-  setPendingNpcDialog: (info: { steps: DialogStep[]; speaker?: DialogSpeaker; npcItemType: string } | null) => void;
-  /** Optimistically mark a locked quest as active (for immediate icon update before server confirms). */
-  optimisticallyActivateQuest: (questId: string) => void;
+  queueDialog: (entries: DialogEntry[]) => void;
   tryAutoAdvanceDialog: (action: string, itemType?: string) => void;
   refreshGame: () => void;
   setShopOpen: (open: boolean) => void;
   setSellBoxOpen: (open: boolean) => void;
   setCookingOpen: (open: boolean) => void;
+  setCraftingOpen: (open: boolean) => void;
   setFoodDishOpen: (open: boolean) => void;
   setEquipOpen: (open: boolean) => void;
   onShopCategorySelect: (categoryKey: string) => void;
   cookResult: CookResult | null;
-  emitCook: (ingredients: { itemType: string; qty: number }[], minigamePassed: boolean) => void;
+  emitCook: (recipeId: string, minigamePassed: boolean) => void;
   craftResult: CraftResult | null;
-  emitCraft: (materials: { itemType: string; qty: number }[], minigamePassed: boolean) => void;
+  emitCraft: (recipeId: string, minigamePassed: boolean) => void;
+  emitSmelt: (recipeId: string, minigamePassed: boolean) => void;
+  emitMineBegin: (sceneSlug: string, col: number, row: number) => void;
+  emitMineComplete: (payload: {
+    sceneSlug: string;
+    col: number;
+    row: number;
+    taps: number;
+    elapsedMs: number;
+    passed: boolean;
+  }) => void;
+  emitMineCancel: () => void;
+  mineReady: MineReadyPayload | null;
+  clearMineReady: () => void;
+  smeltResult: CraftResult | null;
+  clearSmeltResult: () => void;
+  emitLearnRecipe: (itemType: string) => void;
+  learnRecipeResult: { recipeId: string; recipeLabel: string; recipeItemType: string } | null;
+  clearLearnRecipeResult: () => void;
   emitFeedPet: (anchorId: string, foodItemType: string) => void;
   emitConsumeFromFoodDish: (anchorId: string) => void;
   emitPetBehavior: (state: string) => void;
@@ -166,6 +206,14 @@ export interface GameContextValue {
   decorationReactionRef: React.MutableRefObject<((col: number, row: number, itemType: string) => void) | null>;
 }
 
+/** A placement drawn locally while its server confirmation is outstanding. */
+export interface PendingPlacement {
+  anchorId: string;
+  itemType: string;
+  /** When it was placed, so a confirmation that never arrives can be swept. */
+  at: number;
+}
+
 /** Internal reducer state. */
 export interface GameState {
   activeScene: Scene;
@@ -178,6 +226,11 @@ export interface GameState {
   editMode: boolean;
   activeCategory: ItemCategory | 'all';
   inventory: Record<string, number>;
+  storage: Record<string, number>;
+  backpackSlots: number;
+  miningEnergy: number;
+  miningEnergyCap: number;
+  miningEnergyAt: number;
   harvestEffects: HarvestEffect[];
   farmName: string;
   farmXp: number;
@@ -191,12 +244,19 @@ export interface GameState {
   sceneWorldCols?: number;
   sceneWorldRows?: number;
   /** Scene placements for tap detection when using scene bake. */
-  scenePlacements?: Array<{ id: string; itemType: string; x: number; y: number; scale: number; depthOffset?: number }>;
+  scenePlacements?: ScenePlacement[];
   pendingInteraction: InteractAction | null;
   movingItemId: string | null;
   pendingDropTarget: { anchorId: string; newCol: number; newRow: number } | null;
-  /** Last optimistic placement; reverted when server rejects (e.g. out of bounds). */
-  lastOptimisticPlace: { anchorId: string; itemType: string } | null;
+  /**
+   * Placements shown locally that the server has not confirmed yet, oldest first.
+   *
+   * This used to be a single slot, which meant placing two items quickly and
+   * having the first refused reverted the wrong one and stranded the other on the
+   * grid for good. One socket processes them in order, so the head of this queue
+   * is always the one an error refers to.
+   */
+  pendingPlacements: PendingPlacement[];
   toolMode: ToolMode;
   gems: number;
   activeBugs: ActiveBug[];
@@ -206,20 +266,16 @@ export interface GameState {
   lastFossilDigResult: FossilDigResult | null;
   quests: QuestProgress[];
   canUpgrade: boolean;
-  questDialogQueue: Array<{ steps: DialogStep[]; speaker?: DialogSpeaker; npcItemType?: string; blocking?: boolean; rewards?: import('../types').QuestReward; questIdToComplete?: string }>;
-  currentQuestDialog: DialogStep[] | null;
+  /** Dialogs waiting their turn behind `currentDialog`. */
+  dialogQueue: DialogEntry[];
+  currentDialog: DialogEntry | null;
   questDialogIndex: number;
-  currentDialogSpeaker: DialogSpeaker | null;
-  currentNpcItemType: string | null;
-  /** When set, completing this dialog (last step advance) should call quest:complete for this quest. */
-  currentQuestIdToComplete: string | null;
-  /** Rewards for the current dialog (shown on last step when present). */
-  currentDialogRewards: import('../types').QuestReward | null;
-  /** When false, user can tap to dismiss without completing highlight. */
-  currentDialogBlocking: boolean;
+  /** Quests that just finished, awaiting the celebration overlay. */
+  questCompletions: QuestCompletion[];
   shopOpen: boolean;
   sellBoxOpen: boolean;
   cookingOpen: boolean;
+  craftingOpen: boolean;
   foodDishOpen: boolean;
   equipOpen: boolean;
   /** Server-forced behavior correction; cleared after usePetAI applies. */
@@ -234,6 +290,10 @@ export interface GameState {
   shakingTreeAnchorId: string | null;
   /** Increments on each shake so the same tree can animate again. */
   shakeTrigger: number;
+  /** Shared US world weather (America/New_York calendar). */
+  weather: ActiveWeather;
+  /** Local admin preview; null = use server weather. */
+  weatherOverride: WeatherType | null;
 }
 
 /** All dispatchable reducer actions. */
@@ -241,7 +301,9 @@ export type GameAction =
   | { type: 'SNAPSHOT'; payload: GameSnapshot }
   | { type: 'STATE_UPDATE'; payload: StateUpdate }
   | { type: 'OPTIMISTIC_PLACE'; items: PlacedItem[]; keys: string[]; itemType: string; skipInventory?: boolean }
-  | { type: 'REVERT_PLACEMENT' }
+  /** Without an anchorId the oldest unconfirmed placement is reverted. */
+  | { type: 'REVERT_PLACEMENT'; anchorId?: string }
+  | { type: 'SWEEP_STALE_PLACEMENTS'; before: number }
   | { type: 'OPTIMISTIC_REMOVE'; anchorId: string; itemType: string }
   | { type: 'OPTIMISTIC_REMOVE_KEYS'; keys: string[] }
   | { type: 'OPTIMISTIC_HARVEST'; anchorId: string; effect: HarvestEffect }
@@ -273,18 +335,20 @@ export type GameAction =
   | { type: 'SET_FOSSIL_DIG_RESULT'; result: FossilDigResult | null }
   | { type: 'SET_SCENERY_URL'; url: string; farmCols: number; farmRows: number }
   | { type: 'SET_QUESTS'; quests: QuestProgress[]; canUpgrade: boolean }
-  | { type: 'OPTIMISTIC_QUEST_ACTIVATE'; questId: string }
-  | { type: 'QUEUE_QUEST_DIALOG'; dialogs: Array<{ steps: DialogStep[]; speaker?: DialogSpeaker; npcItemType?: string; rewards?: import('../types').QuestReward }> }
-  | { type: 'QUEUE_NPC_DIALOG'; steps: DialogStep[]; speaker?: DialogSpeaker; npcItemType?: string; blocking?: boolean; questIdToComplete?: string }
+  | { type: 'QUEUE_DIALOG'; entries: DialogEntry[] }
+  | { type: 'DISMISS_QUEST_COMPLETIONS' }
   | { type: 'SHOW_PET_DIALOG'; text: string }
   | { type: 'ADVANCE_QUEST_DIALOG' }
   | { type: 'SET_SHOP_OPEN'; open: boolean }
   | { type: 'SET_SELL_BOX_OPEN'; open: boolean }
   | { type: 'SET_COOKING_OPEN'; open: boolean }
+  | { type: 'SET_CRAFTING_OPEN'; open: boolean }
   | { type: 'SET_FOOD_DISH_OPEN'; open: boolean }
   | { type: 'SET_EQUIP_OPEN'; open: boolean }
   | { type: 'SET_PET_BEHAVIOR_SYNC'; state: string }
   | { type: 'CLEAR_PET_BEHAVIOR_SYNC' }
-  | { type: 'SET_PET_STATE'; payload: { col: number; row: number; behavior: string; targetCol?: number; targetRow?: number; interactionType?: string; interactionTarget?: string } }
+  | { type: 'SET_PET_STATE'; payload: { col: number; row: number; behavior: string; targetCol?: number; targetRow?: number; interactionType?: string; interactionTarget?: string; interactionItemType?: string } }
+  | { type: 'SET_WEATHER'; weather: ActiveWeather }
+  | { type: 'SET_WEATHER_OVERRIDE'; weatherOverride: WeatherType | null }
   | { type: 'TREE_SHAKE'; anchorId: string; trigger: number }
   | { type: 'CLEAR_TREE_SHAKE' };

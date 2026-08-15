@@ -173,7 +173,7 @@ export const AddFriendDrawer = forwardRef<AddFriendDrawerRef, { onAdd?: () => vo
     const [isSearching, setIsSearching] = useState(false);
     const [sendingId, setSendingId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+    const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     useEffect(() => () => clearTimeout(searchTimer.current), []);
 

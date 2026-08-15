@@ -1,0 +1,254 @@
+🌱 Ground Cover
+Dead Grass Patch
+Fallen Leaf Carpet
+Dark Forest Floor
+Rotten Leaf Pile
+Moss Patch
+Black Moss Patch
+Mushroom Patch
+Glowing Mushroom Patch
+Twisted Roots
+Exposed Tree Roots
+Bone Pile
+Pebble Cluster
+Cracked Dirt
+Mud Patch
+Ash Patch
+Burnt Grass
+Swamp Grass
+Thorn Bush Patch
+Fog Ground Tile
+Haunted Ground Tile
+🪨 Rocks & Natural Features
+Mossy Boulder
+Cracked Boulder
+Skull Rock
+Witch Stone
+Rune Stone
+Standing Stone
+Stone Circle
+Ancient Monolith
+Fallen Monolith
+Glowing Crystal Rock
+Obsidian Rock
+Bone Rock
+Root Covered Boulder
+Small Rock Cluster
+Giant Boulder
+🍄 Mushrooms
+Red Mushroom Cluster
+Brown Mushroom Cluster
+Poison Mushroom Patch
+Ghost Mushroom
+Glowing Blue Mushroom
+Glowing Purple Mushroom
+Giant Mushroom
+Witch Cap Mushroom
+Bone Mushroom
+Mooncap Mushroom
+Fairy Mushroom Ring
+Rotting Mushroom Log
+🌾 Plants
+Dead Bush
+Thorn Bush
+Dry Fern
+Hanging Ivy
+Black Ivy
+Poison Ivy
+Swamp Reeds
+Tall Dead Grass
+Wilted Flowers
+Black Roses
+Blood Red Roses
+Pale Lilies
+White Ghost Flowers
+Spider Lily Patch
+Pumpkin Vine
+🪵 Logs & Stumps
+Hollow Log
+Mossy Fallen Log
+Rotten Log
+Broken Log
+Dead Tree Stump
+Mossy Stump
+Axe Chopped Stump
+Hollow Stump
+Giant Stump
+Root Stump
+🪦 Graveyard Pieces
+Ancient Tombstone
+Broken Tombstone
+Leaning Grave Marker
+Mossy Gravestone
+Marble Grave
+Family Mausoleum
+Stone Coffin
+Open Grave
+Fresh Grave Mound
+Bone Grave Marker
+Cemetery Fence
+Cemetery Gate
+Funeral Flower Stand
+Raven Perch
+Grave Candle
+🕯 Props
+Jack-o'-Lantern
+Carved Pumpkin Stack
+Rotten Pumpkin
+Pumpkin Wheelbarrow
+Witch Cauldron
+Spell Circle
+Floating Candle
+Candle Circle
+Skull Candle
+Bone Torch
+Haunted Lantern
+Rusted Lantern
+Hanging Lantern
+Ghost Lantern
+Lantern Post
+👻 Haunted Decorations
+Floating Ghost
+Ghost Family
+Tiny Ghost
+Wandering Spirit
+Soul Flame
+Ghost Portal
+Floating Skull
+Floating Eyeballs
+Shadow Figure
+Spirit Orb
+Haunted Mirror
+Haunted Doll
+Creepy Scarecrow
+Skeleton Display
+Bone Totem
+🕸 Spider Area
+Giant Spider Web
+Hanging Spider Web
+Web Covered Tree
+Giant Spider Nest
+Egg Sac Cluster
+Spider Cocoon
+Spider Tunnel
+Spider Den Entrance
+Web Covered Boulder
+Web Covered Fence
+🧙 Witch Area
+Witch Cottage
+Potion Shelf
+Herb Drying Rack
+Broom Rack
+Spell Table
+Crystal Ball Pedestal
+Potion Crate
+Magic Bookshelf
+Spellbook Stand
+Witch Garden
+Herb Garden
+Rune Circle
+Magic Crystal Cluster
+Magic Lantern
+Familiar Cat Statue
+🌉 Structures
+Broken Wooden Bridge
+Rotten Bridge
+Haunted Gazebo
+Broken Fence
+Crooked Fence
+Bone Fence
+Wooden Gate
+Haunted Archway
+Ruined Stone Arch
+Abandoned Campsite
+Destroyed Wagon
+Fallen Watchtower
+Small Cabin Ruins
+Forgotten Shrine
+Ancient Well
+🌫 Atmosphere Pieces
+Ground Fog
+Thick Fog Patch
+Floating Mist
+Swirling Mist
+Fireflies (Purple)
+Blue Spirit Flames
+Green Spirit Flames
+Floating Embers
+Raven Flock
+Crow Perch
+Bat Swarm
+Owl Perch
+Falling Leaves
+Floating Ash
+Moonlight Beam
+🦴 Bone Area
+Bone Pile
+Giant Rib Cage
+Giant Skull
+Animal Skeleton
+Bone Throne
+Bone Archway
+Bone Fence
+Bone Campfire
+Bone Totem
+Bone Circle
+🎃 Harvest Area
+Pumpkin Patch
+Giant Pumpkin
+Pumpkin Crate
+Pumpkin Wagon
+Hay Bale Stack
+Harvest Cart
+Corn Stalk Bundle
+Apple Basket
+Harvest Scarecrow
+Harvest Sign
+✨ Rare Set Pieces
+
+These should be the "wow" landmarks players remember.
+
+Giant Hollow World Tree
+Haunted Clock Tower
+Witch's Windmill
+Ghost Train Tracks
+Abandoned Church
+Moon Shrine
+Spirit Shrine
+Giant Spider Queen Nest
+Vampire Manor Gates
+Forgotten Cemetery
+Crystal Graveyard
+Ghost Lantern Grove
+Hollow Pumpkin Castle
+Ancient Ritual Site
+Eclipse Monolith
+Whispering Stone Circle
+Skeleton Dragon Remains
+Giant Haunted Treehouse
+Fallen Moon Obelisk
+Portal to the Spirit Realm
+🧩 Ground Tile Palette
+
+For the biome itself, I'd build it from a small set of mix-and-match tiles rather than one repeating texture:
+
+Haunted Forest Floor
+Dark Dirt Path
+Cracked Dirt Path
+Mossy Forest Floor
+Rotten Leaves Tile
+Autumn Leaves Tile (Orange)
+Autumn Leaves Tile (Red)
+Black Soil Tile
+Swamp Mud Tile
+Dead Grass Tile
+Root Network Tile
+Pebble Forest Tile
+Bone-Littered Ground Tile
+Glowing Mushroom Ground Tile
+Fog Overlay Tile
+Thorny Ground Tile
+Ash-Covered Ground Tile
+Cobblestone Ruins Tile
+Cemetery Path Tile
+Enchanted Forest Floor

@@ -54,7 +54,13 @@ export function ItemChip({
         )}
       </View>
       <View style={styles.info}>
-        <Text style={[styles.label, showGems && { color: gemColor }]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.label,
+            { color: showGems ? gemColor : colors.text },
+          ]}
+          numberOfLines={1}
+        >
           {displayLabel}
         </Text>
         {!showGems && qty != null && qty > 1 && (

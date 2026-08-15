@@ -4,7 +4,7 @@
  */
 
 import { CachedImage } from '@/components/ui/CachedImage';
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -20,7 +20,25 @@ import type { HarvestEffect } from './types';
 const CROP_OVERFLOW_SCALE = 1.35;
 const FRUIT_SIZE = TILE_SIZE * 0.45;
 
-/** Single fruit sprite: quick rotate (origin top center), fall 15px, scale to 0. */
+/** How far a fruit falls before it lands and fades. */
+const FRUIT_FALL_DISTANCE = TILE_SIZE * 0.9;
+const FRUIT_DETACH_MS = 110;
+const FRUIT_FALL_MS = 260;
+const FRUIT_FADE_MS = 130;
+/** Gap between successive fruit, so they don't read as one blob. */
+const FRUIT_STAGGER_MS = 70;
+/**
+ * How long to wait for a fruit sprite before animating without it.
+ *
+ * The animation used to start on mount, so a crop image that arrived from disk a
+ * few frames later missed most of it and the fruit appeared to blink or jump.
+ */
+const SPRITE_WAIT_MS = 220;
+
+/**
+ * One fruit coming off a tree: it detaches with a small tilt, falls under
+ * gravity, then fades where it lands.
+ */
 function FruitSprite({
   left,
   top,
@@ -36,13 +54,51 @@ function FruitSprite({
 }) {
   const rotate = useSharedValue(0);
   const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
+  const scale = useSharedValue(0.85);
+  const opacity = useSharedValue(0);
+
+  // An emoji draws immediately; an image has to be decoded first.
+  const [spriteReady, setSpriteReady] = useState(!cropImageUrl);
+  const onSpriteLoad = useCallback(() => setSpriteReady(true), []);
+
+  // Don't wait forever on an image that fails or stalls.
   useEffect(() => {
-    rotate.value = withDelay(delayMs, withTiming(22, { duration: 120, easing: Easing.out(Easing.quad) }));
-    translateY.value = withDelay(delayMs, withTiming(15, { duration: 120, easing: Easing.in(Easing.quad) }));
-    scale.value = withDelay(delayMs, withTiming(0, { duration: 120, easing: Easing.in(Easing.quad) }));
-  }, [delayMs]);
+    if (spriteReady) return;
+    const t = setTimeout(() => setSpriteReady(true), SPRITE_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [spriteReady]);
+
+  useEffect(() => {
+    if (!spriteReady) return;
+    opacity.value = withDelay(delayMs, withTiming(1, { duration: 60 }));
+    // Pops off the branch, then keeps tilting as it falls.
+    rotate.value = withDelay(
+      delayMs,
+      withSequence(
+        withTiming(-10, { duration: FRUIT_DETACH_MS, easing: Easing.out(Easing.quad) }),
+        withTiming(26, { duration: FRUIT_FALL_MS, easing: Easing.inOut(Easing.quad) }),
+      ),
+    );
+    scale.value = withDelay(
+      delayMs,
+      withSequence(
+        withTiming(1.12, { duration: FRUIT_DETACH_MS, easing: Easing.out(Easing.back(2)) }),
+        withTiming(1, { duration: FRUIT_FALL_MS, easing: Easing.out(Easing.quad) }),
+      ),
+    );
+    // Held briefly, then accelerating downward — the part that reads as a drop.
+    translateY.value = withDelay(
+      delayMs + FRUIT_DETACH_MS,
+      withTiming(FRUIT_FALL_DISTANCE, { duration: FRUIT_FALL_MS, easing: Easing.in(Easing.quad) }),
+    );
+    opacity.value = withDelay(
+      delayMs + FRUIT_DETACH_MS + FRUIT_FALL_MS - FRUIT_FADE_MS,
+      withTiming(0, { duration: FRUIT_FADE_MS, easing: Easing.in(Easing.quad) }),
+    );
+  }, [spriteReady, delayMs, rotate, scale, translateY, opacity]);
+
   const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
     transform: [
       { translateY: translateY.value },
       { rotate: `${rotate.value}deg` },
@@ -70,6 +126,8 @@ function FruitSprite({
           source={{ uri: cropImageUrl }}
           style={{ width: FRUIT_SIZE, height: FRUIT_SIZE }}
           resizeMode="contain"
+          onLoad={onSpriteLoad}
+          onError={onSpriteLoad}
         />
       ) : cropEmoji ? (
         <Text style={[styles.fruitEmoji, { fontSize: FRUIT_SIZE * 0.85 }]}>{cropEmoji}</Text>
@@ -98,7 +156,7 @@ function TreeFruitHarvest({ effect }: { effect: HarvestEffect }) {
           top={pos.top}
           cropImageUrl={effect.cropImageUrl}
           cropEmoji={effect.cropEmoji}
-          delayMs={i * 30}
+          delayMs={i * FRUIT_STAGGER_MS}
         />
       ))}
     </>

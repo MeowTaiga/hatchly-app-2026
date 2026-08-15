@@ -55,7 +55,7 @@ export default function ThemePickerScreen() {
       >
         <View style={st.header}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => router.navigate('/(tabs)/settings')}
             style={({ pressed }) => [st.backBtn, pressed && { opacity: 0.7 }]}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />

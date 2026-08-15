@@ -150,6 +150,9 @@ export function useAdminItemForm() {
     else if (isEdit) data.petLevel = null;
     if (state.shopSection.trim()) data.shopSection = state.shopSection.trim();
     else if (isEdit) data.shopSection = null;
+    if (state.shopCurrency.trim()) data.shopCurrency = state.shopCurrency.trim();
+    else if (isEdit) data.shopCurrency = null;
+    data.isCurrency = state.isCurrency;
     data.sellable = state.sellable;
     data.sellPrice = state.sellPrice ? parseInt(state.sellPrice, 10) || 0 : 0;
     if (state.availableUntil.trim()) data.availableUntil = new Date(state.availableUntil).toISOString();

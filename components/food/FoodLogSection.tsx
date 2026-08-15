@@ -1,5 +1,9 @@
+/**
+ * Today's food log — meal accordion on the home tab.
+ */
+
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, LayoutAnimation, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet, LayoutAnimation, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { foodIcon, multiplyDesc } from '@/components/food/FoodDrawer';
@@ -7,11 +11,9 @@ import { useFood } from '@/store/FoodProvider';
 import { type FoodLogEntry, type MealType } from '@/lib/api';
 import { MEAL_META, MEAL_ORDER } from '@/lib/meals';
 import { useTheme } from '@/store/ThemeProvider';
-import { spacing, radius } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 
 const MOVE_OPTIONS = MEAL_ORDER;
-
-// ─── Component ──────────────────────────────────────────────────────────────
 
 interface FoodLogSectionProps {
   onFoodPress?: (entry: FoodLogEntry) => void;
@@ -19,63 +21,112 @@ interface FoodLogSectionProps {
 
 export function FoodLogSection({ onFoodPress }: FoodLogSectionProps = {}) {
   const { theme } = useTheme();
-  const { logs, deleteLog, updateLogMeal } = useFood();
+  const { logs, deleteLog, updateLogMeal, totals } = useFood();
   const colors = theme.colors;
+
+  const cardShadow = useMemo(
+    () =>
+      Platform.select({
+        ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10 },
+        android: { elevation: 2 },
+      }),
+    [],
+  );
+
   const st = useMemo(
     () =>
       StyleSheet.create({
-        container: { width: '100%', marginBottom: spacing.xl },
-        title: {
-          fontSize: 13,
-          fontWeight: '700',
-          color: colors.textMuted,
-          textTransform: 'uppercase',
-          letterSpacing: 0.8,
-          marginBottom: 10,
+        container: { width: '100%', marginBottom: spacing.base },
+        header: {
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          marginBottom: 12,
         },
-        group: {
-          backgroundColor: colors.surface + 'CC',
-          borderRadius: radius.lg,
-          marginBottom: 10,
-          overflow: 'hidden',
+        kicker: {
+          fontSize: 11,
+          fontWeight: '900',
+          letterSpacing: 1.1,
+          color: colors.textMuted,
+          marginBottom: 2,
+        },
+        title: {
+          fontSize: 18,
+          fontWeight: '900',
+          letterSpacing: -0.3,
+          color: colors.text,
+        },
+        sub: {
+          fontSize: 12,
+          color: colors.textSecondary,
+          marginTop: 2,
+        },
+        calPill: {
+          paddingHorizontal: 10,
+          paddingVertical: 6,
+          borderRadius: 999,
+          backgroundColor: colors.primary + '18',
+          marginTop: 2,
+        },
+        calPillText: {
+          fontSize: 12,
+          fontWeight: '800',
+          color: colors.primary,
+        },
+        empty: {
+          borderRadius: 22,
           borderWidth: 1,
           borderColor: colors.border,
-          ...theme.shadows.sm,
+          backgroundColor: colors.surface,
+          padding: 16,
+        },
+        emptyText: {
+          fontSize: 13,
+          color: colors.textSecondary,
+          textAlign: 'center',
+          lineHeight: 18,
+        },
+        group: {
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          marginBottom: 10,
+          overflow: 'hidden',
         },
         groupHeader: {
           flexDirection: 'row',
           alignItems: 'center',
-          paddingVertical: 13,
+          paddingVertical: 14,
           paddingHorizontal: 14,
           gap: 10,
         },
         groupIcon: {
-          width: 34,
-          height: 34,
-          borderRadius: 11,
+          width: 42,
+          height: 42,
+          borderRadius: 14,
           alignItems: 'center',
           justifyContent: 'center',
         },
         groupLabel: {
           flex: 1,
           fontSize: 15,
-          fontWeight: '600',
+          fontWeight: '800',
           color: colors.text,
         },
         groupBadge: {
-          backgroundColor: colors.border + '40',
+          backgroundColor: colors.border + '55',
           paddingHorizontal: 8,
           paddingVertical: 2,
           borderRadius: 10,
         },
         groupBadgeText: {
           fontSize: 12,
-          fontWeight: '600',
+          fontWeight: '700',
           color: colors.textSecondary,
         },
         groupCal: {
           fontSize: 13,
-          fontWeight: '700',
+          fontWeight: '800',
           color: colors.primary,
         },
         logRow: {
@@ -84,7 +135,6 @@ export function FoodLogSection({ onFoodPress }: FoodLogSectionProps = {}) {
           paddingVertical: 10,
           paddingHorizontal: 14,
           gap: 10,
-          backgroundColor: colors.surfaceElevated + '80',
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
         },
@@ -97,7 +147,7 @@ export function FoodLogSection({ onFoodPress }: FoodLogSectionProps = {}) {
           justifyContent: 'center',
         },
         logRowBody: { flex: 1, gap: 2 },
-        logRowName: { fontSize: 14, fontWeight: '600', color: colors.text },
+        logRowName: { fontSize: 14, fontWeight: '700', color: colors.text },
         logRowSub: { fontSize: 11, color: colors.textMuted },
         logRowChips: { flexDirection: 'row', gap: 4, marginTop: 3, flexWrap: 'wrap' },
         chip: {
@@ -112,11 +162,9 @@ export function FoodLogSection({ onFoodPress }: FoodLogSectionProps = {}) {
           justifyContent: 'center',
           alignItems: 'center',
           width: 64,
-          borderTopRightRadius: 0,
-          borderBottomRightRadius: 0,
         },
       }),
-    [colors, theme.shadows],
+    [colors],
   );
 
   const grouped = useMemo(() => {
@@ -166,51 +214,73 @@ export function FoodLogSection({ onFoodPress }: FoodLogSectionProps = {}) {
     );
   }, [updateLogMeal]);
 
-  if (logs.length === 0) return null;
+  const totalCal = Math.round(totals.calories);
 
   return (
     <View style={st.container}>
-      <Text style={st.title}>Today's Food</Text>
-      {MEAL_ORDER.map((meal) => {
-        const items = grouped[meal];
-        if (items.length === 0) return null;
-        const meta = MEAL_META[meal];
-        const isOpen = openMeal === meal;
-        const totalCal = items.reduce((s, l) => s + Math.round(l.calories * l.numberOfServings), 0);
-
-        return (
-          <View key={meal} style={st.group}>
-            <Pressable onPress={() => toggle(meal)} style={st.groupHeader}>
-              <View style={[st.groupIcon, { backgroundColor: `${meta.color}18` }]}>
-                <Ionicons name={meta.icon} size={18} color={meta.color} />
-              </View>
-              <Text style={st.groupLabel}>{meta.label}</Text>
-              <View style={st.groupBadge}>
-                <Text style={st.groupBadgeText}>{items.length}</Text>
-              </View>
-              <Text style={st.groupCal}>{totalCal} cal</Text>
-              <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
-            </Pressable>
-
-            {isOpen &&
-              items.map((entry) => (
-                <LogRow
-                  key={entry.id}
-                  entry={entry}
-                  st={st}
-                  onDelete={() => handleDelete(entry.id)}
-                  onMove={() => handleMove(entry)}
-                  onPress={() => onFoodPress?.(entry)}
-                />
-              ))}
+      <View style={st.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={st.kicker}>FUEL</Text>
+          <Text style={st.title}>Today's food</Text>
+          <Text style={st.sub}>
+            {logs.length === 0
+              ? 'Tap the calorie ring to log a meal'
+              : `${logs.length} item${logs.length === 1 ? '' : 's'} across ${nonEmptyMeals.length} meal${nonEmptyMeals.length === 1 ? '' : 's'}`}
+          </Text>
+        </View>
+        {logs.length > 0 ? (
+          <View style={st.calPill}>
+            <Text style={st.calPillText}>{totalCal} cal</Text>
           </View>
-        );
-      })}
+        ) : null}
+      </View>
+
+        {logs.length === 0 ? (
+        <View style={[st.empty, cardShadow]}>
+          <Text style={st.emptyText}>
+            Nothing logged yet — breakfast, lunch, dinner, and snacks show up here.
+          </Text>
+        </View>
+      ) : (
+        MEAL_ORDER.map((meal) => {
+          const items = grouped[meal];
+          if (items.length === 0) return null;
+          const meta = MEAL_META[meal];
+          const isOpen = openMeal === meal;
+          const mealCal = items.reduce((s, l) => s + Math.round(l.calories * l.numberOfServings), 0);
+
+          return (
+            <View key={meal} style={[st.group, cardShadow]}>
+              <Pressable onPress={() => toggle(meal)} style={st.groupHeader}>
+                <View style={[st.groupIcon, { backgroundColor: `${meta.color}18` }]}>
+                  <Ionicons name={meta.icon} size={18} color={meta.color} />
+                </View>
+                <Text style={st.groupLabel}>{meta.label}</Text>
+                <View style={st.groupBadge}>
+                  <Text style={st.groupBadgeText}>{items.length}</Text>
+                </View>
+                <Text style={st.groupCal}>{mealCal} cal</Text>
+                <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+              </Pressable>
+
+              {isOpen &&
+                items.map((entry) => (
+                  <LogRow
+                    key={entry.id}
+                    entry={entry}
+                    st={st}
+                    onDelete={() => handleDelete(entry.id)}
+                    onMove={() => handleMove(entry)}
+                    onPress={() => onFoodPress?.(entry)}
+                  />
+                ))}
+            </View>
+          );
+        })
+      )}
     </View>
   );
 }
-
-// ─── Macro Chip ──────────────────────────────────────────────────────────────
 
 function Chip({ v, u, c, st }: { v: string; u: string; c: string; st: any }) {
   return (
@@ -222,8 +292,6 @@ function Chip({ v, u, c, st }: { v: string; u: string; c: string; st: any }) {
     </View>
   );
 }
-
-// ─── Log Row ─────────────────────────────────────────────────────────────────
 
 function LogRow({ entry, st, onDelete, onMove, onPress }: {
   entry: FoodLogEntry;
@@ -272,4 +340,3 @@ function LogRow({ entry, st, onDelete, onMove, onPress }: {
     </Swipeable>
   );
 }
-

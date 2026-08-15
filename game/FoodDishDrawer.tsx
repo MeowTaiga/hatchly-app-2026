@@ -1,14 +1,22 @@
 /**
- * Food Dish Drawer — Add food items to a placed food dish.
- * Opened by interacting with a food_dish item on the farm.
+ * Food Dish Drawer — Fill a placed food dish for the pet to eat from.
+ * Capacity scales with farm level and is shown as bowl seats in the selector.
  */
 
-import React, { forwardRef, useImperativeHandle, useRef, useMemo, useState, useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useMemo,
+  useState,
+  useCallback,
+} from 'react';
+import { StyleSheet, View } from 'react-native';
 import { AppDrawer, type AppDrawerRef } from '@/components/ui/AppDrawer';
-import { CachedImage } from '@/components/ui/CachedImage';
 import { FoodDishSelector } from './FoodDishSelector';
+import { getMaxFoodDishQueueSize } from './foodDishCapacity';
 import { useTheme } from '@/store/ThemeProvider';
+import { useAuth } from '@/store/AuthProvider';
 import { spacing } from '@/constants/theme';
 import type { ItemDefinition, InventorySlot } from './types';
 import type { QuestHighlight } from './types';
@@ -21,6 +29,7 @@ export interface FoodDishDrawerRef {
 interface FoodDishDrawerProps {
   itemDefs: Record<string, ItemDefinition>;
   inventory: InventorySlot[];
+  farmLevel: number;
   foodDishQueues?: Record<string, string[]>;
   onAddToDish: (anchorId: string, items: Array<{ itemType: string; qty: number }>) => void;
   onError?: (message: string) => void;
@@ -29,15 +38,29 @@ interface FoodDishDrawerProps {
   tryAutoAdvanceDialog?: (action: string, itemType?: string) => void;
 }
 
-const QUEUE_ITEM_SIZE = 36;
-
 export const FoodDishDrawer = forwardRef<FoodDishDrawerRef, FoodDishDrawerProps>(
-  function FoodDishDrawer({ itemDefs, inventory, foodDishQueues, onAddToDish, onError, activeHighlight, onOpenChange, tryAutoAdvanceDialog }, ref) {
+  function FoodDishDrawer(
+    {
+      itemDefs,
+      inventory,
+      farmLevel,
+      foodDishQueues,
+      onAddToDish,
+      onError,
+      activeHighlight,
+      onOpenChange,
+      tryAutoAdvanceDialog,
+    },
+    ref,
+  ) {
     const drawerRef = useRef<AppDrawerRef>(null);
     const [anchorId, setAnchorId] = useState<string | null>(null);
     const { theme } = useTheme();
     const colors = theme.colors;
+    const { user } = useAuth();
     const [openCount, setOpenCount] = useState(0);
+
+    const maxCapacity = useMemo(() => getMaxFoodDishQueueSize(farmLevel), [farmLevel]);
 
     const foodSlots = useMemo(() => {
       return inventory.filter((slot) => {
@@ -62,9 +85,9 @@ export const FoodDishDrawer = forwardRef<FoodDishDrawerRef, FoodDishDrawerProps>
     );
 
     const handleAddToDish = useCallback(
-      (anchorId: string, items: Array<{ itemType: string; qty: number }>) => {
+      (id: string, items: Array<{ itemType: string; qty: number }>) => {
         items.forEach(({ itemType }) => tryAutoAdvanceDialog?.('add_to_food_dish', itemType));
-        onAddToDish(anchorId, items);
+        onAddToDish(id, items);
       },
       [onAddToDish, tryAutoAdvanceDialog],
     );
@@ -78,48 +101,27 @@ export const FoodDishDrawer = forwardRef<FoodDishDrawerRef, FoodDishDrawerProps>
       close: () => drawerRef.current?.close(),
     }));
 
+    const title =
+      queue.length >= maxCapacity
+        ? `Pet Bowl · Full (${maxCapacity})`
+        : `Pet Bowl · ${queue.length}/${maxCapacity}`;
+
     return (
-      <AppDrawer ref={drawerRef} title="Add Food to Dish" snapPoints={['60%', '90%']} onChange={handleDrawerChange}>
+      <AppDrawer
+        ref={drawerRef}
+        title={title}
+        snapPoints={['65%', '92%']}
+        onChange={handleDrawerChange}
+      >
         {anchorId && (
           <View style={styles.drawerContent}>
-            {queue.length > 0 && (
-              <View style={styles.queueSection}>
-                <Text style={[styles.queueLabel, { color: colors.textSecondary }]}>
-                  In dish (next eaten first)
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.queueRow}
-                >
-                  {queue.map((itemType, index) => {
-                    const def = itemDefs[itemType];
-                    if (!def) return null;
-                    return (
-                      <View
-                        key={`${itemType}-${index}`}
-                        style={[styles.queueItem, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
-                      >
-                        {def.imageUrl ? (
-                          <CachedImage
-                            source={{ uri: def.imageUrl }}
-                            style={styles.queueItemImage}
-                            resizeMode="contain"
-                            recyclingKey={`fooddish-queue-${itemType}-${index}`}
-                          />
-                        ) : (
-                          <Text style={styles.queueItemEmoji}>{def.emoji ?? '?'}</Text>
-                        )}
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
             <FoodDishSelector
-              key={openCount}
+              key={`${anchorId}-${openCount}`}
               initialSlots={foodSlots}
               itemDefs={itemDefs}
+              queue={queue}
+              maxCapacity={maxCapacity}
+              petHunger={user?.pet?.hunger}
               onAddToDish={(items) => handleAddToDish(anchorId, items)}
               onError={onError}
               highlightedItemType={highlightedItemType}
@@ -135,33 +137,6 @@ export const FoodDishDrawer = forwardRef<FoodDishDrawerRef, FoodDishDrawerProps>
 const styles = StyleSheet.create({
   drawerContent: {
     flex: 1,
-  },
-  queueSection: {
-    marginBottom: spacing.lg,
-  },
-  queueLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-  },
-  queueRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  queueItem: {
-    width: QUEUE_ITEM_SIZE,
-    height: QUEUE_ITEM_SIZE,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  queueItemImage: {
-    width: QUEUE_ITEM_SIZE - 8,
-    height: QUEUE_ITEM_SIZE - 8,
-  },
-  queueItemEmoji: {
-    fontSize: 18,
+    paddingBottom: spacing.sm,
   },
 });

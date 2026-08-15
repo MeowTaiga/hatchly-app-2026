@@ -3,10 +3,10 @@
  */
 
 import { StyleSheet, Platform } from 'react-native';
-import type { Theme } from '@/store/ThemeProvider';
+import type { AppTheme } from '@/constants/theme';
 import { HUD_PILL_HEIGHT } from './constants';
 
-export function createHudStyles(colors: Theme['colors'], screenWidth: number) {
+export function createHudStyles(colors: AppTheme['colors'], screenWidth: number) {
   return StyleSheet.create({
     container: { ...StyleSheet.absoluteFillObject, zIndex: 200 },
     topRow: {
@@ -63,6 +63,16 @@ export function createHudStyles(colors: Theme['colors'], screenWidth: number) {
     },
     highlightWrap: { borderRadius: 14 },
     highlightBorder: { borderWidth: 2, borderColor: '#FFD700' },
+    /** Explicitly zeros border/glow when a quest highlight is removed. */
+    highlightClear: {
+      shadowColor: 'transparent',
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 0,
+      borderWidth: 0,
+      borderColor: 'transparent',
+    },
     moveBanner: { position: 'absolute' as const, left: 12, right: 12, alignItems: 'center' },
     moveBannerInner: {
       flexDirection: 'row',
@@ -122,6 +132,24 @@ export function createHudStyles(colors: Theme['colors'], screenWidth: number) {
       borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    backpackBadge: {
+      position: 'absolute' as const,
+      right: -6,
+      bottom: -4,
+      minWidth: 28,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    backpackBadgeText: {
+      fontSize: 8,
+      fontWeight: '800' as const,
+      fontVariant: ['tabular-nums'] as const,
+      letterSpacing: -0.2,
     },
     toolSep: {
       width: 1,

@@ -18,6 +18,9 @@ export interface ShopRef {
 
 interface ShopProps {
   gems: number;
+  farmLevel: number;
+  petLevel: number;
+  farmingSkillLevel?: number;
   itemDefs: Record<string, ItemDefinition>;
   inventory?: InventorySlot[];
   onPurchase: (itemType: string) => void;
@@ -34,7 +37,19 @@ const MAIN_SHOP_CONFIG: ShopDrawerConfig = {
 };
 
 export const Shop = forwardRef<ShopRef, ShopProps>(function Shop(
-  { gems, itemDefs, inventory = [], onPurchase, onClose, activeHighlight, onOpenChange, onCategorySelect },
+  {
+    gems,
+    farmLevel,
+    petLevel,
+    farmingSkillLevel = 0,
+    itemDefs,
+    inventory = [],
+    onPurchase,
+    onClose,
+    activeHighlight,
+    onOpenChange,
+    onCategorySelect,
+  },
   ref,
 ) {
   return (
@@ -42,6 +57,9 @@ export const Shop = forwardRef<ShopRef, ShopProps>(function Shop(
       ref={ref}
       config={MAIN_SHOP_CONFIG}
       gems={gems}
+      farmLevel={farmLevel}
+      petLevel={petLevel}
+      farmingSkillLevel={farmingSkillLevel}
       itemDefs={itemDefs}
       inventory={inventory}
       onPurchase={onPurchase}

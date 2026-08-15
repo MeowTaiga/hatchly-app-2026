@@ -8,6 +8,7 @@ import Animated, {
   withDelay,
   Easing,
 } from 'react-native-reanimated';
+import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '@/store/ThemeProvider';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -93,7 +94,7 @@ const Bubble = React.memo(function Bubble({ config, borderColor }: { config: Bub
   }));
 
   return (
-    <Animated.View
+      <Animated.View
       style={[
         styles.bubble,
         {
@@ -108,9 +109,6 @@ const Bubble = React.memo(function Bubble({ config, borderColor }: { config: Bub
         },
         animatedStyle,
       ]}
-      // Hardware-accelerate each bubble into its own compositing layer
-      renderToHardwareTextureAndroid
-      shouldRasterizeIOS
     />
   );
 });
@@ -124,8 +122,14 @@ const Bubble = React.memo(function Bubble({ config, borderColor }: { config: Bub
  */
 export function FloatingBubbles({ count = 8 }: { count?: number }) {
   const { theme, themeMode } = useTheme();
+  const isFocused = useIsFocused();
   const bubbles = useMemo(() => generateBubbles(count, [...theme.bubbleColors]), [count, theme.bubbleColors]);
   const borderColor = themeMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)';
+
+  // Tab screens stay mounted once visited. Unmounting the bubbles while the
+  // screen is off-screen stops their infinite animations instead of leaving one
+  // more set of them running on the UI thread for every tab the user has opened.
+  if (!isFocused) return null;
 
   return (
     <>

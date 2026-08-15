@@ -1,6 +1,7 @@
 import React, { useRef, useCallback, useMemo, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import Animated from 'react-native-reanimated';
+import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { CircleTracker } from '@/components/ui/CircleTracker';
@@ -14,70 +15,87 @@ import { WaterDrawer, type WaterDrawerRef } from '@/components/water/WaterDrawer
 import { FitnessDrawer, type FitnessDrawerRef } from '@/components/fitness/FitnessDrawer';
 import { FoodLogSection } from '@/components/food/FoodLogSection';
 import { ActionBanner } from '@/components/ui/ActionBanner';
+import { FastingTimerCard } from '@/components/fasting/FastingTimerCard';
+import { FastingInterestDrawer, type FastingInterestDrawerRef } from '@/components/fasting/FastingInterestDrawer';
+import { FastingDrawer, type FastingDrawerRef } from '@/components/fasting/FastingDrawer';
+import { GoalsCard } from '@/components/goals/GoalsCard';
+import { GoalsDrawer, type GoalsDrawerRef } from '@/components/goals/GoalsDrawer';
 import { AchievementRow } from '@/components/ui/AchievementRow';
 import { FriendsActivityRow } from '@/components/friends/FriendsActivityRow';
-import { FarmLevelCard } from '@/components/home/FarmLevelCard';
-import { GemsCard } from '@/components/home/GemsCard';
-import { QuestTeaserCard } from '@/components/home/QuestTeaserCard';
-import { FishingTeaserCard } from '@/components/home/FishingTeaserCard';
-import { CookingCraftingCard } from '@/components/home/CookingCraftingCard';
+import { TodayPulseCard } from '@/components/home/TodayPulseCard';
+import { PetCareCard } from '@/components/home/PetCareCard';
+import { FarmHubCard } from '@/components/home/FarmHubCard';
+import { AdventureStrip } from '@/components/home/AdventureStrip';
+import { MoodQuickDrawer, type MoodQuickDrawerRef } from '@/components/home/MoodQuickDrawer';
 import { usePetHeroScroll, usePetHero } from '@/store/PetHeroProvider';
+import { useAuth } from '@/store/AuthProvider';
 import { useFood } from '@/store/FoodProvider';
 import { useMacroGoals } from '@/store/MacroGoalsProvider';
 import { useWeight } from '@/store/WeightProvider';
 import { useWater } from '@/store/WaterProvider';
+import { useFasting } from '@/store/FastingProvider';
 import { useTheme } from '@/store/ThemeProvider';
-import { useToast } from '@/store/ToastProvider';
 import { useGameSummary } from '@/hooks/useGameSummary';
+import { showAppRewards } from '@/lib/showAppRewards';
 import { NUTRIENT_CONFIG } from '@/lib/nutrients';
 import { spacing, getMacroLabelColor } from '@/constants/theme';
 
 export default function HomeScreen() {
   const { theme, themeMode } = useTheme();
-  const { toast } = useToast();
+  const { refreshUser } = useAuth();
   const { refresh: refreshGameSummary } = useGameSummary();
-  const { colors, typography } = theme;
+  const { colors } = theme;
   const { scrollHandler } = usePetHeroScroll();
+
+  // Re-fetch farm/adventure counts whenever Home gains focus (e.g. after catching bugs).
+  useFocusEffect(
+    useCallback(() => {
+      refreshGameSummary();
+    }, [refreshGameSummary]),
+  );
   const { triggerXpGain } = usePetHero();
   const { totals } = useFood();
   const { goals: macroGoals, orderedNutrientKeys, updateGoal, updateNutrientOrder } = useMacroGoals();
   const { currentWeight, weeklyChange, todayLog, goalWeight, dailyCalorieTarget } = useWeight();
   const { totalOz, goalOz } = useWater();
+  const { interested: fastingInterested, isLoaded: fastingLoaded } = useFasting();
   const insets = useSafeAreaInsets();
   const [stepCount, setStepCount] = useState<number | null>(null);
+  const [moodRefreshToken, setMoodRefreshToken] = useState(0);
   const foodDrawerRef = useRef<FoodDrawerRef>(null);
   const weightDrawerRef = useRef<WeightDrawerRef>(null);
   const waterDrawerRef = useRef<WaterDrawerRef>(null);
   const fitnessDrawerRef = useRef<FitnessDrawerRef>(null);
   const macroInfoDrawerRef = useRef<MacroInfoDrawerRef>(null);
   const foodDetailDrawerRef = useRef<FoodDetailDrawerRef>(null);
+  const moodDrawerRef = useRef<MoodQuickDrawerRef>(null);
+  const fastingInterestRef = useRef<FastingInterestDrawerRef>(null);
+  const fastingDrawerRef = useRef<FastingDrawerRef>(null);
+  const goalsDrawerRef = useRef<GoalsDrawerRef>(null);
   const drawerOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const calorieGoal = dailyCalorieTarget;
 
   const handleFoodLogged = useCallback((xpGained: number, gemsAwarded?: number) => {
     triggerXpGain?.(xpGained);
-    if (gemsAwarded && gemsAwarded > 0) {
-      toast(`+${gemsAwarded} gems ✨`, 'success');
-      refreshGameSummary();
-    }
-  }, [triggerXpGain, toast, refreshGameSummary]);
+    showAppRewards({ xpGained, gemsAwarded });
+    if ((gemsAwarded ?? 0) > 0 || xpGained > 0) refreshGameSummary();
+    if (xpGained > 0) void refreshUser();
+  }, [triggerXpGain, refreshGameSummary, refreshUser]);
 
   const handleWeightLogged = useCallback((xpGained: number, gemsAwarded?: number) => {
     triggerXpGain?.(xpGained);
-    if (gemsAwarded && gemsAwarded > 0) {
-      toast(`+${gemsAwarded} gems ✨`, 'success');
-      refreshGameSummary();
-    }
-  }, [triggerXpGain, toast, refreshGameSummary]);
+    showAppRewards({ xpGained, gemsAwarded });
+    if ((gemsAwarded ?? 0) > 0 || xpGained > 0) refreshGameSummary();
+    if (xpGained > 0) void refreshUser();
+  }, [triggerXpGain, refreshGameSummary, refreshUser]);
 
   const handleWaterLogged = useCallback((xpGained: number, gemsAwarded?: number) => {
     triggerXpGain?.(xpGained);
-    if (gemsAwarded && gemsAwarded > 0) {
-      toast(`+${gemsAwarded} gems ✨`, 'success');
-      refreshGameSummary();
-    }
-  }, [triggerXpGain, toast, refreshGameSummary]);
+    showAppRewards({ xpGained, gemsAwarded });
+    if ((gemsAwarded ?? 0) > 0 || xpGained > 0) refreshGameSummary();
+    if (xpGained > 0) void refreshUser();
+  }, [triggerXpGain, refreshGameSummary, refreshUser]);
 
   const clearPendingDrawerOpen = useCallback(() => {
     if (drawerOpenTimerRef.current) {
@@ -103,7 +121,6 @@ export default function HomeScreen() {
 
   useEffect(() => () => clearPendingDrawerOpen(), [clearPendingDrawerOpen]);
 
-  // Weight circle display logic
   const weightDisplay = useMemo(() => {
     if (currentWeight == null) return { display: '— lbs', sub: undefined, subColor: undefined };
 
@@ -180,17 +197,8 @@ export default function HomeScreen() {
           bottom: 0,
           borderRadius: 2,
         },
-        card: {
-          width: '100%',
-          backgroundColor: colors.surface + 'CC',
-          borderRadius: 16,
-          padding: spacing.xl,
-          marginBottom: spacing.base,
-        },
-        cardTitle: { ...typography.label, marginBottom: spacing.xs },
-        cardBody: { ...typography.subtitle, lineHeight: 22 },
       }),
-    [colors, typography],
+    [colors],
   );
 
   return (
@@ -205,7 +213,6 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         removeClippedSubviews
       >
-        {/* Circle Trackers */}
         <View style={styles.trackerRow}>
           <CircleTracker
             icon="footsteps-outline"
@@ -247,7 +254,6 @@ export default function HomeScreen() {
           />
         </View>
 
-        {/* Macro chips — tap to open drawer, scrollable with progress bars */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -287,7 +293,9 @@ export default function HomeScreen() {
           })}
         </ScrollView>
 
-        {/* Action banners */}
+        <FastingTimerCard onPress={() => fastingDrawerRef.current?.open()} />
+        <GoalsCard onPress={() => goalsDrawerRef.current?.open()} />
+
         {!todayLog && (
           <ActionBanner
             icon="scale-outline"
@@ -300,20 +308,29 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Food log accordion */}
+        {!!todayLog && fastingLoaded && fastingInterested === null && (
+          <ActionBanner
+            icon="timer-outline"
+            color={colors.primary}
+            title="Want a fasting timer?"
+            subtitle="A simple countdown for your eating window — stop anytime"
+            actionLabel="See how"
+            onAction={() => fastingInterestRef.current?.open()}
+          />
+        )}
+
         <FoodLogSection onFoodPress={(e) => foodDetailDrawerRef.current?.open(e)} />
 
-        {/* Game-themed content cards — interactable */}
-        <FarmLevelCard />
-        <GemsCard />
-        <QuestTeaserCard />
-        <FishingTeaserCard />
-        <CookingCraftingCard />
+        <TodayPulseCard
+          onLogMood={() => moodDrawerRef.current?.open()}
+          refreshToken={moodRefreshToken}
+        />
 
-        {/* Friends activity */}
+        <FarmHubCard />
+        <AdventureStrip />
+
+        <PetCareCard />
         <FriendsActivityRow />
-
-        {/* Achievements */}
         <AchievementRow />
       </Animated.ScrollView>
 
@@ -321,6 +338,18 @@ export default function HomeScreen() {
       <WeightDrawer ref={weightDrawerRef} onWeightLogged={handleWeightLogged} />
       <WaterDrawer ref={waterDrawerRef} onWaterLogged={handleWaterLogged} />
       <FitnessDrawer ref={fitnessDrawerRef} onStepCountChange={setStepCount} />
+      <MoodQuickDrawer
+        ref={moodDrawerRef}
+        onLogged={() => setMoodRefreshToken((n) => n + 1)}
+      />
+      <FastingInterestDrawer
+        ref={fastingInterestRef}
+        onEnabled={() => {
+          setTimeout(() => fastingDrawerRef.current?.open(), 220);
+        }}
+      />
+      <FastingDrawer ref={fastingDrawerRef} />
+      <GoalsDrawer ref={goalsDrawerRef} />
       <MacroInfoDrawer
         ref={macroInfoDrawerRef}
         totals={totals}

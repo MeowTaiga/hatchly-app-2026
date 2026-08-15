@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppDrawer, type AppDrawerRef } from '@/components/ui/AppDrawer';
 
@@ -17,6 +17,12 @@ interface TileToolsPanelProps {
 
   selectedSpotType: string;
   onSelectSpotType: (type: string) => void;
+
+  paintMiningMode: boolean;
+  onTogglePaintMining: () => void;
+
+  selectedOreType: string;
+  onSelectOreType: (type: string) => void;
 }
 
 const SPOT_TYPES = [
@@ -24,6 +30,48 @@ const SPOT_TYPES = [
   { key: 'river', label: 'River' },
   { key: 'ocean', label: 'Ocean' },
   { key: 'pond', label: 'Pond' },
+];
+
+const ORE_TYPES = [
+  { key: 'stone', label: 'Stone' },
+  { key: 'granite', label: 'Granite' },
+  { key: 'limestone', label: 'Lime' },
+  { key: 'slate', label: 'Slate' },
+  { key: 'sandstone', label: 'Sand' },
+  { key: 'flint', label: 'Flint' },
+  { key: 'coal', label: 'Coal' },
+  { key: 'clay', label: 'Clay' },
+  { key: 'copper', label: 'Copper' },
+  { key: 'tin', label: 'Tin' },
+  { key: 'iron', label: 'Iron' },
+  { key: 'zinc', label: 'Zinc' },
+  { key: 'lead', label: 'Lead' },
+  { key: 'nickel', label: 'Nickel' },
+  { key: 'silver', label: 'Silver' },
+  { key: 'gold', label: 'Gold' },
+  { key: 'mithril', label: 'Mithril' },
+  { key: 'quartz', label: 'Quartz' },
+  { key: 'garnet', label: 'Garnet' },
+  { key: 'amethyst', label: 'Amethyst' },
+  { key: 'emerald', label: 'Emerald' },
+  { key: 'ruby', label: 'Ruby' },
+  { key: 'sapphire', label: 'Sapphire' },
+  { key: 'topaz', label: 'Topaz' },
+  { key: 'opal', label: 'Opal' },
+  { key: 'jade', label: 'Jade' },
+  { key: 'moonstone', label: 'Moon' },
+  { key: 'sunstone', label: 'Sun' },
+  { key: 'black_opal', label: 'Blk Opal' },
+  { key: 'star_crystal', label: 'Star' },
+  { key: 'moon_crystal', label: 'Moon X' },
+  { key: 'sun_crystal', label: 'Sun X' },
+  { key: 'aurora_crystal', label: 'Aurora' },
+  { key: 'spirit_crystal', label: 'Spirit' },
+  { key: 'dream_crystal', label: 'Dream' },
+  { key: 'void_crystal', label: 'Void' },
+  { key: 'celestial', label: 'Celestial' },
+  { key: 'etherstone', label: 'Ether' },
+  { key: 'astralite', label: 'Astral' },
 ];
 
 export const TileToolsPanel = forwardRef<AppDrawerRef, TileToolsPanelProps>(
@@ -38,6 +86,10 @@ export const TileToolsPanel = forwardRef<AppDrawerRef, TileToolsPanelProps>(
       onTogglePaintFishing,
       selectedSpotType,
       onSelectSpotType,
+      paintMiningMode,
+      onTogglePaintMining,
+      selectedOreType,
+      onSelectOreType,
     },
     ref,
   ) {
@@ -85,6 +137,20 @@ export const TileToolsPanel = forwardRef<AppDrawerRef, TileToolsPanelProps>(
             Fishing
           </Text>
         </Pressable>
+
+        <Pressable
+          style={[s.toolCard, paintMiningMode && s.toolCardMine]}
+          onPress={onTogglePaintMining}
+        >
+          <Ionicons
+            name="hammer-outline"
+            size={24}
+            color={paintMiningMode ? '#fff' : '#ccc'}
+          />
+          <Text style={[s.toolLabel, paintMiningMode && s.toolLabelActive]}>
+            Mining
+          </Text>
+        </Pressable>
       </View>
 
       {paintFishingMode && (
@@ -111,14 +177,40 @@ export const TileToolsPanel = forwardRef<AppDrawerRef, TileToolsPanelProps>(
         </View>
       )}
 
+      {paintMiningMode && (
+        <View style={s.spotTypeSection}>
+          <Text style={s.spotTypeLabel}>Ore Type</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.spotTypeRow}>
+            {ORE_TYPES.map((opt) => (
+              <Pressable
+                key={opt.key}
+                style={[s.spotChip, selectedOreType === opt.key && s.spotChipMine]}
+                onPress={() => onSelectOreType(opt.key)}
+              >
+                <Text
+                  style={[
+                    s.spotChipText,
+                    selectedOreType === opt.key && s.spotChipTextActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
         <Text style={s.hint}>
           {paintUnwalkableMode
             ? 'Tap tiles to toggle unwalkable. Drag to paint an area.'
             : paintFishingMode
               ? 'Tap tiles to toggle fishing spots. Drag to paint an area.'
-              : areaSelectMode
-                ? 'Drag to select multiple items, then delete them.'
-                : 'Select a tool above to start editing tiles.'}
+              : paintMiningMode
+                ? 'Tap tiles to toggle ore veins. Drag to paint an area.'
+                : areaSelectMode
+                  ? 'Drag to select multiple items, then delete them.'
+                  : 'Select a tool above to start editing tiles.'}
         </Text>
       </AppDrawer>
     );
@@ -129,11 +221,13 @@ TileToolsPanel.displayName = 'TileToolsPanel';
 const s = StyleSheet.create({
   toolsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 10,
   },
   toolCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '22%',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
@@ -149,6 +243,9 @@ const s = StyleSheet.create({
   },
   toolCardSuccess: {
     backgroundColor: '#22C55E',
+  },
+  toolCardMine: {
+    backgroundColor: '#F59E0B',
   },
   toolLabel: {
     fontSize: 11,
@@ -179,6 +276,9 @@ const s = StyleSheet.create({
   },
   spotChipActive: {
     backgroundColor: '#22C55E',
+  },
+  spotChipMine: {
+    backgroundColor: '#F59E0B',
   },
   spotChipText: {
     fontSize: 12,

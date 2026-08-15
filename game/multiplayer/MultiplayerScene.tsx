@@ -1,43 +1,60 @@
+import { CachedImage } from '@/components/ui/CachedImage';
+import { api } from '@/lib/api';
+import { useAuth } from '@/store/AuthProvider';
+import { usePetHero } from '@/store/PetHeroProvider';
+import { useTheme } from '@/store/ThemeProvider';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Dimensions, ActivityIndicator, Text, Pressable, Keyboard } from 'react-native';
+import { Dimensions, InteractionManager, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  useAnimatedReaction,
-  useFrameCallback,
-  withTiming,
-  withDelay,
-  withRepeat,
-  withSequence,
   cancelAnimation,
   Easing,
   runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useFrameCallback,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import { CachedImage } from '@/components/ui/CachedImage';
-import { useTheme } from '@/store/ThemeProvider';
-import { useAuth } from '@/store/AuthProvider';
-import { api } from '@/lib/api';
-import { TILE_SIZE, MIN_ZOOM, MAX_ZOOM } from '../constants';
-import { findPath, pathToWaypoints, PET_WALK_MS_PER_TILE } from './pathfinding';
-import { useGame } from '../GameProvider';
-import { tryInteractWithPlacedItem } from '../interactWithPlacedItem';
-import { useMultiplayer } from './MultiplayerProvider';
-import { useWalkAnimation } from './useWalkAnimation';
-import { RemotePet } from './RemotePet';
-import { equipmentStyles } from '../creature/pet/equipmentStyles';
-import { hasRequiredTool, getNoToolMessage } from '../toolRequiredUtils';
-import { BobberView } from './BobberView';
-import { PlayerDrawer, type PlayerDrawerRef } from '../PlayerDrawer';
-import { FishingMiniGame } from '../FishingMiniGame';
 import { DayNightOverlay } from '../DayNightOverlay';
-import { QuestBubble, getQuestStatusForNpc } from './QuestBubble';
-import type { SceneData, WalkableRect } from './types';
+import { WeatherOverlay } from '../WeatherOverlay';
+import { FishingMiniGame } from '../FishingMiniGame';
+import { MiningMiniGame } from '../MiningMiniGame';
+import { useGame } from '../GameProvider';
+import { SceneLoadingScreen } from '../SceneLoadingScreen';
+import { MAX_ZOOM, MIN_ZOOM, TILE_SIZE } from '../constants';
+import {
+  buildEquipEmojiStyle,
+  buildEquipImageStyle,
+  buildEquipWrapStyle,
+  resolveEquipOverlay,
+  type EquipOverlayConfig,
+} from '../creature/pet/equipmentStyles';
+import { tryInteractWithPlacedItem, type InteractCallbacks } from '../interactWithPlacedItem';
+import { LivePlacementSprite, livePlacementZIndex } from '../LivePlacementSprite';
+import {
+  isInteractableDef,
+  placementColorStyle,
+  placementDepth,
+  placementRect,
+  pointHitsPlacement,
+} from '../placementRect';
+import { getNoToolMessage, hasRequiredTool } from '../toolRequiredUtils';
+import { liveMiningEnergy, MINING_ENERGY_EMPTY_MSG } from '@/constants/miningEnergy';
+import { BobberView } from './BobberView';
 import type { FishResultBubble } from './MultiplayerProvider';
-import { RARITY_BUBBLE_COLORS, formatFishSize, FishStarRow } from './fishBubbleUtils';
+import { useMultiplayer } from './MultiplayerProvider';
+import { getQuestStatusForNpc, QuestBubble } from './QuestBubble';
+import { RemotePet } from './RemotePet';
+import { FishStarRow, catchBubbleSubtitle, bubblePalette } from './fishBubbleUtils';
+import { findPath, pathToWaypoints } from './pathfinding';
+import type { SceneData, WalkableRect } from './types';
+import { useWalkAnimation } from './useWalkAnimation';
 const PET_SIZE = TILE_SIZE * 2;
 const HALF_PET = PET_SIZE / 2;
-const MAX_PATH_TILES = 20;
+const MAX_PATH_TILES = 35;
 
 function isTileWalkable(
   col: number,
@@ -132,12 +149,56 @@ function clampToWalkable(
 
 interface MultiplayerSceneProps {
   sceneSlug: string;
+  onAssetsReady?: () => void;
 }
 
-export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
+export function MultiplayerScene({ sceneSlug, onAssetsReady }: MultiplayerSceneProps) {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { itemDefs, equipped, quests, farmLevel, showPetDialog, switchScene, setPendingInteraction, clearInteraction, setPendingNpcDialog, queueNpcDialog, optimisticallyActivateQuest, emitQuestActivateByNpc, emitQuestActivateByScene, emitQuestModalOpened } = useGame();
+  const {
+    itemDefs, equipped, inventory, farmLevel, quests, showPetDialog, switchScene,
+    setPendingInteraction, clearInteraction, talkToNpc, enterScene, emitQuestModalOpened,
+    tryAutoAdvanceDialog,
+    mineReady, emitMineBegin, emitMineComplete, emitMineCancel, clearMineReady,
+    miningEnergy, miningEnergyCap, miningEnergyAt,
+  } = useGame();
+
+  const interactCallbacks = useMemo<InteractCallbacks>(
+    () => ({
+      talkToNpc,
+      switchScene,
+      setPendingInteraction,
+      clearInteraction,
+      emitQuestModalOpened,
+      showPetDialog,
+      onInteract: (itemType, modalPayload) => {
+        tryAutoAdvanceDialog('interact', itemType);
+        if (modalPayload) tryAutoAdvanceDialog('open_modal', modalPayload);
+      },
+      gateContext: {
+        inventory,
+        farmLevel,
+        petLevel: user?.totalLevel ?? user?.pet?.level,
+        equipped,
+        itemDefs,
+      },
+    }),
+    [
+      talkToNpc,
+      switchScene,
+      setPendingInteraction,
+      clearInteraction,
+      emitQuestModalOpened,
+      showPetDialog,
+      tryAutoAdvanceDialog,
+      inventory,
+      farmLevel,
+      equipped,
+      itemDefs,
+      user?.totalLevel,
+      user?.pet?.level,
+    ],
+  );
   const {
     isJoined,
     players,
@@ -158,6 +219,7 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
 
   const [sceneData, setSceneData] = useState<SceneData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [assetsReady, setAssetsReady] = useState(false);
   const [myPos, setMyPos] = useState<{ x: number; y: number }>(spawnPos);
   const [waypoint, setWaypoint] = useState<{ x: number; y: number; visibleForMs: number } | null>(null);
   const myPosRef = useRef(myPos);
@@ -167,7 +229,6 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
   const pathTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pathInProgress, setPathInProgress] = useState<Array<{ x: number; y: number }> | null>(null);
   const petVisualPosRef = useRef<{ x: number; y: number }>({ x: myPos.x, y: myPos.y });
-  if (!pathInProgress) petVisualPosRef.current = { x: myPos.x, y: myPos.y };
 
   // Sync myPos to spawnPos when we join (spawnPos arrives async from mp:joined)
   useEffect(() => {
@@ -189,11 +250,12 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
   }, []);
 
   const lastChatByUser = useRef<Map<string, string>>(new Map());
-  const playerDrawerRef = useRef<PlayerDrawerRef>(null);
+  const { openPetProfileDrawer } = usePetHero();
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setAssetsReady(false);
     api
       .getScene(sceneSlug)
       .then((data) => {
@@ -210,15 +272,16 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
     };
   }, [sceneSlug]);
 
-  // Emit quest activation when entering a multiplayer scene (once per join)
-  const sceneActivationEmitted = useRef(false);
+  // Report the arrival once per join, so scene-triggered quests can open.
+  const sceneReported = useRef(false);
   useEffect(() => {
-    if (isJoined && sceneSlug && !sceneActivationEmitted.current) {
-      sceneActivationEmitted.current = true;
-      emitQuestActivateByScene(sceneSlug);
+    if (isJoined && sceneSlug && !sceneReported.current) {
+      sceneReported.current = true;
+      enterScene(sceneSlug);
     }
-    if (!isJoined) sceneActivationEmitted.current = false;
-  }, [isJoined, sceneSlug, emitQuestActivateByScene]);
+    if (!isJoined) sceneReported.current = false;
+  }, [isJoined, sceneSlug, enterScene]);
+
 
   for (const msg of chatMessages) {
     lastChatByUser.current.set(msg.userId, msg.text);
@@ -263,6 +326,10 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
     const tiles = sceneData?.fishingTiles ?? [];
     return new Set(tiles.map((t) => `${t.col},${t.row}`));
   }, [sceneData?.fishingTiles]);
+  const miningTilesSet = useMemo(() => {
+    const tiles = sceneData?.miningTiles ?? [];
+    return new Set(tiles.map((t) => `${t.col},${t.row}`));
+  }, [sceneData?.miningTiles]);
   const cameraRef = useRef({ tx: 0, ty: 0, s: sceneZoom });
 
   const clampTransJS = useCallback(
@@ -297,16 +364,19 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
   }, [sceneZoom, worldW, worldH, screenW, screenH]);
 
   useEffect(() => {
-    cameraTargetX.value = myPos.x;
-    cameraTargetY.value = myPos.y;
-  }, [myPos.x, myPos.y]);
+    if (!pathInProgress) {
+      cameraTargetX.value = myPos.x;
+      cameraTargetY.value = myPos.y;
+    }
+  }, [myPos.x, myPos.y, pathInProgress]);
 
   useEffect(() => {
     if (!pathInProgress) cameraFacing.value = 0;
   }, [pathInProgress]);
 
   const CAM_LAG_PX = 22;
-  const CAM_LERP = 0.28;
+  const CAM_LAG_DEAD_ZONE_PX = 45;
+  const CAM_LERP = 0.08;
   const worldWForCam = worldW;
   const worldHForCam = worldH;
   useFrameCallback((frameInfo) => {
@@ -322,7 +392,7 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
     (facing) => {
       cameraLagOffset.value = withTiming(
         -facing * CAM_LAG_PX,
-        { duration: facing === 0 ? 380 : 100, easing: Easing.out(Easing.quad) },
+        { duration: facing === 0 ? 380 : 120, easing: Easing.out(Easing.quad) },
       );
     },
   );
@@ -341,20 +411,19 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
 
       const clickedCol = Math.floor(wx / TILE_SIZE);
       const clickedRow = Math.floor(wy / TILE_SIZE);
-      const startCol = Math.floor(petVisualPosRef.current.x / TILE_SIZE);
-      const startRow = Math.floor(petVisualPosRef.current.y / TILE_SIZE);
+      const petX = cameraTargetX.value;
+      const petY = cameraTargetY.value;
+      const startCol = Math.floor(petX / TILE_SIZE);
+      const startRow = Math.floor(petY / TILE_SIZE);
 
-      const tryMoveWithPath = (destCol: number, destRow: number) => {
+      const tryMoveWithPath = (destCol: number, destRow: number, onPathComplete?: () => void) => {
         pathQueueRef.current = [];
-        setPathInProgress(null);
         if (pathTimeoutRef.current) {
           clearTimeout(pathTimeoutRef.current);
           pathTimeoutRef.current = null;
         }
         const path = findPath(startCol, startRow, destCol, destRow, walkableRect, unwalkableSet, worldCols, worldRows);
         if (!path || path.length > MAX_PATH_TILES) return false;
-        const petX = petVisualPosRef.current.x;
-        const petY = petVisualPosRef.current.y;
         const waypoints = pathToWaypoints(path, undefined, {
           startX: petX,
           startY: petY,
@@ -371,6 +440,11 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
         moveMyPet(first.x, first.y);
         setMyPos(first);
         setPathInProgress(waypoints.length > 1 ? waypoints.map((w) => ({ x: w.x, y: w.y })) : null);
+        const runOnArrival = () => {
+          setPathInProgress(null);
+          setMyPos({ x: final.x, y: final.y });
+          onPathComplete?.();
+        };
         const dispatchNext = () => {
           pathTimeoutRef.current = null;
           const queue = pathQueueRef.current;
@@ -378,8 +452,7 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
           const next = queue.shift()!;
           moveMyPet(next.x, next.y);
           if (queue.length === 0) {
-            setPathInProgress(null);
-            setMyPos({ x: final.x, y: final.y });
+            runOnArrival();
           } else {
             pathTimeoutRef.current = setTimeout(dispatchNext, queue[0].durationMs);
           }
@@ -387,8 +460,7 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
         if (pathQueueRef.current.length > 0) {
           pathTimeoutRef.current = setTimeout(dispatchNext, pathQueueRef.current[0].durationMs);
         } else if (waypoints.length === 1) {
-          setPathInProgress(null);
-          setMyPos({ x: final.x, y: final.y });
+          runOnArrival();
         }
         return true;
       };
@@ -410,6 +482,23 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
         return;
       }
 
+      // Mining vein — pickaxe in hand, walk adjacent, then mash minigame
+      if (miningTilesSet.has(`${clickedCol},${clickedRow}`)) {
+        if (!hasRequiredTool('mining', equipped, itemDefs)) {
+          showPetDialog(getNoToolMessage('mining'));
+          return;
+        }
+        const energy = liveMiningEnergy(miningEnergy, miningEnergyCap, miningEnergyAt);
+        if (energy < 1) {
+          showPetDialog(MINING_ENERGY_EMPTY_MSG);
+          return;
+        }
+        const nearest = findNearestWalkable(clickedCol, clickedRow, walkableRect, unwalkableSet, worldCols, worldRows);
+        const startMine = () => emitMineBegin(sceneSlug, clickedCol, clickedRow);
+        if (!nearest || !tryMoveWithPath(nearest.col, nearest.row, startMine)) startMine();
+        return;
+      }
+
       // Check if tap hit any remote player (exclude self)
       for (const p of Array.from(players.values())) {
         if (p.userId === myUserId) continue;
@@ -418,66 +507,51 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
         const top = p.y - PET_SIZE - 40;
         const bottom = p.y + 10;
         if (wx >= left && wx <= right && wy >= top && wy <= bottom) {
-          playerDrawerRef.current?.open(p);
+          openPetProfileDrawer({
+            mode: 'other',
+            userId: p.userId,
+            username: p.username,
+            petName: p.petName,
+            petImageUrl: p.petImageUrl,
+            petPose: p.petPose,
+            activePose: p.activePose,
+          });
           return;
         }
       }
 
-      // Hit-test placements front-to-back (topmost first) so overlapping items like fishing_shop work
-      const placementsByDepth = (() => {
-        const list = sceneData?.placements ?? [];
-        return [...list].sort((a, b) => {
-          const defA = itemDefs[a.itemType];
-          const defB = itemDefs[b.itemType];
-          const baseHA = (defA?.rows ?? 1) * TILE_SIZE;
-          const baseHB = (defB?.rows ?? 1) * TILE_SIZE;
-          let depthA = (a.y + baseHA) / TILE_SIZE + (a.depthOffset ?? 0);
-          let depthB = (b.y + baseHB) / TILE_SIZE + (b.depthOffset ?? 0);
-          const catA = defA?.category;
-          const catB = defB?.category;
-          const tableA = defA?.subCategory === 'table';
-          const tableB = defB?.subCategory === 'table';
-          if (catA === 'flooring' || catA === 'tiled_flooring') depthA = -1e6 + depthA;
-          else if (catA === 'soil') depthA = -5e5 + depthA;
-          else if (tableA) depthA = depthA - 1000;
-          if (catB === 'flooring' || catB === 'tiled_flooring') depthB = -1e6 + depthB;
-          else if (catB === 'soil') depthB = -5e5 + depthB;
-          else if (tableB) depthB = depthB - 1000;
-          return depthB - depthA; // descending: topmost first
-        });
-      })();
+      // Hit-test interactable placements front-to-back. Skip scenery AABBs so
+      // trees/bushes don't steal taps from buildings behind their transparent edges.
+      // Must return after handling — falling through to tap-to-walk cancels the
+      // walk-to-interact path (the old "works sometimes" bug).
+      const placementsByDepth = [...(sceneData?.placements ?? [])].sort(
+        (a, b) => placementDepth(b, itemDefs[b.itemType]) - placementDepth(a, itemDefs[a.itemType]),
+      );
       for (const p of placementsByDepth) {
         const def = itemDefs[p.itemType];
-        const baseW = (def?.cols ?? 1) * TILE_SIZE;
-        const baseH = (def?.rows ?? 1) * TILE_SIZE;
-        const w = baseW * (p.scale ?? 1);
-        const h = baseH * (p.scale ?? 1);
-        const left = p.x + (baseW - w) / 2;
-        const top = p.y + (baseH - h);
-        if (wx >= left && wx <= left + w && wy >= top && wy <= top + h) {
-          const placedItem = {
-            id: p.id,
-            itemType: p.itemType,
-            col: 0,
-            row: 0,
-            color: '',
-            tileCols: def?.cols ?? 1,
-            tileRows: def?.rows ?? 1,
-          };
-          const petLevel = user?.pet?.level ?? 1;
-          const callbacks = {
-            setPendingNpcDialog,
-            queueNpcDialog,
-            optimisticallyActivateQuest,
-            emitQuestActivateByNpc,
-            switchScene,
-            setPendingInteraction,
-            clearInteraction,
-            emitQuestModalOpened,
-          };
-          tryInteractWithPlacedItem(placedItem, itemDefs, quests, farmLevel, petLevel, callbacks);
-          break;
-        }
+        if (!isInteractableDef(def)) continue;
+        if (!pointHitsPlacement(wx, wy, p, def)) continue;
+
+        const { left, top, width: w, height: h } = placementRect(p, def);
+        const placedItem = {
+          id: p.id,
+          itemType: p.itemType,
+          col: 0,
+          row: 0,
+          color: '',
+          tileCols: def?.cols ?? 1,
+          tileRows: def?.rows ?? 1,
+        };
+        const centerX = left + w / 2;
+        const centerY = top + h;
+        const targetCol = Math.floor(centerX / TILE_SIZE);
+        const targetRow = Math.floor(centerY / TILE_SIZE);
+        const nearest = findNearestWalkable(targetCol, targetRow, walkableRect, unwalkableSet, worldCols, worldRows);
+        // Walk over first when we can, but interact either way so a blocked
+        // path never swallows the tap.
+        const interact = () => tryInteractWithPlacedItem(placedItem, itemDefs, interactCallbacks);
+        if (!nearest || !tryMoveWithPath(nearest.col, nearest.row, interact)) interact();
+        return;
       }
 
       // General tap-to-walk with pathfinding
@@ -494,7 +568,7 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
       }
       tryMoveWithPath(destCol, destRow);
     },
-    [worldW, worldH, worldCols, worldRows, moveMyPet, walkableRect, unwalkableSet, fishingTilesSet, fishingByUser, sceneSlug, fishCast, sceneData?.placements, itemDefs, quests, farmLevel, user?.pet?.level, switchScene, setPendingInteraction, clearInteraction, setPendingNpcDialog, queueNpcDialog, optimisticallyActivateQuest, emitQuestActivateByNpc, emitQuestModalOpened, players, myUserId, equipped, showPetDialog],
+    [worldW, worldH, worldCols, worldRows, moveMyPet, walkableRect, unwalkableSet, fishingTilesSet, miningTilesSet, fishingByUser, sceneSlug, fishCast, emitMineBegin, sceneData?.placements, itemDefs, interactCallbacks, players, myUserId, equipped, showPetDialog, cameraTargetX, cameraTargetY, openPetProfileDrawer, miningEnergy, miningEnergyCap, miningEnergyAt],
   );
 
   const syncCamera = useCallback((tx: number, ty: number, s: number) => {
@@ -507,8 +581,11 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
     'worklet';
     const x = smoothCamX.value;
     const y = smoothCamY.value;
-    const lag = cameraLagOffset.value;
-    const tx = screenW / 2 - (x + lag) * scale.value;
+    const petX = cameraTargetX.value;
+    const petY = cameraTargetY.value;
+    const distFromCenter = Math.sqrt((petX - x) ** 2 + (petY - y) ** 2);
+    const effectiveLag = distFromCenter >= CAM_LAG_DEAD_ZONE_PX ? cameraLagOffset.value : 0;
+    const tx = screenW / 2 - (x + effectiveLag) * scale.value;
     const ty = screenH / 2 - y * scale.value;
     const scaledW = worldWForCam * scale.value;
     const scaledH = worldHForCam * scale.value;
@@ -523,15 +600,18 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
         { scale: scale.value },
       ],
     };
-  }, [screenW, screenH, worldWForCam, worldHForCam]);
+  }, [screenW, screenH, worldWForCam, worldHForCam, CAM_LAG_DEAD_ZONE_PX]);
 
   useAnimatedReaction(
     () => {
       'worklet';
       const x = smoothCamX.value;
       const y = smoothCamY.value;
-      const lag = cameraLagOffset.value;
-      const tx = screenW / 2 - (x + lag) * scale.value;
+      const petX = cameraTargetX.value;
+      const petY = cameraTargetY.value;
+      const distFromCenter = Math.sqrt((petX - x) ** 2 + (petY - y) ** 2);
+      const effectiveLag = distFromCenter >= CAM_LAG_DEAD_ZONE_PX ? cameraLagOffset.value : 0;
+      const tx = screenW / 2 - (x + effectiveLag) * scale.value;
       const ty = screenH / 2 - y * scale.value;
       const scaledW = worldWForCam * scale.value;
       const scaledH = worldHForCam * scale.value;
@@ -544,7 +624,7 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
       };
     },
     (curr) => { runOnJS(syncCamera)(curr.tx, curr.ty, curr.s); },
-    [screenW, screenH, worldWForCam, worldHForCam],
+    [screenW, screenH, worldWForCam, worldHForCam, CAM_LAG_DEAD_ZONE_PX],
   );
 
   const basePetImageUrl = user?.pet?.imageUrl;
@@ -554,19 +634,53 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
   const ownChatText = myUserId ? lastChatByUser.current.get(myUserId) ?? null : null;
   const bakedImageUrl = sceneData?.bakedImageUrl;
 
+  const handleBakedImageLoad = useCallback(() => {
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setAssetsReady(true);
+            });
+          });
+        });
+      });
+    });
+  }, []);
+
+  const handleNonBakedAssetLoad = useCallback(() => {
+    setAssetsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!sceneData || loading) return;
+    if (bakedImageUrl) return;
+    const hasTiledFlooring = Boolean(sceneData?.tiledFlooringItemType && itemDefs[sceneData.tiledFlooringItemType]?.imageUrl);
+    if (!hasTiledFlooring) {
+      const id = setTimeout(() => setAssetsReady(true), 150);
+      return () => clearTimeout(id);
+    }
+    const task = InteractionManager.runAfterInteractions(() => {
+      const id = setTimeout(() => setAssetsReady(true), 600);
+      return () => clearTimeout(id);
+    });
+    return () => task.cancel();
+  }, [sceneData, loading, bakedImageUrl, itemDefs]);
+
+  // Signal to parent when assets are ready (used by scene transition)
+  useEffect(() => {
+    if (!loading && assetsReady) onAssetsReady?.();
+  }, [loading, assetsReady, onAssetsReady]);
+
   if (loading) {
-    return (
-      <View style={[styles.loadingWrap, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-          Loading scene...
-        </Text>
-      </View>
-    );
+    return <SceneLoadingScreen pet={user?.pet} />;
   }
+
+  const showAssetsOverlay = !assetsReady;
 
   return (
     <>
+      {showAssetsOverlay && <SceneLoadingScreen pet={user?.pet} />}
       {showFishingModal && (
         <FishingMiniGame
           onComplete={(passed) => fishResult(passed)}
@@ -574,7 +688,33 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
           fishLabel={pendingFishData?.fishLabel}
           fishImageUrl={pendingFishData?.fishImageUrl}
           difficulty={pendingFishData?.difficulty}
-          bobberEmoji={equipped?.bobber ? itemDefs[equipped.bobber]?.emoji : undefined}
+          toolImageUrl={equipped?.handTool ? itemDefs[equipped.handTool]?.imageUrl : undefined}
+        />
+      )}
+      {mineReady && (
+        <MiningMiniGame
+          label={mineReady.label}
+          imageUrl={mineReady.imageUrl}
+          emoji={mineReady.emoji}
+          tapsRequired={mineReady.tapsRequired}
+          timeLimitMs={mineReady.timeLimitMs}
+          energy={mineReady.miningEnergy}
+          energyCap={mineReady.miningEnergyCap}
+          toolImageUrl={equipped?.handTool ? itemDefs[equipped.handTool]?.imageUrl : undefined}
+          onComplete={(passed, taps, elapsedMs) => {
+            emitMineComplete({
+              sceneSlug: mineReady.sceneSlug,
+              col: mineReady.col,
+              row: mineReady.row,
+              taps,
+              elapsedMs,
+              passed,
+            });
+          }}
+          onCancel={() => {
+            emitMineCancel();
+            clearMineReady();
+          }}
         />
       )}
       <Pressable
@@ -585,139 +725,162 @@ export function MultiplayerScene({ sceneSlug }: MultiplayerSceneProps) {
           <Animated.View
             style={[styles.world, { width: worldW, height: worldH }, worldStyle]}
           >
-              {bakedImageUrl ? (
-                <CachedImage
-                  source={{ uri: bakedImageUrl }}
-                  style={{ width: worldW, height: worldH }}
-                  resizeMode="cover"
-                />
-              ) : (
-                <>
-                  {/* Color flooring always rendered first so transparent tiled flooring shows it beneath */}
-                  <View style={{ width: worldW, height: worldH, position: 'absolute', backgroundColor: sceneData?.bgColor ?? '#5A9E5A' }} />
-                  {sceneData?.tiledFlooringItemType && itemDefs[sceneData.tiledFlooringItemType]?.imageUrl ? (
-                    <View style={{ width: worldW, height: worldH, position: 'absolute' }}>
-                      {Array.from({ length: Math.ceil(worldRows / 5) * Math.ceil(worldCols / 5) }, (_, i) => {
-                        const tileCols = Math.ceil(worldCols / 5);
-                        const row = Math.floor(i / tileCols);
-                        const col = i % tileCols;
-                        return (
-                          <CachedImage
-                            key={`tile-${row}-${col}`}
-                            source={{ uri: itemDefs[sceneData!.tiledFlooringItemType!]!.imageUrl! }}
-                            style={{
-                              position: 'absolute',
-                              left: col * 5 * TILE_SIZE - 1,
-                              top: row * 5 * TILE_SIZE - 1,
-                              width: 5 * TILE_SIZE + 2,
-                              height: 5 * TILE_SIZE + 2,
-                            }}
-                            resizeMode="fill"
-                          />
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                </>
-              )}
+            {bakedImageUrl ? (
+              <CachedImage
+                source={{ uri: bakedImageUrl }}
+                style={{ width: worldW, height: worldH }}
+                resizeMode="cover"
+                onLoad={handleBakedImageLoad}
+              />
+            ) : (
+              <>
+                {/* Color flooring always rendered first so transparent tiled flooring shows it beneath */}
+                <View style={{ width: worldW, height: worldH, position: 'absolute', backgroundColor: sceneData?.bgColor ?? '#5A9E5A' }} />
+                {sceneData?.tiledFlooringItemType && itemDefs[sceneData.tiledFlooringItemType]?.imageUrl ? (
+                  <View
+                    style={[
+                      { width: worldW, height: worldH, position: 'absolute' },
+                      placementColorStyle(sceneData.tiledFlooringStyle ?? {}),
+                    ]}
+                  >
+                    {Array.from({ length: Math.ceil(worldRows / 5) * Math.ceil(worldCols / 5) }, (_, i) => {
+                      const tileCols = Math.ceil(worldCols / 5);
+                      const row = Math.floor(i / tileCols);
+                      const col = i % tileCols;
+                      return (
+                        <CachedImage
+                          key={`tile-${row}-${col}`}
+                          source={{ uri: itemDefs[sceneData!.tiledFlooringItemType!]!.imageUrl! }}
+                          style={{
+                            position: 'absolute',
+                            left: col * 5 * TILE_SIZE - 1,
+                            top: row * 5 * TILE_SIZE - 1,
+                            width: 5 * TILE_SIZE + 2,
+                            height: 5 * TILE_SIZE + 2,
+                          }}
+                          resizeMode="fill"
+                          onLoad={i === 0 ? handleNonBakedAssetLoad : undefined}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </>
+            )}
 
-              {sceneData?.placements
-                ?.filter((p) => {
-                  const def = itemDefs[p.itemType];
-                  return def?.category === 'npc' && def?.npcDialog?.length;
-                })
-                .map((p) => {
-                  const def = itemDefs[p.itemType];
-                  const baseW = (def?.cols ?? 1) * TILE_SIZE;
-                  const baseH = (def?.rows ?? 1) * TILE_SIZE;
-                  const questStatus = getQuestStatusForNpc(
-                    p.itemType,
-                    quests,
-                    user?.pet?.level ?? 1,
-                    farmLevel,
-                  );
-                  if (!questStatus) return null;
-                  return (
-                    <QuestBubble
-                      key={`quest-bubble-${p.id}`}
-                      status={questStatus}
-                      itemDefs={itemDefs}
-                      centerX={p.x + baseW / 2}
-                      topY={p.y}
-                    />
-                  );
-                })}
-
-              {Array.from(fishingByUser.entries()).map(([userId, pos]) => {
-                const isMe = userId === myUserId;
-                const bobberDef =
-                  isMe && equipped?.bobber
-                    ? itemDefs[equipped.bobber]
-                    : (players.get(userId) as { equippedBobber?: string } | undefined)?.equippedBobber
-                      ? itemDefs[(players.get(userId) as { equippedBobber?: string }).equippedBobber!]
-                      : null;
-                const displayName = isMe ? ownUsername : players.get(userId)?.username ?? 'Fisher';
-                const isReeling = isMe ? showFishingModal : reelingByUser.has(userId);
+            {sceneData?.placements
+              ?.filter((p) => p.live)
+              .map((p) => {
+                const def = itemDefs[p.itemType];
+                if (!def?.imageUrl && !def?.emoji) return null;
                 return (
-                  <BobberView
-                    key={`bobber-${userId}`}
-                    col={pos.col}
-                    row={pos.row}
-                    imageUrl={bobberDef?.imageUrl}
-                    emoji={bobberDef?.emoji}
-                    username={displayName}
-                    isReeling={isReeling}
+                  <LivePlacementSprite
+                    key={`live-${p.id}`}
+                    placement={p}
+                    def={def}
+                    zIndex={livePlacementZIndex(p, def)}
                   />
                 );
               })}
-              {Array.from(players.values()).map((player) => (
-                <RemotePet
-                  key={player.userId}
-                  player={player}
-                  chatText={lastChatByUser.current.get(player.userId) ?? null}
-                  fishResult={fishResultByUser.get(player.userId)}
-                  fishFailed={fishFailedByUser.has(player.userId)}
-                  isReeling={reelingByUser.has(player.userId)}
-                  itemDefs={itemDefs}
-                />
-              ))}
 
-              <OwnPet
-                x={myPos.x}
-                y={myPos.y}
-                path={pathInProgress}
-                petVisualPosRef={petVisualPosRef}
-                cameraTargetX={cameraTargetX}
-                cameraTargetY={cameraTargetY}
-                cameraFacing={cameraFacing}
-                snapToTarget={spawnSyncRef.current}
-                imageUrl={ownPetImageUrl}
-                username={ownUsername}
-                chatText={ownChatText}
-                fishResult={myUserId ? fishResultByUser.get(myUserId) : undefined}
-                fishFailed={myUserId ? fishFailedByUser.has(myUserId) : false}
-                isReeling={showFishingModal}
+            {sceneData?.placements
+              ?.filter((p) => {
+                const def = itemDefs[p.itemType];
+                return def?.category === 'npc' && def?.npcDialog?.length;
+              })
+              .map((p) => {
+                const def = itemDefs[p.itemType];
+                const baseW = (def?.cols ?? 1) * TILE_SIZE;
+                const baseH = (def?.rows ?? 1) * TILE_SIZE;
+                const questStatus = getQuestStatusForNpc(
+                  p.itemType,
+                  quests,
+                );
+                if (!questStatus) return null;
+                return (
+                  <QuestBubble
+                    key={`quest-bubble-${p.id}`}
+                    status={questStatus}
+                    itemDefs={itemDefs}
+                    centerX={p.x + baseW / 2}
+                    topY={p.y}
+                  />
+                );
+              })}
+
+            {Array.from(fishingByUser.entries()).map(([userId, pos]) => {
+              const isMe = userId === myUserId;
+              const bobberDef =
+                isMe && equipped?.bobber
+                  ? itemDefs[equipped.bobber]
+                  : (players.get(userId) as { equippedBobber?: string } | undefined)?.equippedBobber
+                    ? itemDefs[(players.get(userId) as { equippedBobber?: string }).equippedBobber!]
+                    : null;
+              const displayName = isMe ? ownUsername : players.get(userId)?.username ?? 'Fisher';
+              const isReeling = isMe ? showFishingModal : reelingByUser.has(userId);
+              return (
+                <BobberView
+                  key={`bobber-${userId}`}
+                  col={pos.col}
+                  row={pos.row}
+                  imageUrl={bobberDef?.imageUrl}
+                  emoji={bobberDef?.emoji}
+                  username={displayName}
+                  isReeling={isReeling}
+                />
+              );
+            })}
+            {Array.from(players.values()).map((player) => (
+              <RemotePet
+                key={player.userId}
+                player={player}
+                chatText={lastChatByUser.current.get(player.userId) ?? null}
+                fishResult={fishResultByUser.get(player.userId)}
+                fishFailed={fishFailedByUser.has(player.userId)}
+                isReeling={reelingByUser.has(player.userId)}
                 itemDefs={itemDefs}
-                equippedHandToolImageUrl={equipped?.handTool ? itemDefs[equipped.handTool]?.imageUrl : undefined}
-                equippedHandToolEmoji={equipped?.handTool ? itemDefs[equipped.handTool]?.emoji : undefined}
-                equippedChairImageUrl={equipped?.chair ? itemDefs[equipped.chair]?.imageUrl : undefined}
-                equippedChairEmoji={equipped?.chair ? itemDefs[equipped.chair]?.emoji : undefined}
               />
+            ))}
 
-              {waypoint && (
-                <WaypointMarker
-                  x={waypoint.x}
-                  y={waypoint.y}
-                  visibleForMs={waypoint.visibleForMs}
-                  onClear={clearWaypoint}
-                />
-              )}
+            <OwnPet
+              x={myPos.x}
+              y={myPos.y}
+              path={pathInProgress}
+              petVisualPosRef={petVisualPosRef}
+              cameraTargetX={cameraTargetX}
+              cameraTargetY={cameraTargetY}
+              cameraFacing={cameraFacing}
+              snapToTarget={spawnSyncRef.current}
+              imageUrl={ownPetImageUrl}
+              username={ownUsername}
+              chatText={ownChatText}
+              fishResult={myUserId ? fishResultByUser.get(myUserId) : undefined}
+              fishFailed={myUserId ? fishFailedByUser.has(myUserId) : false}
+              isReeling={showFishingModal}
+              itemDefs={itemDefs}
+              equippedHandToolImageUrl={equipped?.handTool ? itemDefs[equipped.handTool]?.imageUrl : undefined}
+              equippedHandToolEmoji={equipped?.handTool ? itemDefs[equipped.handTool]?.emoji : undefined}
+              equippedHandToolOverlay={equipped?.handTool ? itemDefs[equipped.handTool]?.equipOverlay : undefined}
+              equippedChairImageUrl={equipped?.chair ? itemDefs[equipped.chair]?.imageUrl : undefined}
+              equippedChairEmoji={equipped?.chair ? itemDefs[equipped.chair]?.emoji : undefined}
+              equippedChairOverlay={equipped?.chair ? itemDefs[equipped.chair]?.equipOverlay : undefined}
+            />
 
-              <DayNightOverlay />
-            </Animated.View>
-          </View>
+            {waypoint && (
+              <WaypointMarker
+                x={waypoint.x}
+                y={waypoint.y}
+                visibleForMs={waypoint.visibleForMs}
+                onClear={clearWaypoint}
+              />
+            )}
+          </Animated.View>
+
+          {/* Screen-space tint (like farm) so live props / pets aren't above it via footprint zIndex. */}
+          <DayNightOverlay />
+          <WeatherOverlay />
+        </View>
       </Pressable>
-      <PlayerDrawer ref={playerDrawerRef} />
     </>
   );
 }
@@ -814,17 +977,19 @@ interface OwnPetProps {
   fishResult?: FishResultBubble | null;
   fishFailed?: boolean;
   isReeling?: boolean;
-  itemDefs?: Record<string, { imageUrl?: string; emoji?: string }>;
+  itemDefs?: Record<string, { imageUrl?: string; emoji?: string; equipOverlay?: EquipOverlayConfig }>;
   equippedHandToolImageUrl?: string | null;
   equippedHandToolEmoji?: string;
+  equippedHandToolOverlay?: EquipOverlayConfig | null;
   equippedChairImageUrl?: string | null;
   equippedChairEmoji?: string;
+  equippedChairOverlay?: EquipOverlayConfig | null;
 }
 
 const POLE_WADDLE_DEG = 2;
 const POLE_REEL_DEG = 8;
 
-function OwnPet({ x, y, path, petVisualPosRef, cameraTargetX, cameraTargetY, cameraFacing, imageUrl, username, chatText, fishResult, fishFailed, isReeling = false, itemDefs, equippedHandToolImageUrl, equippedHandToolEmoji, equippedChairImageUrl, equippedChairEmoji, snapToTarget }: OwnPetProps) {
+function OwnPet({ x, y, path, petVisualPosRef, cameraTargetX, cameraTargetY, cameraFacing, imageUrl, username, chatText, fishResult, fishFailed, isReeling = false, itemDefs, equippedHandToolImageUrl, equippedHandToolEmoji, equippedHandToolOverlay, equippedChairImageUrl, equippedChairEmoji, equippedChairOverlay, snapToTarget }: OwnPetProps) {
   const { theme } = useTheme();
   const { animX, animY, facingRight, bounceOffset } = useWalkAnimation(x, y, { snapToTarget, path: path ?? undefined });
   const updateVisualPos = useCallback(
@@ -900,6 +1065,8 @@ function OwnPet({ x, y, path, petVisualPosRef, cameraTargetX, cameraTargetY, cam
   }, [fishFailed]);
 
   const style = useAnimatedStyle(() => ({
+    // Feet Y as zIndex so live scene props (trees, etc.) can occlude the pet.
+    zIndex: Math.round(animY.value),
     transform: [
       { translateX: animX.value - HALF_PET },
       { translateY: animY.value - PET_SIZE - bounceOffset.value },
@@ -911,13 +1078,30 @@ function OwnPet({ x, y, path, petVisualPosRef, cameraTargetX, cameraTargetY, cam
     transform: [{ scaleX: facingRight.value }],
   }));
 
+  const handResolved = useMemo(
+    () => resolveEquipOverlay('handTool', equippedHandToolOverlay),
+    [equippedHandToolOverlay],
+  );
+  const chairResolved = useMemo(
+    () => resolveEquipOverlay('chair', equippedChairOverlay),
+    [equippedChairOverlay],
+  );
+  const handWrapStyle = useMemo(() => buildEquipWrapStyle('handTool', handResolved), [handResolved]);
+  const handImageStyle = useMemo(() => buildEquipImageStyle('handTool', handResolved), [handResolved]);
+  const handEmojiStyle = useMemo(() => buildEquipEmojiStyle('handTool', handResolved), [handResolved]);
+  const chairWrapStyle = useMemo(() => buildEquipWrapStyle('chair', chairResolved), [chairResolved]);
+  const chairImageStyle = useMemo(() => buildEquipImageStyle('chair', chairResolved), [chairResolved]);
+  const chairEmojiStyle = useMemo(() => buildEquipEmojiStyle('chair', chairResolved), [chairResolved]);
+  const chairRotStyle = useMemo(
+    () => ({ transform: [{ rotate: `${chairResolved.rotationDeg}deg` }] }),
+    [chairResolved.rotationDeg],
+  );
+  const handBaseRotation = handResolved.rotationDeg;
+
   const poleAnimatedStyle = useAnimatedStyle(() => {
     const rot = isReelingSv.value ? reelRotation.value * POLE_REEL_DEG : bounceOffset.value * POLE_WADDLE_DEG;
     return {
-      transform: [
-        { scaleX: -1 },
-        { rotate: `${-50 + rot}deg` },
-      ],
+      transform: [{ rotate: `${handBaseRotation + rot}deg` }],
     };
   });
 
@@ -925,20 +1109,20 @@ function OwnPet({ x, y, path, petVisualPosRef, cameraTargetX, cameraTargetY, cam
     <Animated.View style={[styles.ownPet, style]}>
       {/* Equipment rendered behind pet */}
       {(equippedChairImageUrl || equippedChairEmoji) && (
-        <View style={equipmentStyles.chairWrap} pointerEvents="none">
+        <View style={[chairWrapStyle, chairRotStyle]} pointerEvents="none">
           {equippedChairImageUrl ? (
-            <CachedImage source={{ uri: equippedChairImageUrl }} style={equipmentStyles.chairImage} resizeMode="contain" />
+            <CachedImage source={{ uri: equippedChairImageUrl }} style={chairImageStyle} resizeMode="contain" />
           ) : (
-            <Text style={equipmentStyles.chairEmoji}>{equippedChairEmoji ?? '🪑'}</Text>
+            <Text style={chairEmojiStyle}>{equippedChairEmoji ?? '🪑'}</Text>
           )}
         </View>
       )}
       {(equippedHandToolImageUrl || equippedHandToolEmoji) && (
-        <Animated.View style={[equipmentStyles.poleWrap, poleAnimatedStyle]}>
+        <Animated.View style={[handWrapStyle, poleAnimatedStyle]}>
           {equippedHandToolImageUrl ? (
-            <CachedImage source={{ uri: equippedHandToolImageUrl }} style={equipmentStyles.poleImage} resizeMode="contain" />
+            <CachedImage source={{ uri: equippedHandToolImageUrl }} style={handImageStyle} resizeMode="contain" />
           ) : (
-            <Text style={equipmentStyles.poleEmoji}>{equippedHandToolEmoji ?? '🔧'}</Text>
+            <Text style={handEmojiStyle}>{equippedHandToolEmoji ?? '🔧'}</Text>
           )}
         </Animated.View>
       )}
@@ -965,7 +1149,8 @@ function OwnPet({ x, y, path, petVisualPosRef, cameraTargetX, cameraTargetY, cam
         </Animated.View>
       )}
       {visibleFishResult && (() => {
-        const c = RARITY_BUBBLE_COLORS[visibleFishResult.rarity ?? 'common'];
+        const c = bubblePalette(visibleFishResult.rarity);
+        const isOre = visibleFishResult.kind === 'ore';
         return (
           <Animated.View style={[styles.bubbleAbsolute, styles.fishBalloonHigher, unflipStyle]}>
             <View style={[styles.fishBalloon, { backgroundColor: c.bg }]}>
@@ -977,19 +1162,21 @@ function OwnPet({ x, y, path, petVisualPosRef, cameraTargetX, cameraTargetY, cam
                     resizeMode="contain"
                   />
                 ) : (
-                  <Text style={styles.fishBalloonEmoji}>🐟</Text>
+                  <Text style={styles.fishBalloonEmoji}>{isOre ? '🪨' : '🐟'}</Text>
                 )}
               </View>
               <Text style={[styles.fishBalloonLabel, { color: c.text }]} numberOfLines={1}>
                 {visibleFishResult.label}
               </Text>
-              <FishStarRow
-                sizeLabel={visibleFishResult.sizeLabel}
-                filledColor={c.text}
-                dimColor="rgba(255,255,255,0.4)"
-              />
+              {!isOre && (
+                <FishStarRow
+                  sizeLabel={visibleFishResult.sizeLabel}
+                  filledColor={c.text}
+                  dimColor="rgba(255,255,255,0.4)"
+                />
+              )}
               <Text style={[styles.fishBalloonSize, { color: c.textMuted }]}>
-                {formatFishSize(visibleFishResult.size, visibleFishResult.sizeLabel)}
+                {catchBubbleSubtitle(visibleFishResult)}
               </Text>
               <View style={[styles.chatTail, { backgroundColor: c.bg }]} />
             </View>
@@ -1020,16 +1207,6 @@ const styles = StyleSheet.create({
     zIndex: 15,
     overflow: 'visible',
   },
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
   ownPet: {
     position: 'absolute',
     width: PET_SIZE,
@@ -1037,7 +1214,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'visible',
-    zIndex: 20,
   },
   petImage: {
     width: PET_SIZE,

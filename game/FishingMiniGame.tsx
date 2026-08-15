@@ -1,41 +1,28 @@
 /**
- * FishingMiniGame — Compact circular reel-in game.
- * Tap when the orbiting indicator lands in the green zone.
- * Closes immediately on success/failure — the pet bubble shows the result.
+ * Reel fight — tap to lift the catch bracket, gravity pulls it down.
+ * Frame the fish until the bar fills. Slip off too long and it gets away.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions, Modal, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Dimensions, Modal } from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
   Easing,
-  cancelAnimation,
-  interpolate,
-  FadeOut,
-  ZoomIn,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { CachedImage } from '@/components/ui/CachedImage';
 import { useTheme } from '@/store/ThemeProvider';
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const CIRCLE_SIZE = Math.min(220, SCREEN_WIDTH * 0.52);
-const TRACK_STROKE = 16;
-const RADIUS = (CIRCLE_SIZE - TRACK_STROKE) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
-const DOT_SIZE = 20;
-
-const GREEN_RATIO = 0.18;
-const YELLOW_RATIO = 0.10;
-const DIRECTION_CHANGE_CHANCE = 0.4;
-
-const CAP_CORRECTION = 30;
+const COL_W = Math.min(188, SCREEN_WIDTH * 0.5);
+const COL_H = 292;
+const FISH = 88;
+const FISH_CROP = 2;
 
 interface FishingMiniGameProps {
   onComplete: (passed: boolean) => void;
@@ -43,386 +30,281 @@ interface FishingMiniGameProps {
   fishLabel?: string;
   fishImageUrl?: string;
   difficulty?: number;
-  bobberEmoji?: string;
+  /** Equipped fishing pole art. */
+  toolImageUrl?: string;
 }
 
-type TapResult = 'perfect' | 'good' | 'miss';
-
-function scoreAngle(angle: number): TapResult {
-  const greenHalf = Math.PI * GREEN_RATIO;
-  const yellowSpan = Math.PI * 2 * YELLOW_RATIO;
-  const normalized = ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  const dist = Math.min(normalized, 2 * Math.PI - normalized);
-  if (dist <= greenHalf) return 'perfect';
-  if (dist <= greenHalf + yellowSpan) return 'good';
-  return 'miss';
-}
-
-const RESULT_LABELS: Record<TapResult, string> = {
-  perfect: 'Perfect!',
-  good: 'Good',
-  miss: 'Miss',
-};
-
-/** Difficulty 1-5: rounds and base speed (like CookingMiniGame). */
-const getDifficultyParams = (difficulty: number) => {
+function paramsFor(difficulty: number) {
   const d = Math.max(1, Math.min(5, difficulty));
-  const totalRounds = d;
-  const baseSpeed = 300 + (5 - d) * 150;
-  return { totalRounds, baseSpeed };
-};
+  return {
+    window: 0.46 - (d - 1) * 0.038,
+    gravity: 1.28 + (d - 1) * 0.2,
+    impulse: 0.68 - (d - 1) * 0.04,
+    fillSec: 3.8 + (d - 1) * 0.75,
+    drainPerSec: 0.12 + (d - 1) * 0.04,
+    fishMoveMs: 860 - (d - 1) * 90,
+    dashChance: 0.08 + (d - 1) * 0.07,
+    yankChance: d >= 3 ? 0.006 + (d - 3) * 0.004 : 0,
+  };
+}
 
-export function FishingMiniGame({ onComplete, onCancel, fishLabel, fishImageUrl, difficulty = 2 }: FishingMiniGameProps) {
+export function FishingMiniGame({
+  onComplete,
+  onCancel,
+  fishLabel,
+  fishImageUrl,
+  difficulty = 2,
+  toolImageUrl,
+}: FishingMiniGameProps) {
   const { theme } = useTheme();
   const colors = theme.colors;
+  const p = paramsFor(difficulty);
 
-  const { totalRounds, baseSpeed } = getDifficultyParams(difficulty);
+  const [status, setStatus] = useState('Tap to reel');
+  const finished = useRef(false);
+  const onRef = useRef(true);
+  const catcherY = useSharedValue(0.5);
+  const fishY = useSharedValue(0.48);
+  const fill = useSharedValue(0.3);
+  const locked = useSharedValue(1);
+  const punch = useSharedValue(1);
+  const wiggle = useSharedValue(0);
+  const velRef = useRef(0);
+  const catcherRef = useRef(0.5);
+  const fishRef = useRef(0.48);
+  const progressRef = useRef(0.3);
+  const lastHaptic = useRef(0);
+  const lastTick = useRef(Date.now());
 
-  const [round, setRound] = useState(0);
-  const [results, setResults] = useState<TapResult[]>([]);
-  const [finished, setFinished] = useState(false);
-  const [lastTap, setLastTap] = useState<TapResult | null>(null);
-  const angleRad = useSharedValue(0);
-  const activeRef = useRef(true);
-  const dirRef = useRef<1 | -1>(1);
-
-  const cardOpacity = useSharedValue(0);
-  const pulseScale = useSharedValue(0);
-  const pulseOpacity = useSharedValue(0);
-  const tapFlash = useSharedValue(0);
-
-  const speed = Math.max(450, baseSpeed - round * 80);
-
-  useEffect(() => {
-    cardOpacity.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
-  }, []);
-
-  useEffect(() => {
-    activeRef.current = true;
-    angleRad.value = 0;
-    angleRad.value = withRepeat(
-      withTiming(dirRef.current * 2 * Math.PI, { duration: speed, easing: Easing.linear }),
-      -1,
-      false,
-    );
-    return () => {
-      activeRef.current = false;
-      cancelAnimation(angleRad);
-    };
-  }, [round, speed, angleRad]);
-
-  const handleTap = useCallback(() => {
-    if (finished || !activeRef.current) return;
-    const angle = angleRad.value;
-
-    const tapResult = scoreAngle(angle);
-    setLastTap(tapResult);
-
-    Haptics.impactAsync(
-      tapResult === 'perfect'
-        ? Haptics.ImpactFeedbackStyle.Medium
-        : tapResult === 'good'
-          ? Haptics.ImpactFeedbackStyle.Light
-          : Haptics.ImpactFeedbackStyle.Heavy,
-    );
-
-    pulseScale.value = 0.6;
-    pulseOpacity.value = tapResult === 'miss' ? 0.3 : 0.6;
-    pulseScale.value = withTiming(2, { duration: 350, easing: Easing.out(Easing.cubic) });
-    pulseOpacity.value = withTiming(0, { duration: 350 });
-
-    tapFlash.value = 1;
-    tapFlash.value = withTiming(0, { duration: 200 });
-
-    const newResults = [...results, tapResult];
-    setResults(newResults);
-
-    if (newResults.length >= totalRounds) {
-      setFinished(true);
-      cancelAnimation(angleRad);
-      const hasMiss = newResults.some((r) => r === 'miss');
-      const passed = !hasMiss;
-      setTimeout(() => {
-        if (activeRef.current) onComplete(passed);
-      }, 200);
-    } else {
-      setTimeout(() => setLastTap(null), 400);
-      if (Math.random() < DIRECTION_CHANGE_CHANCE) {
-        dirRef.current = dirRef.current === 1 ? -1 : 1;
+  const finish = useCallback(
+    (passed: boolean) => {
+      if (finished.current) return;
+      finished.current = true;
+      setStatus(passed ? 'Caught!' : 'It got away…');
+      if (passed) {
+        punch.value = withSequence(withTiming(1.14, { duration: 90 }), withSpring(1, { damping: 8, stiffness: 260 }));
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        wiggle.value = withSequence(withTiming(-18, { duration: 80 }), withTiming(18, { duration: 80 }), withTiming(0, { duration: 80 }));
+        fishY.value = withTiming(-0.28, { duration: 320, easing: Easing.in(Easing.quad) });
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-      setRound((r) => r + 1);
-    }
-  }, [finished, angleRad, results, onComplete, pulseScale, pulseOpacity, tapFlash]);
-
-  const cx = CIRCLE_SIZE / 2;
-
-  const dotStyle = useAnimatedStyle(() => {
-    const a = angleRad.value - Math.PI / 2;
-    return {
-      transform: [
-        { translateX: cx + RADIUS * Math.cos(a) - DOT_SIZE / 2 },
-        { translateY: cx + RADIUS * Math.sin(a) - DOT_SIZE / 2 },
-      ],
-    };
-  });
-
-  const cardAnimStyle = useAnimatedStyle(() => ({
-    opacity: cardOpacity.value,
-  }));
-
-  const pulseAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-    opacity: pulseOpacity.value,
-  }));
-
-  const flashAnimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(tapFlash.value, [0, 1], [0, 0.1]),
-  }));
-
-  const greenLen = CIRCUMFERENCE * GREEN_RATIO;
-  const yellowLen = CIRCUMFERENCE * YELLOW_RATIO;
-  const greenOffset = greenLen / 2 + CAP_CORRECTION;
-
-  const greenColor = colors.success;
-  const yellowColor = '#FACC15';
-  const missTrackColor = `${colors.text}12`;
-
-  const shadowStyle = Platform.select({
-    ios: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 16,
+      setTimeout(() => onComplete(passed), 400);
     },
-    android: { elevation: 8 },
-  }) as object;
+    [fishY, onComplete, punch, wiggle],
+  );
 
-  const dotColor = (r: TapResult) =>
-    r === 'perfect' ? colors.success : r === 'good' ? yellowColor : colors.error;
+  useEffect(() => {
+    const retarget = () => {
+      if (finished.current) return;
+      const dash = Math.random() < p.dashChance;
+      const next = Math.max(0.1, Math.min(0.9, Math.random()));
+      const dir = next < fishRef.current ? -1 : 1;
+      fishRef.current = next;
+      fishY.value = withTiming(next, {
+        duration: dash ? 150 : p.fishMoveMs,
+        easing: dash ? Easing.out(Easing.cubic) : Easing.inOut(Easing.sin),
+      });
+      wiggle.value = withSequence(
+        withTiming(dir * (dash ? 16 : 8), { duration: 90 }),
+        withSpring(0, { damping: 8, stiffness: 180 }),
+      );
+    };
+    retarget();
+    const id = setInterval(retarget, p.fishMoveMs + 100);
+    return () => clearInterval(id);
+  }, [fishY, p.dashChance, p.fishMoveMs, wiggle]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (finished.current) return;
+      const now = Date.now();
+      const dt = Math.min(0.05, (now - lastTick.current) / 1000);
+      lastTick.current = now;
+
+      let vel = velRef.current + p.gravity * dt;
+      if (p.yankChance > 0 && Math.random() < p.yankChance) {
+        vel += (fishRef.current - catcherRef.current) * 2.2;
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }
+      let y = catcherRef.current + vel * dt;
+      const half = p.window / 2;
+      if (y < half) {
+        y = half;
+        vel = Math.abs(vel) * 0.16;
+      } else if (y > 1 - half) {
+        y = 1 - half;
+        vel = -Math.abs(vel) * 0.16;
+      }
+      velRef.current = vel;
+      catcherRef.current = y;
+      catcherY.value = y;
+
+      const fishNow = fishY.value;
+      fishRef.current = fishNow;
+      const on = Math.abs(fishNow - y) <= half;
+      locked.value = withTiming(on ? 1 : 0, { duration: 80 });
+
+      if (on !== onRef.current) {
+        onRef.current = on;
+        setStatus(on ? 'On the line!' : "It's running!");
+        if (on) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+
+      if (on) {
+        progressRef.current = Math.min(1, progressRef.current + dt / p.fillSec);
+        if (now - lastHaptic.current > 200) {
+          lastHaptic.current = now;
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+      } else {
+        progressRef.current = Math.max(0, progressRef.current - p.drainPerSec * dt);
+      }
+      fill.value = progressRef.current;
+
+      if (progressRef.current >= 1) finish(true);
+      else if (progressRef.current <= 0) finish(false);
+    }, 32);
+    return () => clearInterval(id);
+  }, [catcherY, fill, finish, fishY, locked, p.drainPerSec, p.fillSec, p.gravity, p.window, p.yankChance]);
+
+  const reel = useCallback(() => {
+    if (finished.current) return;
+    velRef.current -= p.impulse;
+    punch.value = 0.9;
+    punch.value = withSpring(1, { damping: 9, stiffness: 400 });
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [p.impulse, punch]);
+
+  const lineStyle = useAnimatedStyle(() => ({
+    height: Math.max(8, catcherY.value * COL_H - (p.window * COL_H) / 2),
+  }));
+
+  const windowStyle = useAnimatedStyle(() => ({
+    top: (catcherY.value - p.window / 2) * COL_H,
+    borderColor: interpolateColor(locked.value, [0, 1], [colors.border, colors.success]),
+    transform: [{ scale: 0.98 + locked.value * 0.04 }],
+  }));
+
+  const fishStyle = useAnimatedStyle(() => ({
+    top: fishY.value * COL_H - FISH / 2,
+    transform: [{ scale: punch.value }, { rotate: `${wiggle.value}deg` }],
+  }));
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${Math.round(fill.value * 100)}%`,
+    backgroundColor: interpolateColor(locked.value, [0, 1], [colors.primary, colors.success]),
+  }));
+
+  const windowPx = p.window * COL_H;
 
   return (
-    <Modal transparent animationType="none" onRequestClose={onCancel}>
-      <Pressable style={st.overlay} onPress={onCancel}>
-        <Pressable>
-        <Animated.View style={[st.card, { backgroundColor: colors.surface }, shadowStyle, cardAnimStyle]}>
-          {/* Circle game area — TAP button is inside */}
-          <Pressable
-            style={st.circleWrap}
-            onPress={handleTap}
-            disabled={finished}
-          >
-            <Animated.View
-              style={[st.flashOverlay, flashAnimStyle, { backgroundColor: colors.primary }]}
-              pointerEvents="none"
-            />
+    <Modal transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.backdrop}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.kicker, { color: colors.textMuted }]}>REEL</Text>
+          <Text style={[styles.title, { color: colors.text }]}>{fishLabel || 'A fish!'}</Text>
+          <Text style={[styles.sub, { color: colors.textSecondary }]}>{status}</Text>
 
-            <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} style={st.svg}>
-              <Defs>
-                <LinearGradient id="greenGrad" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0" stopColor={greenColor} />
-                  <Stop offset="1" stopColor={colors.successDark ?? greenColor} />
-                </LinearGradient>
-              </Defs>
-
-              {/* Background track */}
-              <Circle
-                cx={cx}
-                cy={cx}
-                r={RADIUS}
-                stroke={missTrackColor}
-                strokeWidth={TRACK_STROKE}
-                fill="transparent"
-              />
-              {/* Green sweet-spot (centered at top) */}
-              <Circle
-                cx={cx}
-                cy={cx}
-                r={RADIUS}
-                stroke="url(#greenGrad)"
-                strokeWidth={TRACK_STROKE}
-                fill="transparent"
-                strokeLinecap="round"
-                strokeDasharray={`${greenLen} ${CIRCUMFERENCE}`}
-                strokeDashoffset={greenOffset}
-                transform={`rotate(-90 ${cx} ${cx})`}
-              />
-              {/* Yellow zone (clockwise after green) */}
-              <Circle
-                cx={cx}
-                cy={cx}
-                r={RADIUS}
-                stroke={yellowColor}
-                strokeWidth={TRACK_STROKE}
-                fill="transparent"
-                strokeLinecap="round"
-                strokeDasharray={`${yellowLen} ${CIRCUMFERENCE}`}
-                strokeDashoffset={-greenLen / 2}
-                transform={`rotate(-90 ${cx} ${cx})`}
-                opacity={0.6}
-              />
-              {/* Yellow zone (counterclockwise before green) */}
-              <Circle
-                cx={cx}
-                cy={cx}
-                r={RADIUS}
-                stroke={yellowColor}
-                strokeWidth={TRACK_STROKE}
-                fill="transparent"
-                strokeLinecap="round"
-                strokeDasharray={`${yellowLen} ${CIRCUMFERENCE}`}
-                strokeDashoffset={greenLen / 2 + yellowLen - CIRCUMFERENCE}
-                transform={`rotate(-90 ${cx} ${cx})`}
-                opacity={0.6}
-              />
-            </Svg>
-
-            {/* Pulse ring on tap */}
-            <Animated.View
-              style={[st.pulseRing, { borderColor: lastTap ? dotColor(lastTap) : colors.primary }, pulseAnimStyle]}
-              pointerEvents="none"
-            />
-
-            {/* Center content: fish + TAP label */}
-            <View style={st.centerDecor} pointerEvents="none">
-              {fishImageUrl ? (
-                <CachedImage source={{ uri: fishImageUrl }} style={st.centerImage} resizeMode="contain" />
-              ) : null}
-              {fishLabel && !finished && (
-                <Text style={[st.centerLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {fishLabel}
-                </Text>
-              )}
-              {lastTap && !finished ? (
-                <Animated.Text
-                  entering={ZoomIn.duration(120)}
-                  exiting={FadeOut.duration(120)}
-                  style={[st.tapFeedback, { color: dotColor(lastTap) }]}
-                >
-                  {RESULT_LABELS[lastTap]}
-                </Animated.Text>
-              ) : !finished ? (
-                <Text style={[st.tapLabel, { color: colors.primary }]}>TAP</Text>
-              ) : null}
+          <Pressable onPressIn={reel} style={styles.stage}>
+            <View style={[styles.column, { backgroundColor: colors.border }]}>
+              <View style={[styles.water, { backgroundColor: colors.primary + '28' }]} />
+              <Animated.View style={[styles.line, { backgroundColor: colors.textMuted }, lineStyle]} />
+              <Animated.View style={[styles.fishWrap, fishStyle]}>
+                {fishImageUrl ? (
+                  <CachedImage source={{ uri: fishImageUrl }} style={styles.fishArt} resizeMode="cover" />
+                ) : (
+                  <Text style={styles.fishEmoji}>🐟</Text>
+                )}
+              </Animated.View>
+              <Animated.View style={[styles.window, { height: windowPx }, windowStyle]} pointerEvents="none">
+                {toolImageUrl ? (
+                  <CachedImage source={{ uri: toolImageUrl }} style={styles.toolArt} resizeMode="contain" />
+                ) : null}
+              </Animated.View>
             </View>
-
-            {/* Orbiting dot */}
-            <Animated.View
-              style={[st.dot, { backgroundColor: colors.primary, borderColor: colors.surface }, dotStyle]}
-              pointerEvents="none"
-            />
           </Pressable>
 
-          {/* Progress dots */}
-          <View style={st.progressRow}>
-            {Array.from({ length: totalRounds }).map((_, i) => {
-              const r = results[i];
-              const isCurrent = i === results.length && !finished;
-              return (
-                <View
-                  key={i}
-                  style={[
-                    st.progressDot,
-                    {
-                      backgroundColor: r ? dotColor(r) : `${colors.border}50`,
-                      borderColor: isCurrent ? colors.primary : 'transparent',
-                      transform: [{ scale: r ? 1 : isCurrent ? 1.05 : 0.8 }],
-                    },
-                  ]}
-                />
-              );
-            })}
+          <View style={[styles.bar, { backgroundColor: colors.border }]}>
+            <Animated.View style={[styles.fill, fillStyle]} />
           </View>
-
-        </Animated.View>
-        </Pressable>
-      </Pressable>
+          <Pressable onPress={onCancel} hitSlop={8}>
+            <Text style={[styles.cancel, { color: colors.textMuted }]}>Cancel</Text>
+          </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
-const st = StyleSheet.create({
-  overlay: {
+const styles = StyleSheet.create({
+  backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
   card: {
-    borderRadius: 24,
-    paddingTop: 16,
-    paddingBottom: 14,
-    paddingHorizontal: 16,
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 20,
+    padding: 18,
     alignItems: 'center',
-  },
-  circleWrap: {
-    width: CIRCLE_SIZE,
-    height: CIRCLE_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  svg: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-  },
-  flashOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: CIRCLE_SIZE / 2,
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: CIRCLE_SIZE * 0.4,
-    height: CIRCLE_SIZE * 0.4,
-    borderRadius: CIRCLE_SIZE * 0.2,
-    borderWidth: 2,
-  },
-  centerDecor: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: CIRCLE_SIZE * 0.45,
-  },
-  centerImage: {
-    width: 44,
-    height: 44,
-  },
-  centerLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 1,
-    textAlign: 'center',
-  },
-  tapFeedback: {
-    fontSize: 12,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  tapLabel: {
-    fontSize: 16,
-    fontWeight: '900',
-    marginTop: 4,
-    letterSpacing: 1,
-  },
-  dot: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: DOT_SIZE,
-    height: DOT_SIZE,
-    borderRadius: DOT_SIZE / 2,
-    borderWidth: 3,
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.18, shadowRadius: 3 }
-      : { elevation: 4 }),
-  },
-  progressRow: {
-    flexDirection: 'row',
     gap: 8,
-    marginTop: 14,
   },
-  progressDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
+  kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+  title: { fontSize: 20, fontWeight: '800' },
+  sub: { fontSize: 13, fontWeight: '600', minHeight: 20 },
+  stage: { marginVertical: 6, alignItems: 'center' },
+  column: {
+    width: COL_W,
+    height: COL_H,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
   },
+  water: { ...StyleSheet.absoluteFillObject },
+  line: {
+    position: 'absolute',
+    top: 0,
+    left: COL_W / 2 - 1,
+    width: 2,
+    opacity: 0.45,
+    borderRadius: 1,
+  },
+  window: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    borderRadius: 14,
+    borderWidth: 3,
+    backgroundColor: 'transparent',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    paddingRight: 4,
+    paddingTop: 4,
+  },
+  toolArt: { width: 48, height: 48 },
+  fishWrap: {
+    position: 'absolute',
+    left: (COL_W - FISH) / 2,
+    width: FISH,
+    height: FISH,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    zIndex: 1,
+  },
+  fishArt: {
+    position: 'absolute',
+    top: -FISH_CROP,
+    left: -FISH_CROP,
+    width: FISH + FISH_CROP * 2,
+    height: FISH + FISH_CROP * 2,
+  },
+  fishEmoji: { fontSize: 64 },
+  bar: { width: '100%', height: 14, borderRadius: 8, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: 8 },
+  cancel: { fontSize: 13, fontWeight: '700', marginTop: 4 },
 });

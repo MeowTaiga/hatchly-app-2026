@@ -8,6 +8,7 @@ import {
   clamp,
   runOnJS,
 } from 'react-native-reanimated';
+import { farmOriginX, farmOriginY, type GridDimensions } from './screenToGrid';
 import type { CameraState } from './types';
 import { TILE_SIZE, MIN_ZOOM, MAX_ZOOM, DEFAULT_ZOOM, WORLD_PADDING } from './constants';
 
@@ -22,7 +23,7 @@ export interface UseCameraOptions {
   worldCols?: number;
   /** Total world rows (farm + padding). Defaults to rows + 2*WORLD_PADDING. */
   worldRows?: number;
-  onTileTap?: (col: number, row: number) => void;
+  onTileTap?: (col: number, row: number, worldX: number, worldY: number) => void;
   /** Screen-Y below which taps are ignored (HUD zone). Checked on the UI thread before runOnJS. */
   tapDeadZoneY?: number;
   /** Row offset from the top of the farm to center the camera on initially. Defaults to center. */
@@ -53,11 +54,13 @@ export function useCamera({ cols, rows, worldCols, worldRows, onTileTap, tapDead
   const initScale = Math.max(DEFAULT_ZOOM, minZoom);
 
   // Center the camera on the playable farm area within the larger world
-  const padPx = ((wCols - cols) / 2) * TILE_SIZE;
-  const farmCX = padPx + (cols * TILE_SIZE) / 2;
+  const gridDims: GridDimensions = { cols, rows, worldCols: wCols, worldRows: wRows };
+  const originX = farmOriginX(gridDims);
+  const originY = farmOriginY(gridDims);
+  const farmCX = originX + (cols * TILE_SIZE) / 2;
   const farmCY = initialFocusRow != null
-    ? padPx + initialFocusRow * TILE_SIZE
-    : padPx + (rows * TILE_SIZE) / 2;
+    ? originY + initialFocusRow * TILE_SIZE
+    : originY + (rows * TILE_SIZE) / 2;
   const rawTX = screenW / 2 - farmCX * initScale;
   const rawTY = screenH / 2 - farmCY * initScale;
   const ws = worldW * initScale;
@@ -79,6 +82,12 @@ export function useCamera({ cols, rows, worldCols, worldRows, onTileTap, tapDead
   const focalX = useSharedValue(0);
   const focalY = useSharedValue(0);
 
+  // Held in a shared value so toggling edit mode doesn't rebuild the gestures.
+  const deadZoneY = useSharedValue(tapDeadZoneY ?? 0);
+  useEffect(() => {
+    deadZoneY.value = tapDeadZoneY ?? 0;
+  }, [tapDeadZoneY, deadZoneY]);
+
   const camera: CameraState = useMemo(
     () => ({ translateX, translateY, scale }),
     [translateX, translateY, scale],
@@ -94,119 +103,123 @@ export function useCamera({ cols, rows, worldCols, worldRows, onTileTap, tapDead
     startScale.value = initScale;
   }, [cols, rows, wCols, wRows, initialFocusRow, initTX, initTY, initScale]);
 
-  // ── Boundary helper (worklet) ──────────────────────────────────────────
-
-  const clampTx = (tx: number, s: number): number => {
-    'worklet';
-    const ws = worldW * s;
-    if (ws <= screenW) return (screenW - ws) / 2;
-    return clamp(tx, screenW - ws, 0);
-  };
-
-  const clampTy = (ty: number, s: number): number => {
-    'worklet';
-    const ws = worldH * s;
-    if (ws <= screenH) return (screenH - ws) / 2;
-    return clamp(ty, screenH - ws, 0);
-  };
-
-  // ── Pan gesture ─────────────────────────────────────────────────────────
-
-  const pan = Gesture.Pan()
-    .minPointers(1)
-    .maxPointers(2)
-    .onStart(() => {
+  /**
+   * Built once per world size. Handing GestureDetector a fresh gesture on every
+   * render makes it reconfigure the native handlers, which visibly stutters an
+   * in-progress pan whenever anything else in the world re-renders.
+   */
+  const gesture = useMemo(() => {
+    const clampTx = (tx: number, s: number): number => {
       'worklet';
-      cancelAnimation(translateX);
-      cancelAnimation(translateY);
-      startTX.value = translateX.value;
-      startTY.value = translateY.value;
-      startScale.value = scale.value;
-    })
-    .onUpdate((e) => {
+      const scaled = worldW * s;
+      if (scaled <= screenW) return (screenW - scaled) / 2;
+      return clamp(tx, screenW - scaled, 0);
+    };
+
+    const clampTy = (ty: number, s: number): number => {
       'worklet';
-      if (isPinching.value) return; // pinch handles all movement during zoom
-      const s = scale.value;
-      translateX.value = clampTx(startTX.value + e.translationX, s);
-      translateY.value = clampTy(startTY.value + e.translationY, s);
-    })
-    .onEnd((e) => {
-      'worklet';
-      if (isPinching.value) return;
-      const s = scale.value;
-      const wW = worldW * s;
-      const wH = worldH * s;
-      if (wW > screenW) {
-        translateX.value = withDecay({ velocity: e.velocityX, clamp: [screenW - wW, 0] });
-      }
-      if (wH > screenH) {
-        translateY.value = withDecay({ velocity: e.velocityY, clamp: [screenH - wH, 0] });
-      }
-    });
+      const scaled = worldH * s;
+      if (scaled <= screenH) return (screenH - scaled) / 2;
+      return clamp(ty, screenH - scaled, 0);
+    };
 
-  // ── Pinch gesture ───────────────────────────────────────────────────────
+    const pan = Gesture.Pan()
+      .minPointers(1)
+      .maxPointers(2)
+      // Tiny finger jitter must not win the Race against Tap, or world taps
+      // feel delayed / dropped and the camera nudges instead.
+      .minDistance(10)
+      .onStart(() => {
+        'worklet';
+        cancelAnimation(translateX);
+        cancelAnimation(translateY);
+        startTX.value = translateX.value;
+        startTY.value = translateY.value;
+        startScale.value = scale.value;
+      })
+      .onUpdate((e) => {
+        'worklet';
+        if (isPinching.value) return; // pinch handles all movement during zoom
+        const s = scale.value;
+        translateX.value = clampTx(startTX.value + e.translationX, s);
+        translateY.value = clampTy(startTY.value + e.translationY, s);
+      })
+      .onEnd((e) => {
+        'worklet';
+        if (isPinching.value) return;
+        const s = scale.value;
+        const wW = worldW * s;
+        const wH = worldH * s;
+        if (wW > screenW) {
+          translateX.value = withDecay({ velocity: e.velocityX, clamp: [screenW - wW, 0] });
+        }
+        if (wH > screenH) {
+          translateY.value = withDecay({ velocity: e.velocityY, clamp: [screenH - wH, 0] });
+        }
+      });
 
-  const pinch = Gesture.Pinch()
-    .onStart((e) => {
-      'worklet';
-      cancelAnimation(translateX);
-      cancelAnimation(translateY);
-      isPinching.value = true;
-      startScale.value = scale.value;
-      startTX.value = translateX.value;
-      startTY.value = translateY.value;
-      focalX.value = e.focalX;
-      focalY.value = e.focalY;
-    })
-    .onUpdate((e) => {
-      'worklet';
-      const newScale = clamp(startScale.value * e.scale, minZoom, MAX_ZOOM);
-      const ratio = newScale / startScale.value;
+    const pinch = Gesture.Pinch()
+      .onStart((e) => {
+        'worklet';
+        cancelAnimation(translateX);
+        cancelAnimation(translateY);
+        isPinching.value = true;
+        startScale.value = scale.value;
+        startTX.value = translateX.value;
+        startTY.value = translateY.value;
+        focalX.value = e.focalX;
+        focalY.value = e.focalY;
+      })
+      .onUpdate((e) => {
+        'worklet';
+        const newScale = clamp(startScale.value * e.scale, minZoom, MAX_ZOOM);
+        const ratio = newScale / startScale.value;
 
-      // Zoom around the original focal point
-      const newTX = focalX.value - ratio * (focalX.value - startTX.value);
-      const newTY = focalY.value - ratio * (focalY.value - startTY.value);
+        // Zoom around the original focal point
+        const newTX = focalX.value - ratio * (focalX.value - startTX.value);
+        const newTY = focalY.value - ratio * (focalY.value - startTY.value);
 
-      scale.value = newScale;
-      translateX.value = clampTx(newTX, newScale);
-      translateY.value = clampTy(newTY, newScale);
-    })
-    .onEnd(() => {
-      'worklet';
-      isPinching.value = false;
-      // Re-save so pan picks up the new position
-      startTX.value = translateX.value;
-      startTY.value = translateY.value;
-    });
+        scale.value = newScale;
+        translateX.value = clampTx(newTX, newScale);
+        translateY.value = clampTy(newTY, newScale);
+      })
+      .onEnd(() => {
+        'worklet';
+        isPinching.value = false;
+        // Re-save so pan picks up the new position
+        startTX.value = translateX.value;
+        startTY.value = translateY.value;
+      });
 
-  // ── Tap gesture ─────────────────────────────────────────────────────────
+    const tap = Gesture.Tap()
+      .maxDuration(250)
+      .onEnd((e) => {
+        'worklet';
+        if (!onTileTap) return;
+        if (deadZoneY.value > 0 && e.absoluteY > deadZoneY.value) return;
+        const wx = (e.x - translateX.value) / scale.value;
+        const wy = (e.y - translateY.value) / scale.value;
 
-  const padCols = Math.floor((wCols - cols) / 2);
-  const padRows = Math.floor((wRows - rows) / 2);
+        // Taps anywhere in the world fire, not just the farm grid, so baked
+        // scene placements outside the farm stay clickable.
+        const worldCol = Math.floor(wx / TILE_SIZE);
+        const worldRow = Math.floor(wy / TILE_SIZE);
+        if (worldCol < 0 || worldCol >= wCols || worldRow < 0 || worldRow >= wRows) return;
 
-  const deadZone = tapDeadZoneY ?? 0;
+        runOnJS(onTileTap)(
+          Math.floor((wx - originX) / TILE_SIZE),
+          Math.floor((wy - originY) / TILE_SIZE),
+          wx,
+          wy,
+        );
+      });
 
-  const tap = Gesture.Tap()
-    .maxDuration(250)
-    .onEnd((e) => {
-      'worklet';
-      if (!onTileTap) return;
-      if (deadZone > 0 && e.absoluteY > deadZone) return;
-      const wx = (e.x - translateX.value) / scale.value;
-      const wy = (e.y - translateY.value) / scale.value;
-      const col = Math.floor(wx / TILE_SIZE) - padCols;
-      const row = Math.floor(wy / TILE_SIZE) - padRows;
-      // Fire for taps anywhere in the world (farm grid + padding) so scene placements outside farm are clickable
-      const worldCol = col + padCols;
-      const worldRow = row + padRows;
-      if (worldCol >= 0 && worldCol < wCols && worldRow >= 0 && worldRow < wRows) {
-        runOnJS(onTileTap)(col, row);
-      }
-    });
-
-  // ── Compose ─────────────────────────────────────────────────────────────
-
-  const gesture = Gesture.Race(Gesture.Simultaneous(pan, pinch), tap);
+    return Gesture.Race(Gesture.Simultaneous(pan, pinch), tap);
+  }, [
+    worldW, worldH, screenW, screenH, minZoom, wCols, wRows, originX, originY, onTileTap,
+    translateX, translateY, scale, startTX, startTY, startScale, isPinching, focalX, focalY,
+    deadZoneY,
+  ]);
 
   return { camera, gesture };
 }

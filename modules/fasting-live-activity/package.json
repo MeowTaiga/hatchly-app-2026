@@ -1,0 +1,13 @@
+{
+  "name": "fasting-live-activity",
+  "version": "1.0.0",
+  "description": "iOS Live Activity for the Hatchly fasting timer",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "keywords": ["react-native", "expo", "fasting-live-activity"],
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

@@ -1,5 +1,5 @@
 /**
- * Health Period Context — provides weekly/monthly toggle state for the health overview.
+ * Health Period Context — Week | Month | All for the health overview.
  * All health cards consume useHealthPeriod() to get the current period.
  */
 

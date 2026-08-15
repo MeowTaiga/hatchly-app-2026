@@ -8,7 +8,7 @@ import {
   removeItemsByAnchorId,
   removeItemsByIds,
 } from '../gridHelpers';
-import type { DialogSpeaker, DialogStep, GridData, PlacedItem } from '../types';
+import type { DialogEntry, GridData, ItemDefinition, PlacedItem, QuestDialog, QuestProgress } from '../types';
 import { tileKey } from '../types';
 import {
   DEFAULT_HOUSE_COLS,
@@ -24,6 +24,83 @@ import type { GameAction, GameState } from './types';
 /** Maps optimistic anchor IDs to their server-assigned IDs after reconciliation. */
 export const optIdMap = new Map<string, string>();
 
+// ─── Dialog queue ────────────────────────────────────────────────────────────
+
+/** Starts showing `entry` and parks the rest of the queue behind it. */
+function showDialog(state: GameState, entry: DialogEntry, rest: DialogEntry[]): GameState {
+  return {
+    ...state,
+    currentDialog: entry,
+    questDialogIndex: 0,
+    dialogQueue: rest,
+  };
+}
+
+/**
+ * Drains the queue if nothing is on screen. Every path that adds dialogs goes
+ * through here so "show the next one" exists in exactly one place — the old
+ * reducer repeated that block four times with slightly different field lists.
+ *
+ * Quest rewards take priority: while completions are waiting to be shown, keep
+ * dialogs parked so the NPC doesn't talk (or teach a recipe) before the payout.
+ */
+function withDialogQueue(state: GameState, queue: DialogEntry[]): GameState {
+  if (state.currentDialog || queue.length === 0) return { ...state, dialogQueue: queue };
+  if (state.questCompletions.length > 0) return { ...state, dialogQueue: queue };
+  const [first, ...rest] = queue;
+  return showDialog(state, first, rest);
+}
+
+/** Turns the server's dialogs into queue entries, resolving each speaker. */
+export function toDialogEntries(
+  dialogs: QuestDialog[] | undefined,
+  itemDefs: Record<string, ItemDefinition>,
+): DialogEntry[] {
+  if (!dialogs?.length) return [];
+
+  return dialogs.map((d) => {
+    const npcDef = d.speaker !== 'pet' && d.npcItemType ? itemDefs[d.npcItemType] : undefined;
+    return {
+      steps: d.steps,
+      speaker: npcDef ? { name: npcDef.label, imageUrl: npcDef.imageUrl ?? null } : undefined,
+      questId: d.questId || undefined,
+      kind: d.kind,
+    };
+  });
+}
+
+/**
+ * Stops a finished quest's own dialog from holding the screen hostage.
+ *
+ * A start dialog can insist the player presses something before it moves on. If
+ * they go and finish the whole quest instead, that instruction is stale. Rewards
+ * already show immediately (and park new dialogs), but an on-screen blocking
+ * step from the finished quest would still trap the player — so strip its
+ * highlights and make it tap-to-close.
+ */
+function releaseDialogsFor(state: GameState, questIds: Set<string>): GameState {
+  if (questIds.size === 0) return state;
+
+  const release = (entry: DialogEntry): DialogEntry => {
+    if (!entry.questId || !questIds.has(entry.questId)) return entry;
+    // The quest is done — leave the closing lines on screen, but stop pointing
+    // at HUD buttons / inventory slots the player has already finished.
+    return {
+      ...entry,
+      blocking: false,
+      steps: entry.steps.map((step) =>
+        step.highlight ? { ...step, highlight: undefined } : step,
+      ),
+    };
+  };
+
+  return {
+    ...state,
+    currentDialog: state.currentDialog ? release(state.currentDialog) : null,
+    dialogQueue: state.dialogQueue.map(release),
+  };
+}
+
 /**
  * Main game reducer. Processes actions and returns the next state.
  *
@@ -36,39 +113,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SNAPSHOT': {
       optIdMap.clear();
       const defs = action.payload.itemDefs;
-      const houseDef = defs['house'];
-      const houseCols = houseDef?.cols ?? DEFAULT_HOUSE_COLS;
-      const houseRows = houseDef?.rows ?? DEFAULT_HOUSE_ROWS;
+      // Interior size is independent of the farm-placed house footprint (2 rows + overflow).
+      const houseCols = DEFAULT_HOUSE_COLS;
+      const houseRows = DEFAULT_HOUSE_ROWS;
 
-      const snapshotDialogs: Array<{ steps: DialogStep[]; speaker?: DialogSpeaker }> = [];
-      // Don't merge pendingDialogs when transitioning — avoids dialog reopening after scene change
-      if (!state.isTransitioning && action.payload.pendingDialogs?.length) {
-        for (const pd of action.payload.pendingDialogs) {
-          if (pd.dialog?.length) snapshotDialogs.push({ steps: pd.dialog, speaker: undefined });
-        }
-      }
-      const allQueued = [...state.questDialogQueue, ...snapshotDialogs];
-      let currentDialog = state.currentQuestDialog;
-      let dialogIdx = state.questDialogIndex;
-      let currentSpeaker = state.currentDialogSpeaker;
-      let currentNpcItemType = state.currentNpcItemType;
-      let currentQuestIdToComplete = state.currentQuestIdToComplete;
-      let currentDialogRewards = state.currentDialogRewards;
-      let currentDialogBlocking = state.currentDialogBlocking;
-      let dialogQueue = allQueued;
-      if (!currentDialog && allQueued.length > 0) {
-        const [first, ...rest] = allQueued;
-        currentDialog = first.steps;
-        currentSpeaker = first.speaker ?? null;
-        currentNpcItemType = (first as { npcItemType?: string }).npcItemType ?? null;
-        currentQuestIdToComplete = (first as { questIdToComplete?: string }).questIdToComplete ?? null;
-        currentDialogRewards = (first as { rewards?: import('../types').QuestReward }).rewards ?? null;
-        currentDialogBlocking = (first as { blocking?: boolean }).blocking !== false;
-        dialogQueue = rest;
-        dialogIdx = 0;
-      }
+      const quests = action.payload.quests ?? [];
+      // Scene changes must not reopen dialogs the player already walked away from.
+      const arriving = state.isTransitioning
+        ? []
+        : toDialogEntries(action.payload.questDialogs, defs);
 
-      return {
+      const withGrids: GameState = {
         ...state,
         farmName: action.payload.farmName,
         farmXp: action.payload.farmXp,
@@ -76,6 +131,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         gems: action.payload.gems ?? 0,
         farmLevels: action.payload.farmLevels,
         inventory: { ...action.payload.inventory },
+        storage: { ...(action.payload.storage ?? {}) },
+        backpackSlots: action.payload.backpackSlots ?? 20,
+        miningEnergy: action.payload.miningEnergy ?? 20,
+        miningEnergyCap: action.payload.miningEnergyCap ?? 20,
+        miningEnergyAt: action.payload.miningEnergyAt ?? Date.now(),
         equipped: action.payload.equipped,
         itemDefs: defs,
         sceneryUrl: action.payload.sceneryUrl ?? '',
@@ -87,20 +147,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         movingItemId: null,
         selectedTile: null,
         pendingDropTarget: null,
-        lastOptimisticPlace: null,
+        pendingPlacements: [],
         pendingSellItems: null,
         pendingSellAt: null,
         foodDishQueues: action.payload.foodDishQueues,
-        quests: action.payload.quests ?? [],
+        quests,
         canUpgrade: action.payload.canUpgrade ?? false,
-        currentQuestDialog: currentDialog,
-        questDialogIndex: dialogIdx,
-        questDialogQueue: dialogQueue,
-        currentDialogSpeaker: currentSpeaker,
-        currentNpcItemType,
-        currentQuestIdToComplete,
-        currentDialogRewards,
-        currentDialogBlocking,
         petState: action.payload.petState
           ? {
               col: action.payload.petState.col,
@@ -108,7 +160,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
               behavior: action.payload.petState.behavior,
             }
           : null,
+        weather: action.payload.weather ?? state.weather,
       };
+
+      return withDialogQueue(withGrids, [...state.dialogQueue, ...arriving]);
     }
 
     case 'STATE_UPDATE': {
@@ -119,6 +174,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (payload.farmLevel != null) newState.farmLevel = payload.farmLevel;
       if (payload.gems != null) newState.gems = payload.gems;
       if (payload.farmName != null) newState.farmName = payload.farmName;
+      if (payload.storage) newState.storage = { ...payload.storage };
+      if (payload.backpackSlots != null) newState.backpackSlots = payload.backpackSlots;
+      if (payload.miningEnergy != null) newState.miningEnergy = payload.miningEnergy;
+      if (payload.miningEnergyCap != null) newState.miningEnergyCap = payload.miningEnergyCap;
+      if (payload.miningEnergyAt != null) newState.miningEnergyAt = payload.miningEnergyAt;
       if (payload.inventory) {
         let mergedInventory = { ...payload.inventory };
         let hadStaleMerge = false;
@@ -165,6 +225,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (payload.foodDishQueues !== undefined) newState.foodDishQueues = payload.foodDishQueues;
       if (payload.quests) newState.quests = payload.quests;
       if (payload.canUpgrade != null) newState.canUpgrade = payload.canUpgrade;
+      if (payload.questCompletions?.length) {
+        newState.questCompletions = [...newState.questCompletions, ...payload.questCompletions];
+      }
       if (payload.shakeResult?.drops?.length) {
         const sr = payload.shakeResult;
         const effect: import('../types').HarvestEffect = {
@@ -185,6 +248,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const grid = newState[gridKey];
         let newItems = new Map(grid.items);
         let reconciledOpt = false;
+        /** Optimistic anchors this update accounted for, so only those clear. */
+        const confirmedAnchors = new Set<string>();
 
         // Detect IDs that appear in BOTH removedItemIds AND addedItems — these are
         // IN-PLACE UPDATES (e.g., watering), not true remove+add. We skip removing
@@ -194,7 +259,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (payload.addedItems?.length) {
           for (const si of payload.addedItems) {
             addedIdSet.add(si.id);
-            addedItemMap.set(si.id, si);
+            addedItemMap.set(si.id, snapshotItemToPlacedItem(si, state.itemDefs));
           }
         }
 
@@ -263,10 +328,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
               const optAnchor = optItem.anchorId ?? optItem.id;
               const serverAnchor = serverItem.anchorId ?? serverItem.id;
               optIdMap.set(optAnchor, serverAnchor);
+              confirmedAnchors.add(optAnchor);
               const updated = [...arr];
               updated[optIdx] = { ...serverItem, clientId: optItem.clientId ?? optItem.id };
               newItems.set(key, updated);
             } else {
+              for (const it of arr) {
+                if (it.id.startsWith('opt_')) confirmedAnchors.add(it.anchorId ?? it.id);
+              }
               const withoutOpt = arr.filter((it, idx) => !it.id.startsWith('opt_') || consumed.has(idx));
               if (withoutOpt.length < arr.length) reconciledOpt = true;
               // Preserve clientId from any matched opt item, OR from the pre-move state
@@ -284,12 +353,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (payload.removedItemIds?.length || reconciledOpt) {
           newState.pendingDropTarget = null;
         }
-        if (payload.addedItems?.length) {
-          newState.lastOptimisticPlace = null;
+        // Only the placements this update actually accounted for clear. Clearing
+        // the lot on any update with `addedItems` meant an unrelated action —
+        // watering, say — marked a still-unconfirmed placement as settled.
+        if (confirmedAnchors.size > 0) {
+          newState.pendingPlacements = newState.pendingPlacements.filter(
+            (p) => !confirmedAnchors.has(p.anchorId),
+          );
         }
       }
 
-      return newState;
+      const arriving = state.isTransitioning
+        ? []
+        : toDialogEntries(payload.questDialogs, newState.itemDefs);
+
+      const released = releaseDialogsFor(
+        newState,
+        new Set((payload.questCompletions ?? []).map((c) => c.questId)),
+      );
+
+      return withDialogQueue(released, [...released.dialogQueue, ...arriving]);
     }
 
     case 'OPTIMISTIC_PLACE': {
@@ -300,32 +383,73 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         newItems = addItemAtKey(newItems, action.keys[i], action.items[i]);
       }
       const anchorId = action.items[0]?.id;
-      const lastOptimisticPlace = !action.skipInventory && anchorId
-        ? { anchorId, itemType: action.itemType }
-        : state.lastOptimisticPlace;
       if (action.skipInventory) {
         return { ...state, [gridKey]: { ...grid, items: newItems } };
       }
       const inv = { ...state.inventory };
       inv[action.itemType] = Math.max(0, (inv[action.itemType] ?? 0) - 1);
-      return { ...state, [gridKey]: { ...grid, items: newItems }, inventory: inv, lastOptimisticPlace };
-    }
-
-    case 'REVERT_PLACEMENT': {
-      const { lastOptimisticPlace } = state;
-      if (!lastOptimisticPlace) return state;
-      const gridKey = state.activeScene === 'farm' ? 'farmGrid' : 'houseGrid';
-      const grid = state[gridKey];
-      const newItems = removeItemsByAnchorId(grid.items, lastOptimisticPlace.anchorId);
-      const inv = { ...state.inventory };
-      inv[lastOptimisticPlace.itemType] = (inv[lastOptimisticPlace.itemType] ?? 0) + 1;
+      // Empty stack → drop selection so plantable soil highlights (and the
+      // build palette) don't keep acting like that item is still in hand.
+      const clearSelection =
+        inv[action.itemType] === 0 && state.selectedItemType === action.itemType;
       return {
         ...state,
         [gridKey]: { ...grid, items: newItems },
         inventory: inv,
-        lastOptimisticPlace: null,
+        selectedItemType: clearSelection ? null : state.selectedItemType,
+        pendingPlacements: anchorId
+          ? [...state.pendingPlacements, { anchorId, itemType: action.itemType, at: Date.now() }]
+          : state.pendingPlacements,
+      };
+    }
+
+    case 'REVERT_PLACEMENT': {
+      // Refusals arrive in the order the placements were sent, so the oldest
+      // outstanding one is the one being refused.
+      const pending = action.anchorId
+        ? state.pendingPlacements.find((p) => p.anchorId === action.anchorId)
+        : state.pendingPlacements[0];
+      if (!pending) return state;
+      const gridKey = state.activeScene === 'farm' ? 'farmGrid' : 'houseGrid';
+      const grid = state[gridKey];
+      const newItems = removeItemsByAnchorId(grid.items, pending.anchorId);
+      const inv = { ...state.inventory };
+      inv[pending.itemType] = (inv[pending.itemType] ?? 0) + 1;
+      return {
+        ...state,
+        [gridKey]: { ...grid, items: newItems },
+        inventory: inv,
+        pendingPlacements: state.pendingPlacements.filter((p) => p.anchorId !== pending.anchorId),
         pendingDropTarget: null,
         selectedTile: null,
+      };
+    }
+
+    /**
+     * Drops locally-drawn placements the server never acknowledged.
+     *
+     * Errors are matched by message text, so an unanticipated refusal used to
+     * leave a phantom item on the farm until the next full snapshot. This is the
+     * backstop that makes that impossible rather than merely unlikely.
+     */
+    case 'SWEEP_STALE_PLACEMENTS': {
+      const stale = state.pendingPlacements.filter((p) => action.before - p.at > 0);
+      if (stale.length === 0) return state;
+
+      const gridKey = state.activeScene === 'farm' ? 'farmGrid' : 'houseGrid';
+      const grid = state[gridKey];
+      let newItems = grid.items;
+      const inv = { ...state.inventory };
+      for (const p of stale) {
+        newItems = removeItemsByAnchorId(newItems, p.anchorId);
+        inv[p.itemType] = (inv[p.itemType] ?? 0) + 1;
+      }
+      const staleIds = new Set(stale.map((p) => p.anchorId));
+      return {
+        ...state,
+        [gridKey]: { ...grid, items: newItems },
+        inventory: inv,
+        pendingPlacements: state.pendingPlacements.filter((p) => !staleIds.has(p.anchorId)),
       };
     }
 
@@ -433,15 +557,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         isTransitioning: true,
         selectedTile: null,
         movingItemId: null,
-        // Clear quest dialog so it doesn't persist/reopen when changing scenes
-        questDialogQueue: [],
-        currentQuestDialog: null,
+        // Whatever was being said belongs to the scene we're leaving.
+        dialogQueue: [],
+        currentDialog: null,
         questDialogIndex: 0,
-        currentDialogSpeaker: null,
-        currentNpcItemType: null,
-        currentQuestIdToComplete: null,
-        currentDialogRewards: null,
-        currentDialogBlocking: true,
       };
 
     case 'APPLY_SCENE':
@@ -520,14 +639,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
         return { ...grid, items: newItems };
       };
-      const houseDef = defs['house'];
-      const houseCols = houseDef?.cols ?? state.houseGrid.cols;
-      const houseRows = houseDef?.rows ?? state.houseGrid.rows;
-      const houseNeedsResize =
-        houseCols !== state.houseGrid.cols || houseRows !== state.houseGrid.rows;
-      const newHouseGrid = houseNeedsResize
-        ? createEmptyGrid(houseCols, houseRows)
-        : remap(state.houseGrid);
+      const newHouseGrid = remap(state.houseGrid);
       return {
         ...state,
         itemDefs: defs,
@@ -564,66 +676,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_QUESTS':
       return { ...state, quests: action.quests, canUpgrade: action.canUpgrade };
 
-    case 'OPTIMISTIC_QUEST_ACTIVATE': {
-      const quests = (state.quests ?? []).map((q) =>
-        q.questId === action.questId && q.status === 'locked' ? { ...q, status: 'active' as const } : q,
+    case 'QUEUE_DIALOG':
+      return withDialogQueue(state, [...state.dialogQueue, ...action.entries]);
+
+    case 'SHOW_PET_DIALOG':
+      // A one-off pet line jumps the queue; it's usually an error message the
+      // player needs to see now, and it must be dismissible. It takes over the
+      // screen but leaves the queue alone — it used to empty it, so any error
+      // message threw away the quest dialogs waiting their turn.
+      return showDialog(
+        state,
+        { steps: [{ text: action.text }], blocking: false },
+        state.dialogQueue,
       );
-      return { ...state, quests };
-    }
 
-    case 'QUEUE_QUEST_DIALOG': {
-      const wrapped = action.dialogs.map((d) =>
-        typeof d === 'object' && 'steps' in d ? d : { steps: d as DialogStep[], speaker: undefined as DialogSpeaker | undefined },
-      );
-      const queue = [...state.questDialogQueue, ...wrapped];
-      if (!state.currentQuestDialog && queue.length > 0) {
-        const [first, ...rest] = queue;
-        return {
-          ...state,
-          questDialogQueue: rest,
-          currentQuestDialog: first.steps,
-          questDialogIndex: 0,
-          currentDialogSpeaker: first.speaker ?? null,
-          currentNpcItemType: null,
-          currentDialogRewards: (first as { rewards?: import('../types').QuestReward }).rewards ?? null,
-          currentDialogBlocking: true,
-        };
-      }
-      return { ...state, questDialogQueue: queue };
-    }
-
-    case 'QUEUE_NPC_DIALOG': {
-      const entry = { steps: action.steps, speaker: action.speaker, npcItemType: action.npcItemType, blocking: action.blocking, questIdToComplete: action.questIdToComplete };
-      const queue = [...state.questDialogQueue, entry];
-      if (!state.currentQuestDialog && queue.length > 0) {
-        const [first, ...rest] = queue;
-        return {
-          ...state,
-          questDialogQueue: rest,
-          currentQuestDialog: first.steps,
-          questDialogIndex: 0,
-          currentDialogSpeaker: first.speaker ?? null,
-          currentNpcItemType: first.npcItemType ?? null,
-          currentQuestIdToComplete: first.questIdToComplete ?? null,
-          currentDialogRewards: null,
-          currentDialogBlocking: (first as { blocking?: boolean }).blocking !== false,
-        };
-      }
-      return { ...state, questDialogQueue: queue };
-    }
-
-    case 'SHOW_PET_DIALOG': {
-      return {
-        ...state,
-        questDialogQueue: [],
-        currentQuestDialog: [{ text: action.text }],
-        questDialogIndex: 0,
-        currentDialogSpeaker: null,
-        currentNpcItemType: null,
-        currentQuestIdToComplete: null,
-        currentDialogRewards: null,
-        currentDialogBlocking: false,
-      };
+    case 'DISMISS_QUEST_COMPLETIONS': {
+      // Clear payouts, then let any parked end/start dialogs take the screen.
+      const cleared = { ...state, questCompletions: [] };
+      return withDialogQueue(cleared, cleared.dialogQueue);
     }
 
     case 'SET_SHOP_OPEN':
@@ -634,6 +704,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'SET_COOKING_OPEN':
       return { ...state, cookingOpen: action.open };
+    case 'SET_CRAFTING_OPEN':
+      return { ...state, craftingOpen: action.open };
 
     case 'SET_FOOD_DISH_OPEN':
       return { ...state, foodDishOpen: action.open };
@@ -647,30 +719,53 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'CLEAR_PET_BEHAVIOR_SYNC':
       return { ...state, petBehaviorSync: null };
 
-    case 'SET_PET_STATE':
-      return { ...state, petState: action.payload };
+    case 'SET_PET_STATE': {
+      // The server re-broadcasts pet state every couple of seconds even when
+      // nothing moved. Bailing out keeps it from invalidating the whole context.
+      const prev = state.petState;
+      const next = action.payload;
+      if (
+        prev &&
+        next &&
+        prev.behavior === next.behavior &&
+        prev.col === next.col &&
+        prev.row === next.row &&
+        prev.targetCol === next.targetCol &&
+        prev.targetRow === next.targetRow &&
+        prev.interactionType === next.interactionType &&
+        prev.interactionTarget === next.interactionTarget &&
+        prev.interactionItemType === next.interactionItemType
+      ) {
+        return state;
+      }
+      return { ...state, petState: next };
+    }
+
+    case 'SET_WEATHER': {
+      const prev = state.weather;
+      const next = action.weather;
+      if (
+        prev.type === next.type &&
+        prev.date === next.date &&
+        prev.label === next.label &&
+        prev.endsAt === next.endsAt
+      ) {
+        return state;
+      }
+      return { ...state, weather: next };
+    }
+
+    case 'SET_WEATHER_OVERRIDE':
+      if (state.weatherOverride === action.weatherOverride) return state;
+      return { ...state, weatherOverride: action.weatherOverride };
 
     case 'ADVANCE_QUEST_DIALOG': {
-      if (!state.currentQuestDialog) return state;
-      const nextIdx = state.questDialogIndex + 1;
-      if (nextIdx < state.currentQuestDialog.length) {
-        return { ...state, questDialogIndex: nextIdx };
+      if (!state.currentDialog) return state;
+      const nextIndex = state.questDialogIndex + 1;
+      if (nextIndex < state.currentDialog.steps.length) {
+        return { ...state, questDialogIndex: nextIndex };
       }
-      if (state.questDialogQueue.length > 0) {
-        const [next, ...rest] = state.questDialogQueue;
-        return {
-          ...state,
-          questDialogQueue: rest,
-          currentQuestDialog: next.steps,
-          questDialogIndex: 0,
-          currentDialogSpeaker: next.speaker ?? null,
-          currentNpcItemType: (next as { npcItemType?: string }).npcItemType ?? null,
-          currentQuestIdToComplete: (next as { questIdToComplete?: string }).questIdToComplete ?? null,
-          currentDialogRewards: (next as { rewards?: import('../types').QuestReward }).rewards ?? null,
-          currentDialogBlocking: (next as { blocking?: boolean }).blocking !== false,
-        };
-      }
-      return { ...state, currentQuestDialog: null, questDialogIndex: 0, currentDialogSpeaker: null, currentNpcItemType: null, currentQuestIdToComplete: null, currentDialogRewards: null, currentDialogBlocking: true };
+      return withDialogQueue({ ...state, currentDialog: null }, state.dialogQueue);
     }
 
     default:

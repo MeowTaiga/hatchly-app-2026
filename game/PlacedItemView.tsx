@@ -13,14 +13,36 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { FENCE_VARIANT_MAP, TILE_SIZE } from './constants';
-import type { PlacedItem } from './types';
+import { useTreeShakeTrigger } from './treeShake';
+import type { ItemDefinition, PlacedItem } from './types';
 
 /** Buildings size by cols width; height = width * this so they extend upward and overlay scenery. */
-const BUILDING_ASPECT_RATIO = 1.35;
+export const BUILDING_ASPECT_RATIO = 1.35;
 const CROP_OVERFLOW_SCALE = 1.35;
 const SEED_SCALE = 0.55;
 /** Scale for centerOverflow items (garden arch, etc.) — centered and extends upward. */
-const CENTER_OVERFLOW_SCALE = 1.25;
+export const CENTER_OVERFLOW_SCALE = 1.25;
+
+/** Pixel box for an item's sprite, including upward overflow past the tile pad. */
+export function itemArtBox(def: ItemDefinition | undefined, item: PlacedItem) {
+  const cols = def?.category === 'tree' ? item.tileCols : (def?.cols ?? item.tileCols);
+  const rows = def?.category === 'tree' ? item.tileRows : (def?.rows ?? item.tileRows);
+  const pxW = TILE_SIZE * (cols ?? 1);
+  const footprintH = TILE_SIZE * (rows ?? 1);
+  const isBuilding = def?.category === 'building';
+  const centerOverflow = def?.centerOverflow ?? false;
+  const pxH = isBuilding
+    ? pxW * BUILDING_ASPECT_RATIO
+    : centerOverflow
+      ? Math.max(footprintH * CENTER_OVERFLOW_SCALE, pxW * 0.6)
+      : footprintH;
+  return {
+    pxW,
+    pxH,
+    footprintH,
+    overflowUp: Math.max(0, pxH - footprintH),
+  };
+}
 
 
 /**
@@ -60,18 +82,6 @@ function seedImage(tileW: number, tileH: number) {
   return centeredSmallImageStyle(tileW, tileH);
 }
 
-function centerOverflowImage(tileW: number, tileH: number) {
-  const w = tileW;
-  const h = Math.max(tileH * CENTER_OVERFLOW_SCALE, tileW * 0.6);
-  return {
-    position: 'absolute' as const,
-    width: w,
-    height: h,
-    left: 0,
-    top: tileH - h,
-  };
-}
-
 function overflowCrop(tileW: number, tileH: number) {
   const w = tileW * CROP_OVERFLOW_SCALE;
   const h = tileH * CROP_OVERFLOW_SCALE;
@@ -85,9 +95,10 @@ function overflowCrop(tileW: number, tileH: number) {
 }
 
 /** Tap-shake for trees. No key = no flicker. Explicit reset + cancel before replay. */
-function TreeShakeWrapper({ width, height, trigger, children }: {
-  width: number; height: number; trigger?: number; children: React.ReactNode;
+function TreeShakeWrapper({ width, height, anchorId, children }: {
+  width: number; height: number; anchorId: string; children: React.ReactNode;
 }) {
+  const trigger = useTreeShakeTrigger(anchorId);
   const rot = useSharedValue(0);
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -249,21 +260,22 @@ const BUILDING_RENDERERS: Record<string, (w: number, h: number) => React.ReactNo
   cooking_pot: () => <CookingPotVisual />,
 };
 
-// ─── Fully Grown Crop (scales up from bottom-center on mount) ────────────────
+// ─── Fully Grown Crop (scales up from bottom-center on live growth only) ─────
 
-function GrownCropImage({ uri, tileW, tileH }: {
-  uri: string; tileW: number; tileH: number;
+function GrownCropImage({ uri, tileW, tileH, animate }: {
+  uri: string; tileW: number; tileH: number; animate: boolean;
 }) {
   const w = tileW * CROP_OVERFLOW_SCALE;
   const h = tileH * CROP_OVERFLOW_SCALE;
-  const scale = useSharedValue(0);
+  const scale = useSharedValue(animate ? 0 : 1);
 
   useEffect(() => {
+    if (!animate) return;
     scale.value = withTiming(1, {
       duration: 300,
       easing: Easing.out(Easing.back(1.4)),
     });
-  }, []);
+  }, [animate, scale]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -339,9 +351,15 @@ const CropVisual = React.memo(function CropVisual({ item, def, itemDefs, isGrowi
     return Date.now() - item.plantedAt >= item.growthMs;
   });
 
+  // Snapshot restore / remount: already-grown crops skip the pop-in animation.
+  const grewWhileMountedRef = React.useRef(false);
+  const startedFullyGrownRef = React.useRef(fullyGrown);
+
   React.useEffect(() => {
     if (!item.plantedAt || !item.growthMs || !item.watered) {
       setFullyGrown(false);
+      startedFullyGrownRef.current = false;
+      grewWhileMountedRef.current = false;
       return;
     }
     const elapsed = Date.now() - item.plantedAt;
@@ -350,7 +368,10 @@ const CropVisual = React.memo(function CropVisual({ item, def, itemDefs, isGrowi
       return;
     }
     const remaining = item.growthMs - elapsed;
-    const timer = setTimeout(() => setFullyGrown(true), remaining);
+    const timer = setTimeout(() => {
+      grewWhileMountedRef.current = true;
+      setFullyGrown(true);
+    }, remaining);
     return () => clearTimeout(timer);
   }, [item.plantedAt, item.growthMs, item.watered]);
 
@@ -366,12 +387,18 @@ const CropVisual = React.memo(function CropVisual({ item, def, itemDefs, isGrowi
 
   // Whether to show darkening tint on the seed (watered + growing, not fully grown)
   const showDarken = isGrowing && !fullyGrown;
+  const animateGrowth = grewWhileMountedRef.current && !startedFullyGrownRef.current;
 
   return (
     <>
       {displayImageUrl ? (
         fullyGrown ? (
-          <GrownCropImage uri={displayImageUrl} tileW={tileW} tileH={tileH} />
+          <GrownCropImage
+            uri={displayImageUrl}
+            tileW={tileW}
+            tileH={tileH}
+            animate={animateGrowth}
+          />
         ) : (
           <>
             <SeedImage
@@ -422,10 +449,6 @@ interface PlacedItemViewProps {
   isMoving?: boolean;
   fenceConnectionMask?: number;
   highlighted?: boolean;
-  /** When true, plays a subtle tap-shake animation (trees only). */
-  isShaking?: boolean;
-  /** Changes each tap so animation can replay on same tree. */
-  shakeTrigger?: number;
 }
 
 export const PlacedItemView = React.memo(function PlacedItemView({
@@ -435,8 +458,6 @@ export const PlacedItemView = React.memo(function PlacedItemView({
   isMoving,
   fenceConnectionMask,
   highlighted,
-  isShaking,
-  shakeTrigger,
 }: PlacedItemViewProps) {
   const { theme } = useTheme();
   if (item.anchorId) return null;
@@ -450,11 +471,9 @@ export const PlacedItemView = React.memo(function PlacedItemView({
   const cols = def?.category === 'tree' ? item.tileCols : (def?.cols ?? item.tileCols);
   const rows = def?.category === 'tree' ? item.tileRows : (def?.rows ?? item.tileRows);
   const isBuilding = def?.category === 'building';
-  const pxW = TILE_SIZE * cols;
-  const pxH = isBuilding
-    ? pxW * BUILDING_ASPECT_RATIO
-    : TILE_SIZE * rows;
-  const footprintH = TILE_SIZE * rows;
+  const centerOverflow = def?.centerOverflow ?? false;
+  const { pxW, pxH, footprintH } = itemArtBox(def, item);
+  const overflowUp = isBuilding || centerOverflow;
   const buildingRenderer = BUILDING_RENDERERS[item.itemType];
 
   const selectedStyle = isSelected && !isMoving ? styles.itemSelected : undefined;
@@ -525,7 +544,7 @@ export const PlacedItemView = React.memo(function PlacedItemView({
           highlightStyle,
         ]}
       >
-        <TreeShakeWrapper width={pxW} height={pxH} trigger={isShaking ? shakeTrigger : undefined}>
+        <TreeShakeWrapper width={pxW} height={pxH} anchorId={item.id}>
           {saplingContent}
         </TreeShakeWrapper>
       </View>
@@ -553,7 +572,7 @@ export const PlacedItemView = React.memo(function PlacedItemView({
           highlightStyle,
         ]}
       >
-        <TreeShakeWrapper width={pxW} height={pxH} trigger={isShaking ? shakeTrigger : undefined}>
+        <TreeShakeWrapper width={pxW} height={pxH} anchorId={item.id}>
           {emojiContent}
         </TreeShakeWrapper>
       </View>
@@ -625,7 +644,7 @@ export const PlacedItemView = React.memo(function PlacedItemView({
           highlightStyle,
         ]}
       >
-        <TreeShakeWrapper width={footprintW} height={footprintH} trigger={isShaking ? shakeTrigger : undefined}>
+        <TreeShakeWrapper width={footprintW} height={footprintH} anchorId={item.id}>
           {treeContent}
         </TreeShakeWrapper>
       </View>
@@ -655,7 +674,7 @@ export const PlacedItemView = React.memo(function PlacedItemView({
           highlightStyle,
         ]}
       >
-        <TreeShakeWrapper width={footprintW} height={footprintH} trigger={isShaking ? shakeTrigger : undefined}>
+        <TreeShakeWrapper width={footprintW} height={footprintH} anchorId={item.id}>
           {emojiContent}
         </TreeShakeWrapper>
       </View>
@@ -695,7 +714,6 @@ export const PlacedItemView = React.memo(function PlacedItemView({
 
   // ── Items with image (house, decorations, etc.) ──
   const imgUrl = item.imageUrl || def?.imageUrl;
-  const centerOverflow = def?.centerOverflow ?? false;
   if (imgUrl) {
     return (
       <View
@@ -705,10 +723,10 @@ export const PlacedItemView = React.memo(function PlacedItemView({
             left: item.col * TILE_SIZE,
             top: item.row * TILE_SIZE,
             width: pxW,
-            height: isBuilding ? footprintH : (centerOverflow ? footprintH * 1.5 : pxH),
+            height: overflowUp ? pxH : (isBuilding ? footprintH : pxH),
             backgroundColor: 'transparent',
             borderWidth: 0,
-            borderRadius: isFlat ? 0 : 6,
+            borderRadius: isFlat || overflowUp ? 0 : 6,
             overflow: 'visible',
           },
           selectedStyle,
@@ -716,12 +734,8 @@ export const PlacedItemView = React.memo(function PlacedItemView({
           highlightStyle,
         ]}
       >
-        {isBuilding ? (
-          <View style={[styles.buildingImageWrap, { width: pxW, height: pxH, bottom: item.itemType === 'house' ? -80 : 0 }]}>
-            <CachedImage source={{ uri: imgUrl }} style={styles.itemImage} resizeMode="contain" />
-          </View>
-        ) : centerOverflow ? (
-          <CachedImage source={{ uri: imgUrl }} style={centerOverflowImage(pxW, footprintH)} resizeMode="contain" />
+        {overflowUp ? (
+          <CachedImage source={{ uri: imgUrl }} style={styles.itemImage} resizeMode="contain" />
         ) : isFlat ? (
           <CachedImage source={{ uri: imgUrl }} style={styles.itemImage} resizeMode="cover" />
         ) : (
@@ -807,8 +821,6 @@ export const PlacedItemView = React.memo(function PlacedItemView({
     prev.isMoving === next.isMoving &&
     prev.fenceConnectionMask === next.fenceConnectionMask &&
     prev.highlighted === next.highlighted &&
-    prev.isShaking === next.isShaking &&
-    prev.shakeTrigger === next.shakeTrigger &&
     prev.itemDefs === next.itemDefs
   );
 });

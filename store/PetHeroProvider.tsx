@@ -7,7 +7,11 @@ import {
 } from 'react-native-reanimated';
 import { usePathname } from 'expo-router';
 import { useSocketEvent } from '@/lib/socket';
-import { PetProfileDrawer, type PetProfileDrawerRef } from '@/components/ui/PetProfileDrawer';
+import {
+  PetProfileDrawer,
+  type PetProfileDrawerRef,
+  type ProfileDrawerTarget,
+} from '@/components/ui/PetProfileDrawer';
 
 const WS_PET_DIALOG = 'pet:dialog';
 
@@ -16,19 +20,23 @@ const WS_PET_DIALOG = 'pet:dialog';
 interface PetHeroContextValue {
   /** 0 = expanded, 1 = collapsed — drives all hero bar animations */
   collapsed: SharedValue<number>;
-  /** Trigger a floating +XP animation on the hero bar */
-  triggerXpGain?: (amount: number) => void;
+  /** Trigger a floating +XP animation on the hero bar / game status pill */
+  triggerXpGain?: (amount: number, skillLabel?: string) => void;
   /** Clear the XP event after animation completes (prevents replay on remount) */
   clearXpGainEvent: () => void;
   /** Current XP gain event (amount > 0 means animation playing) */
-  xpGainEvent: { amount: number; key: number };
+  xpGainEvent: { amount: number; key: number; skillLabel?: string };
   /** Server-pushed pet dialog (e.g. hunger reminder) — show globally */
   serverPetDialog: { text: string } | null;
   dismissServerPetDialog: () => void;
   /** Programmatically show a pet dialog (e.g. daily greeting, welcome back) */
   showPetDialog: (text: string) => void;
-  /** Open the pet profile drawer (from PetStatsDisplay tap) */
-  openPetProfileDrawer: () => void;
+  /**
+   * Open the shared companion profile drawer.
+   * Omit target (or pass `{ mode: 'self' }`) for your own skills card.
+   * Pass `{ mode: 'other', userId, ... }` from multiplayer taps.
+   */
+  openPetProfileDrawer: (target?: ProfileDrawerTarget) => void;
 }
 
 // ─── Scroll threshold before collapse triggers ──────────────────────────────
@@ -45,7 +53,10 @@ const PetHeroContext = createContext<PetHeroContextValue | null>(null);
 
 export function PetHeroProvider({ children }: { children: React.ReactNode }) {
   const collapsed = useSharedValue(0);
-  const [xpGainEvent, setXpGainEvent] = useState({ amount: 0, key: 0 });
+  const [xpGainEvent, setXpGainEvent] = useState<{ amount: number; key: number; skillLabel?: string }>({
+    amount: 0,
+    key: 0,
+  });
   const [serverPetDialog, setServerPetDialog] = useState<{ text: string } | null>(null);
   const pathname = usePathname();
   const petProfileDrawerRef = useRef<PetProfileDrawerRef>(null);
@@ -69,12 +80,12 @@ export function PetHeroProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname]);
 
-  const triggerXpGain = useCallback((amount: number) => {
-    setXpGainEvent({ amount, key: Date.now() });
+  const triggerXpGain = useCallback((amount: number, skillLabel?: string) => {
+    setXpGainEvent({ amount, key: Date.now(), skillLabel });
   }, []);
 
   const clearXpGainEvent = useCallback(() => {
-    setXpGainEvent({ amount: 0, key: 0 });
+    setXpGainEvent({ amount: 0, key: 0, skillLabel: undefined });
   }, []);
 
   const dismissServerPetDialog = useCallback(() => {
@@ -85,8 +96,8 @@ export function PetHeroProvider({ children }: { children: React.ReactNode }) {
     setServerPetDialog({ text });
   }, []);
 
-  const openPetProfileDrawer = useCallback(() => {
-    petProfileDrawerRef.current?.open();
+  const openPetProfileDrawer = useCallback((target?: ProfileDrawerTarget) => {
+    petProfileDrawerRef.current?.open(target ?? { mode: 'self' });
   }, []);
 
   return (

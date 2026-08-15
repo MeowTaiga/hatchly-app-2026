@@ -29,12 +29,12 @@ export default function AdminMailScreen() {
   const [attachedItems, setAttachedItems] = useState<Array<{ itemType: string; qty: number }>>([]);
   const [addItemType, setAddItemType] = useState('');
   const [addQty, setAddQty] = useState('1');
+  const [sending, setSending] = useState(false);
+  const [itemDefs, setItemDefs] = useState<AdminGameItem[]>([]);
   const searchableItems: SearchableItem[] = useMemo(
     () => itemDefs.map((i) => ({ key: i.itemType, label: i.label || i.itemType, imageUrl: i.imageUrl })),
     [itemDefs],
   );
-  const [sending, setSending] = useState(false);
-  const [itemDefs, setItemDefs] = useState<AdminGameItem[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const [searchResults, setSearchResults] = useState<{ id: string; username: string }[]>([]);
   const [searching, setSearching] = useState(false);

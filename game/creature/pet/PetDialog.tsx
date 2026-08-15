@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Modal } from 'react-native';
 import { CachedImage } from '@/components/ui/CachedImage';
 import Animated, {
   useSharedValue,
@@ -83,38 +83,40 @@ export function PetDialog({ message, petName, petImageUrl, onDismiss }: PetDialo
   };
 
   return (
-    <View style={styles.overlay} pointerEvents="box-none">
-      <Animated.View style={[styles.backdrop, backdropStyle]} pointerEvents="auto">
-        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
-      </Animated.View>
+    <Modal transparent animationType="fade" statusBarTranslucent visible>
+      <View style={styles.overlay} pointerEvents="box-none">
+        <Animated.View style={[styles.backdrop, backdropStyle]} pointerEvents="auto">
+          <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
+        </Animated.View>
 
-      <Animated.View
-        style={[
-          styles.contentWrap,
-          { bottom: TAB_BAR_TOTAL_HEIGHT + 20 + insets.bottom },
-          contentStyle,
-        ]}
-        pointerEvents="box-none"
-      >
-        <Pressable style={styles.container} onPress={dismiss}>
-          <View style={styles.avatarWrap}>
-            {petImageUrl ? (
-              <CachedImage source={{ uri: petImageUrl }} style={styles.avatar} resizeMode="contain" />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder, themeStyles.avatarPlaceholder]}>
-                <Text style={styles.avatarEmoji}>🐾</Text>
-              </View>
-            )}
-          </View>
+        <Animated.View
+          style={[
+            styles.contentWrap,
+            { bottom: TAB_BAR_TOTAL_HEIGHT + 20 + insets.bottom },
+            contentStyle,
+          ]}
+          pointerEvents="box-none"
+        >
+          <Pressable style={styles.container} onPress={dismiss}>
+            <View style={styles.avatarWrap}>
+              {petImageUrl ? (
+                <CachedImage source={{ uri: petImageUrl }} style={styles.avatar} resizeMode="contain" />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder, themeStyles.avatarPlaceholder]}>
+                  <Text style={styles.avatarEmoji}>🐾</Text>
+                </View>
+              )}
+            </View>
 
-          <View style={[styles.bubble, themeStyles.bubble]}>
-            <View style={[styles.bubbleTail, themeStyles.bubbleTail]} />
-            <Text style={[styles.petName, themeStyles.petName]}>{petName}</Text>
-            <Text style={[styles.messageText, themeStyles.messageText]}>{message.text}</Text>
-          </View>
-        </Pressable>
-      </Animated.View>
-    </View>
+            <View style={[styles.bubble, themeStyles.bubble]}>
+              <View style={[styles.bubbleTail, themeStyles.bubbleTail]} />
+              <Text style={[styles.petName, themeStyles.petName]}>{petName}</Text>
+              <Text style={[styles.messageText, themeStyles.messageText]}>{message.text}</Text>
+            </View>
+          </Pressable>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
@@ -125,8 +127,7 @@ const shadow = Platform.select({
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 500,
+    flex: 1,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

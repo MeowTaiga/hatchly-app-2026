@@ -1,0 +1,289 @@
+⛏️ Stone & Ore Types
+🪨 Basic Stone — Early/Mid Game
+
+These are your everyday materials and shouldn't feel particularly rare.
+
+Material	Rarity	Main Uses
+Stone	Common	Buildings, paths, tools
+Granite	Common	Buildings, furniture
+Limestone	Common	Bricks, walls, decoration
+Slate	Common	Roofing, flooring
+Sandstone	Common	Buildings, statues
+Flint	Common	Tools, campfires
+Coal	Common	Smelting, crafting
+Clay	Common	Pottery, bricks
+🔶 Metals — Mid Game
+Material	Rarity	Main Uses
+Copper Ore	Common	Tools, wiring, decorations
+Tin Ore	Common	Bronze
+Iron Ore	Common	Tools, weapons, buildings
+Silver Ore	Rare	Jewelry, decorations
+Gold Ore	Rare	Luxury furniture, jewelry
+Zinc Ore	Uncommon	Brass
+Lead Ore	Uncommon	Specialty crafting
+Nickel Ore	Uncommon	Advanced crafting
+Refined Metals
+Copper Ingot
+Tin Ingot
+Bronze Ingot
+Iron Ingot
+Steel Ingot
+Silver Ingot
+Gold Ingot
+Brass Ingot
+💎 Precious Stones & Crystals
+
+These can start appearing deeper underground.
+
+Material	Rarity	Vibe
+Quartz	Uncommon	Clear crystal
+Amethyst	Rare	Purple
+Emerald	Rare	Green
+Ruby	Rare	Red
+Sapphire	Rare	Blue
+Topaz	Rare	Golden
+Opal	Rare	Iridescent
+Jade	Rare	Green
+Garnet	Uncommon	Deep red
+Moonstone	Very Rare	Pale blue
+Sunstone	Very Rare	Golden
+Black Opal	Very Rare	Dark rainbow
+🌌 Magical / Endgame Ores
+
+I'd make these substantially rarer and visually distinctive so players immediately know they've hit something special.
+
+Material	Rarity	Vibe
+Star Crystal	Legendary	Tiny stars inside
+Moon Crystal	Legendary	Glowing blue
+Sun Crystal	Legendary	Warm golden glow
+Aurora Crystal	Legendary	Shifting colors
+Spirit Crystal	Legendary	Ghostly white
+Dream Crystal	Legendary	Soft purple/pink
+Void Crystal	Mythic	Black with stars
+Celestial Ore	Mythic	Metallic cosmic ore
+Etherstone	Mythic	Floating fragments
+Astralite	Mythic	Deep-space mineral
+🏔️ Mining Cave Set Pieces
+
+I'd make these modular so the same assets can build everything from a tiny starter mine to a massive endgame cavern.
+
+🪨 Cave Walls & Floors
+Cave Wall — Stone
+Cave Wall — Granite
+Cave Wall — Slate
+Cave Wall — Dark Stone
+Cave Floor
+Rocky Cave Floor
+Cracked Cave Floor
+Muddy Cave Floor
+Gravel Cave Floor
+Deep Cave Floor
+Crystal Cave Floor
+Ancient Stone Floor
+Cave Ceiling
+Low Cave Ceiling
+Jagged Cave Ceiling
+Cave Corner
+Cave Wall Corner
+Cave Wall End
+Cave Pillar
+Giant Stone Pillar
+🕳️ Cave Openings
+Small Cave Entrance
+Large Cave Entrance
+Narrow Cave Passage
+Wide Cave Passage
+Low Crawlspace
+Underground Tunnel
+Collapsed Tunnel
+Mine Shaft Opening
+Deep Mine Shaft
+Crystal Cave Entrance
+Ancient Ruin Entrance
+Hidden Cave Entrance
+Underground Lake Entrance
+⛏️ Mine Structures
+Wooden Mine Support
+Reinforced Mine Support
+Mine Support Corner
+Wooden Mine Beam
+Mine Support Tunnel
+Broken Mine Support
+Mine Cart Track
+Curved Mine Track
+Broken Mine Track
+Mine Cart
+Broken Mine Cart
+Ore Storage Cart
+Mining Elevator
+Mine Shaft Elevator
+Rope Pulley
+Wooden Winch
+Mine Entrance Gate
+Mine Storage Shed
+Mining Camp Tent
+Underground Workshop
+🪵 Mining Clutter
+Pickaxe Rack
+Shovel Rack
+Mining Helmet Rack
+Wooden Crate
+Ore Crate
+Broken Crate
+Barrel
+Water Barrel
+Rope Coil
+Wooden Bucket
+Ore Bucket
+Lantern Hook
+Hanging Mine Lantern
+Oil Lantern
+Mining Tools
+Stone Hammer
+Hand Pickaxe
+Mining Backpack
+Bedroll
+Miner Campfire
+💎 Ore Deposits
+
+These would be especially important for your procedural/randomized cave sections.
+
+Small Stone Deposit
+Large Stone Deposit
+Coal Deposit
+Copper Ore Deposit
+Tin Ore Deposit
+Iron Ore Deposit
+Silver Ore Deposit
+Gold Ore Deposit
+Quartz Deposit
+Amethyst Deposit
+Emerald Deposit
+Ruby Deposit
+Sapphire Deposit
+Opal Deposit
+Moonstone Deposit
+Sunstone Deposit
+Star Crystal Deposit
+Spirit Crystal Deposit
+Void Crystal Deposit
+Celestial Ore Deposit
+
+And I'd make Small / Medium / Large versions of the major deposits so you can reuse the same visual language.
+
+💧 Underground Environment
+Underground Stream
+Small Underground Pool
+Underground Lake
+Waterfall Cave
+Dripping Cave Wall
+Cave Puddle
+Wet Cave Floor
+Underground River
+Stone Footbridge
+Wooden Mine Bridge
+Broken Mine Bridge
+Water Crossing
+🍄 Cave Flora
+
+Even though it's a mine, these make the environment way less sterile.
+
+Cave Moss Patch
+Hanging Cave Moss
+Glow Mushroom
+Glow Mushroom Cluster
+Blue Glow Mushroom
+Purple Glow Mushroom
+Giant Glow Mushroom
+Cave Fern
+Cave Grass
+Underground Flower
+Crystal Flower
+Pale Mushroom
+Giant Mushroom
+Mushroom Circle
+Root Covered Cave Wall
+🦇 Cave Wildlife Props
+Bat Nest
+Hanging Bat Cluster
+Giant Bat Nest
+Spider Web
+Large Spider Web
+Cave Spider Nest
+Spider Egg Sac
+Snail Cluster
+Cave Beetle Nest
+Fossilized Creature
+Ancient Bone Pile
+Giant Rib Cage
+Giant Skull
+🏺 Ancient Cave Ruins
+
+These could appear much deeper than normal mining areas.
+
+Ancient Stone Pillar
+Broken Ancient Pillar
+Ancient Stone Arch
+Ancient Statue
+Broken Statue
+Ancient Altar
+Ancient Shrine
+Rune Stone
+Rune Wall
+Ancient Door
+Sealed Stone Door
+Ancient Chest
+Ancient Pedestal
+Ancient Brazier
+Ancient Candle Stand
+Forgotten Camp
+Ancient Mine Cart
+Buried Statue
+Fossil Wall
+Ancient Underground Temple
+✨ Deep Cave / Magical Set Pieces
+
+These should feel like you've gone somewhere you're not supposed to be.
+
+Giant Crystal Cluster
+Crystal Forest
+Floating Crystal Formation
+Crystal Waterfall
+Glowing Crystal Lake
+Giant Moon Crystal
+Celestial Ore Vein
+Spirit Crystal Grove
+Floating Stone Island
+Underground Starry Cavern
+Magical Underground Garden
+Giant Mushroom Grove
+Ancient World Tree Root
+Dream Cave
+Void Rift
+Void Crystal Cavern
+Cosmic Underground Lake
+Floating Rock Formation
+Astral Shrine
+Celestial Cavern
+🚂 Big Landmark Set Pieces
+
+These are the things I'd use as memorable locations rather than generic decoration.
+
+Abandoned Mine Entrance
+Abandoned Miner Camp
+Collapsed Mine
+Forgotten Mining Town
+Giant Mine Shaft
+Deep Underground Elevator
+Underground Railroad Station
+Lost Mine Cart Tunnel
+Ancient Crystal Cavern
+Underground Waterfall
+Giant Fossil Chamber
+Ancient Ruin Chamber
+Underground Shrine
+Crystal Cathedral
+Giant Mushroom Cavern
+Moon Crystal Chamber
+Void Crystal Chamber
+Celestial Mining Chamber

@@ -1,0 +1,192 @@
+🌾 Tier 1 — Starter Crops (wheat 30s; others 3m–2h 30m)
+Seed	Grow Time	Harvest
+Wheat	30s	Wheat
+Grass Seed	3m	Grass
+Clover Seed	8m	Clover
+Carrot Seed	15m	Carrot
+Radish Seed	25m	Radish
+Lettuce Seed	40m	Lettuce
+Spinach Seed	55m	Spinach
+Green Onion Seed	75m	Green Onion
+Potato Seed	105m	Potato
+Turnip Seed	150m	Turnip
+🥕 Tier 2 — Common Crops (4h–11h)
+Seed	Grow Time
+Tomato Seed	4h
+Corn Seed	5h
+Cucumber Seed	5h
+Pumpkin Seed	6h
+Bell Pepper Seed	6h
+Chili Pepper Seed	6h
+Eggplant Seed	7h
+Cabbage Seed	7h
+Broccoli Seed	8h
+Cauliflower Seed	8h
+Onion Seed	9h
+Garlic Seed	9h
+Celery Seed	10h
+Pea Seed	10h
+Bean Seed	10h
+🍓 Tier 3 — Fruits (14h–20h) — soil berries & melons only (tree fruits via TreeService)
+Seed	Grow Time
+Strawberry Seed	14h
+Blueberry Seed	15h
+Raspberry Seed	17h
+Blackberry Seed	18h
+Watermelon Seed	19h
+Melon Seed	20h
+🌿 Tier 4 — Herbs (24h–38h)
+Basil Seed
+Mint Seed
+Rosemary Seed
+Thyme Seed
+Oregano Seed
+Sage Seed
+Parsley Seed
+Dill Seed
+Chive Seed
+Lavender Seed
+Chamomile Seed
+Cilantro Seed
+Tarragon Seed
+Bay Seed
+Fennel Seed
+🌺 Tier 5 — Flowers (42h+)
+Sunflower Seed
+Rose Seed
+Tulip Bulb
+Daisy Seed
+Lily Bulb
+Orchid Seed
+Marigold Seed
+Lavender Flower Seed
+Cosmos Seed
+Poppy Seed
+Hibiscus Seed
+Peony Bulb
+Iris Bulb
+Hydrangea Seed
+Lotus Seed
+🍄 Tier 6 — Mushrooms (54h+)
+Brown Mushroom Spores
+Red Mushroom Spores
+Shiitake Spores
+Oyster Mushroom Spores
+Morel Spores
+Glow Mushroom Spores
+Moss Mushroom Spores
+Fairy Mushroom Spores
+Truffle Spores
+Mooncap Spores
+✨ Tier 7 — Exotic (72h+)
+Crystal Berry Seed
+Moon Blossom Seed
+Sunfruit Seed
+Starfruit Seed
+Dragonfruit Seed
+Spirit Melon Seed
+Aurora Berry Seed
+Honey Blossom Seed
+Rainbow Flower Seed
+Frost Berry Seed
+Ember Pepper Seed
+Dream Fruit Seed
+Celestial Herb Seed
+🌾 Processing Recipes
+Recipe	Ingredients
+Flour	Wheat x2
+Cornmeal	Corn x2
+Sugar	Sugar Cane x3
+Butter	Milk
+Cheese	Milk x2
+Yogurt	Milk
+Tomato Sauce	Tomato x3
+Mashed Potato	Potato x2
+Vegetable Stock	Carrot + Onion + Water
+Fruit Jam	Any Fruit x3
+Apple Jam	Apple x3
+Berry Jam	Any Berry x3
+Pickles	Cucumber + Water
+Popcorn	Corn
+Dried Herbs	Any Herb
+🍞 Basic Baking
+Item	Recipe
+Bread Dough	Flour + Water
+Bread	Bread Dough
+Flatbread	Flour + Water
+Sweet Bread	Bread + Sugar
+Toast	Bread
+Bread Roll	Bread Dough
+Pie Crust	Flour + Butter
+Cake Batter	Flour + Butter + Sugar
+🥪 Sandwiches
+Bread + Lettuce = Garden Sandwich
+Bread + Tomato = Tomato Sandwich
+Bread + Cheese = Cheese Sandwich
+Bread + Apple = Apple Sandwich
+Bread + Cucumber = Cucumber Sandwich
+Bread + Egg = Egg Sandwich
+Bread + Pumpkin = Pumpkin Sandwich
+🥧 Bakery
+Apple Bread = Apple + Bread
+Pumpkin Bread = Pumpkin + Bread
+Blueberry Bread = Blueberry + Bread
+Banana Bread = Banana + Bread
+Berry Bread = Berry + Bread
+Garlic Bread = Garlic + Bread
+Herb Bread = Herbs + Bread
+Cinnamon Bread = Bread + Cinnamon
+Honey Bread = Bread + Honey
+Lemon Bread = Lemon + Bread
+🥗 Salads
+Garden Salad = Lettuce + Tomato
+Fresh Salad = Lettuce + Carrot
+Herb Salad = Lettuce + Herbs
+Potato Salad = Potato + Herbs
+Fruit Salad = 3 Fruits
+Berry Bowl = 3 Berries
+Summer Salad = Corn + Tomato + Lettuce
+Farmer Salad = Carrot + Radish + Lettuce
+🍲 Soups
+Tomato Soup
+Potato Soup
+Pumpkin Soup
+Mushroom Soup
+Onion Soup
+Vegetable Soup
+Corn Chowder
+Herb Soup
+Cream Soup
+Broccoli Soup
+
+(each uses Water + vegetables)
+
+🍰 Desserts
+Apple Pie
+Cherry Pie
+Peach Pie
+Blueberry Pie
+Strawberry Pie
+Pumpkin Pie
+Berry Tart
+Lemon Tart
+Fruit Cake
+Carrot Cake
+Cheesecake
+Berry Cheesecake
+Apple Crumble
+Jam Cookies
+Honey Cookies
+🍹 Drinks
+Apple Juice
+Orange Juice
+Lemonade
+Berry Smoothie
+Strawberry Smoothie
+Peach Smoothie
+Herbal Tea
+Mint Tea
+Chamomile Tea
+Lavender Tea
+Mushroom Tea
+Fruit Punch

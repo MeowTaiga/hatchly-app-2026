@@ -1,4 +1,4 @@
-/** Mood options for daily check-in. Must match backend MOOD_OPTIONS. */
+/** Mood options for diary check-ins. Must match backend MOOD_OPTIONS. */
 export const MOOD_OPTIONS = [
   { id: 'great' as const, emoji: '😄', label: 'Great' },
   { id: 'good' as const, emoji: '🙂', label: 'Good' },

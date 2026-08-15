@@ -85,7 +85,9 @@ export const CropInfoDrawer = forwardRef<CropInfoDrawerRef, CropInfoDrawerProps>
     const displayName = grownDef?.label ?? def?.label ?? renderCrop?.itemType ?? '';
     const displayImage = grownDef?.imageUrl ?? def?.imageUrl;
     const displayEmoji = grownDef?.emoji ?? def?.emoji;
-    const yieldItems = def?.harvestYield ?? [];
+    const yieldItems = (def?.harvestYield ?? []).filter(
+      (d) => d.itemType !== renderCrop?.itemType,
+    );
 
     const statusLabel = !isWatered
       ? 'Needs water'

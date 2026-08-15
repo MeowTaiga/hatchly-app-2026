@@ -135,7 +135,8 @@ const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
     alignItems: 'center',
-    zIndex: 5,
+    // Above live props / pets (those use footprint Y as zIndex).
+    zIndex: 1_000_000,
   },
   bobber: {
     width: BOBBER_SIZE,
